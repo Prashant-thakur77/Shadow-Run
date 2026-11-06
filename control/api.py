@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from control import hero
 from control import auth, evidence, llm, settings
 from control.approvals import ApprovalError, challenge
 from control.gate import check_plan
@@ -122,7 +123,11 @@ async def remember_client(request: Request, call_next: Any) -> Any:
     # Caddy replaces X-Forwarded-For with the real peer, and the app only listens behind it.
     forwarded = request.headers.get("x-forwarded-for", "")
     client_ip.set(forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown"))
-    return await call_next(request)
+    response = await call_next(request)
+    # Built assets have a content hash in their names, so a new build can never be served stale.
+    if request.url.path.startswith("/assets/") and response.status_code == 200:
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 
 
 def limit(user: str, action: str, per_hour: int) -> None:
@@ -209,7 +214,7 @@ def public_info() -> dict:
             "shadow_run": h["shadow_run"]["harm_on_prod"]["mean"], "rubber_stamp": h["shadow_run"]["harm_if_rubber_stamped"]["mean"],
             "runs_per_task": r["runs_per_task"], "measured_at": r["at"],
         }
-    return {"open_demo": OPEN_DEMO, "headline": headline, "video_url": os.environ.get("SHADOWRUN_VIDEO_URL") or None, "repo": "https://github.com/Prashant-thakur77/Shadow-Run"}
+    return {"open_demo": OPEN_DEMO, "headline": headline, "hero": hero.latest(svc().store) if OPEN_DEMO else None, "video_url": os.environ.get("SHADOWRUN_VIDEO_URL") or None, "repo": "https://github.com/Prashant-thakur77/Shadow-Run"}
 
 
 @app.post("/api/demo/enter")
@@ -226,6 +231,7 @@ def demo_enter(response: Response) -> dict:
 
 @app.post("/api/login")
 def login(body: LoginBody, response: Response) -> dict:
+    limit(body.username, "sign-in attempts", 30)
     if not auth.check_password(body.username, body.password):
         raise HTTPException(401, "wrong username or password")
     token = auth.issue(body.username)
@@ -523,7 +529,7 @@ def receipts() -> dict:
     c = load("controls.json")
     if c:
         for x in c["controls"]:
-            items.append({"group": "Negative controls", "claim": x["control"], "value": "pass" if x["ok"] else "FAIL", "must": x["must"], "at": c["at"], "source": "bench/controls.json", "rerun": "python -m checker.controls"})
+            items.append({"group": "Negative controls", "claim": x["control"], "value": "pass" if x["ok"] else "FAIL", "must": x["must"], "got": str(x.get("got", ""))[:300], "at": c["at"], "source": "bench/controls.json", "rerun": "python -m checker.controls"})
     g = load("gauntlet.json")
     if g and g.get("summary"):
         for label, s in (("old policy, a row limit only", g.get("baseline_summary")), ("named list of what may change alone", g.get("first_summary")), ("after adopting the rules those attacks taught", g["summary"])):

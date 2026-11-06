@@ -1,130 +1,778 @@
+/* The run page, in three zones. Zone one is the verdict: the word, the cause, and the two rooms, all in the first
+   viewport and split by the same seam as the landing page. Zone two is the evidence, with the decision first. Zone three
+   is the record, folded. features.css loads after this file, so rules for its parts are scoped under .runpage. */
 .runpage {
-  display: grid;
-  grid-template-columns: 188px minmax(0, 1fr);
-  gap: var(--s-6);
-  max-width: var(--page-max);
-  margin: 0 auto;
-  padding: var(--s-5) var(--gutter) 0;
-  align-items: start;
+  --margin: clamp(16px, calc(40px + (100vw - 1280px) * 0.05), 96px);
+  --ledger-w: 190px;
+  --foot-h: 150px;
+  padding-bottom: 84px;
 }
 
-/* Rail */
-.rail {
-  position: sticky;
-  top: 76px;
+/* Zone one */
+.run-verdict {
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
-  font-size: var(--fs-s);
-}
-.rail-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-bottom: var(--s-3);
-  border-bottom: 1px solid var(--line);
-  color: var(--tone-text);
-  font-weight: 600;
-  line-height: 1.25;
-}
-.rail-list a {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-2);
-  padding: 4px 8px;
-  margin-left: -8px;
-  border-left: 2px solid transparent;
-  color: var(--ink-3);
-  text-decoration: none;
-  line-height: 1.3;
-}
-.rail-list a:hover {
-  color: var(--ink);
-}
-.rail-list a.is-on {
-  border-left-color: var(--ink);
-  color: var(--ink);
-  font-weight: 600;
-}
-.rail-n {
-  font-size: 11px;
-  font-weight: 400;
-}
-
-.runcol {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-6);
+  padding: 12px var(--margin) 0;
   min-width: 0;
 }
-
-/* Header */
-.runhead {
+.run-fold {
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
-  padding: var(--s-5);
-  border: 1px solid var(--tone-line);
-  border-top: 4px solid var(--tone);
-  background: var(--tone-bg);
+  min-width: 0;
+}
+.runhead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-3) calc(var(--margin) * 2);
+  align-items: start;
+  min-height: 150px;
+}
+.runhead-verdict,
+.runhead-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 .runhead-status {
   display: flex;
   align-items: center;
-  gap: var(--s-4);
+  gap: var(--s-3);
   color: var(--tone-text);
 }
 .runhead-status .mark {
-  width: clamp(30px, 4.4vw, 52px);
-  height: clamp(30px, 4.4vw, 52px);
+  flex: none;
+  width: clamp(26px, 3vw, 44px);
+  height: clamp(26px, 3vw, 44px);
   color: var(--tone);
 }
 .runhead-word {
-  font-size: clamp(38px, 6.2vw, 76px);
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 1.02;
+  overflow-wrap: anywhere;
 }
 .runhead-line {
-  max-width: 76ch;
-  font-size: var(--fs-l);
-  line-height: 1.35;
+  max-width: 62ch;
+  color: var(--ink-2);
+  font-size: var(--fs-m);
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 .runhead-jump {
-  margin-top: var(--s-1);
+  margin-top: 2px;
 }
+/* A task from Home travels into this block. */
 .runhead-task {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-top: var(--s-2);
-  padding-top: var(--s-3);
-  border-top: 1px solid var(--tone-line);
+  min-width: 0;
+  view-transition-name: run-task;
+}
+::view-transition-group(run-task) {
+  z-index: 2;
+  animation-duration: var(--dur-enter);
+  animation-timing-function: var(--ease-enter);
+}
+::view-transition-old(run-task),
+::view-transition-new(run-task) {
+  width: auto;
+  height: auto;
+  object-fit: none;
+  object-position: left top;
+}
+::view-transition-old(run-task) {
+  animation-duration: var(--dur-fast);
+}
+::view-transition-new(run-task) {
+  animation-duration: var(--dur-panel);
 }
 .runhead-tasktext {
-  font-size: var(--fs-l);
-  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--fs-m);
+  line-height: 1.4;
   overflow-wrap: anywhere;
+}
+.runhead-tasktext.is-plan {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+.runhead-taskskip {
+  color: var(--ink-3);
+  font-size: var(--fs-s);
 }
 .runhead-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-2) var(--s-6);
+  gap: 4px var(--s-5);
+  margin-top: 4px;
   font-size: var(--fs-s);
+}
+.runhead-meta .hash {
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 .runhead-meta > div {
   min-width: 0;
 }
 .runhead-meta dt {
   color: var(--ink-3);
-  font-size: var(--fs-xs);
+  font-size: 11px;
 }
 .runhead-meta dd {
   overflow-wrap: anywhere;
 }
 .runhead-again {
   font-size: var(--fs-s);
+}
+.runhead-loadingid {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+
+/* The two rooms, at the run page's scale: the height the first viewport has left. */
+.run-rooms {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+/* Only the viewport decides this height, with room kept for the decision bar on every run. If a line of text could change
+   it, prod's dots would re-lay out when a status changes, and prod doesn't move. */
+.run-rooms-stage {
+  position: relative;
+  height: clamp(430px, calc(100vh - 372px), 720px);
+}
+.run-rooms-stage > .rooms {
+  position: absolute;
+  inset: 0;
+  height: auto;
+}
+.run-rooms.is-empty .rooms {
+  min-height: 300px;
+}
+.run-rooms .room-body-empty {
+  min-height: 240px;
+}
+.run-rooms .rooms-notyet .t-display-m {
+  overflow-wrap: anywhere;
+}
+.run-rooms-hashes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--s-4);
+  font-family: var(--font-mono);
+}
+.run-rooms-hashes > div {
+  display: flex;
+  gap: var(--s-2);
+  align-items: baseline;
+}
+.run-rooms-hashes dt {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.run-rooms-hashes dd {
+  font-size: 16px;
+}
+.run-rooms-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+}
+.run-rooms-bar .t-caption {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.run-rooms-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.run-rooms-controls .btn {
+  min-height: 30px;
+  padding: 3px 10px;
+}
+/* Proof gets the same weight as the harm: prod's hashes are large. */
+.run-rooms .prod-hashes dd {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-size: clamp(16px, 1.5vw, 24px);
+  letter-spacing: -0.02em;
+}
+.run-rooms .prod-hashes .copy {
+  letter-spacing: 0;
+}
+.runhead-proof {
+  display: none;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px var(--s-2);
+  margin-top: var(--s-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+}
+.runhead-proof code {
+  color: var(--ink-3);
+}
+/* Narrow panes wrap the two hashes. A taller footer here depends only on the viewport, so prod's layout stays put. */
+@media (max-width: 1200px) {
+  .runpage {
+    --foot-h: 186px;
+  }
+  .run-rooms-stage {
+    height: clamp(560px, calc(100vh - 300px), 720px);
+  }
+}
+.prod-same.is-neutral,
+.prod-verdict.is-neutral {
+  color: var(--ink);
+}
+/* Looping is allowed only while a real job runs. This stops the moment the status changes. */
+.rooms-scan {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--ink-2);
+  animation: rooms-scan 1.4s linear infinite;
+}
+@keyframes rooms-scan {
+  to {
+    top: 100%;
+  }
+}
+/* The single time prod moves anywhere in the product: a real apply committing or rolling back. */
+.room-prod {
+  position: relative;
+}
+.rooms-sweep {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  height: 1px;
+  background: var(--ink);
+  opacity: 0;
+  animation: rooms-sweep var(--dur-wipe) linear both;
+}
+@keyframes rooms-sweep {
+  from {
+    top: 0;
+    opacity: 1;
+  }
+  to {
+    top: 100%;
+    opacity: 1;
+  }
+}
+
+.runpage .incident-banner {
+  margin-top: 0;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--line);
+  border-left: 1px solid var(--line-2);
+  background: transparent;
+}
+.runpage .incident-happened {
+  font-size: var(--fs-m);
+}
+
+/* Prod's hash, for an undo's round trip or what a stopped apply left behind. Flat, and the same weight as the harm. */
+.runpage .prodproof {
+  border: 1px solid var(--tone-line);
+  background: transparent;
+}
+.runpage .prodproof-word {
+  flex-wrap: wrap;
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.runpage .prodproof-step {
+  border: 1px solid var(--line-2);
+  background: var(--bg-1);
+}
+.runpage .prodproof-step.is-same {
+  border-color: var(--tone-line);
+}
+.runpage .prodproof-step .hash code {
+  font-size: clamp(16px, 1.6vw, 24px);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+/* Zone two and three */
+.run-body {
+  display: grid;
+  grid-template-columns: 204px minmax(0, 1fr);
+  gap: var(--s-6);
+  max-width: calc(var(--page-max) + var(--margin) * 2);
+  margin: 0 auto;
+  padding: var(--s-6) var(--margin) 0;
+  align-items: start;
+}
+.runcol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  min-width: 0;
+}
+.run-zone-label {
+  color: var(--ink-3);
+}
+.run-zone-record {
+  margin-top: var(--s-4);
+}
+.record-section {
+  display: block;
+  padding-top: var(--s-3);
+  scroll-margin-top: calc(var(--header-h) + 12px);
+}
+.record-section > summary {
+  display: flex;
+  align-items: baseline;
+  list-style: none;
+  cursor: pointer;
+}
+.record-section > summary::-webkit-details-marker {
+  display: none;
+}
+.record-section > summary::after {
+  content: '+';
+  order: 9;
+  margin-left: var(--s-3);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  line-height: 1;
+}
+.record-section[open] > summary::after {
+  content: '\2212';
+}
+.record-section > summary .section-title {
+  margin-right: auto;
+  font-size: var(--fs-l);
+}
+.record-section > .section-body {
+  margin-top: var(--s-4);
+}
+.record-section > summary:hover .section-title {
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: 4px;
+}
+
+/* Rail: a line with one pill that travels to the section in view. */
+.rail {
+  position: sticky;
+  top: calc(var(--header-h) + 16px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-height: calc(100vh - var(--header-h) - 32px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  font-size: var(--fs-s);
+}
+.rail-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--tone-text);
+  font-weight: 500;
+  line-height: 1.25;
+}
+.rail-track {
+  position: relative;
+  padding-left: 14px;
+  border-left: 1px solid var(--line-2);
+}
+.rail-pill {
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 5px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--ink);
+  opacity: 0;
+  transition: transform var(--dur-panel) var(--ease-out);
+}
+.rail-list a {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 4px 0;
+  color: var(--ink-3);
+  text-decoration: none;
+  line-height: 1.3;
+  transition: var(--hover-colors);
+}
+.rail-list a:hover,
+.rail-list a.is-on {
+  color: var(--ink);
+}
+.rail-title {
+  min-width: 0;
+}
+.rail-list .mark {
+  margin-left: auto;
+}
+.rail-break {
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+}
+.rail-n {
+  flex: none;
+  font-size: 11px;
+  font-weight: 400;
+}
+.rail-chips {
+  display: none;
+}
+
+/* Keeps the decision one move away. */
+.decisionbar {
+  position: fixed;
+  right: 0;
+  bottom: var(--bottombar-h);
+  left: 0;
+  z-index: 25;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px var(--s-4);
+  padding: 8px var(--margin);
+  border-top: 1px solid var(--line-2);
+  background: var(--bg);
+  animation: decisionbar-rise var(--dur-panel) var(--ease-out) both;
+}
+@keyframes decisionbar-rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+.decisionbar-hashes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--s-4);
+  min-width: 0;
+}
+.decisionbar-hashes > div {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.decisionbar-hashes dt {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.decisionbar-hashes dd {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+.decisionbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.decisionbar-error {
+  flex: 1 1 100%;
+  order: 3;
+}
+
+/* The Gantt's parts that only a whole run needs. */
+.run-gantt {
+  gap: var(--s-3);
+}
+.gantt-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--s-4);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.gantt-stepper li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.gantt-stepper li.is-reached.tone-bad {
+  color: var(--bad);
+}
+.gantt-stepper li.is-reached.tone-good {
+  color: var(--good);
+}
+.gantt-stepper li.is-reached.tone-caution,
+.gantt-stepper li.is-reached.tone-wait {
+  color: var(--caution-text);
+}
+.gantt-stepper .is-reached.tone-bad::before,
+.gantt-stepper .is-reached.tone-good::before,
+.gantt-stepper .is-reached.tone-caution::before,
+.gantt-stepper .is-reached.tone-wait::before {
+  display: none;
+}
+.gantt-attempt-head.is-button {
+  width: 100%;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.gantt-attempt-head.is-button:hover .gantt-attempt-label,
+.gantt-attempt-head.is-button[aria-pressed='true'] .gantt-attempt-label {
+  color: var(--ink);
+}
+.gantt-attempt-label {
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+}
+.gantt-attempt-head.is-button .gantt-attempt-label {
+  text-decoration-color: var(--line-2);
+}
+.gantt-attempt-note {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.gantt-attempt.is-open {
+  padding-bottom: var(--s-2);
+}
+.gantt-row-summary {
+  margin-bottom: 2px;
+}
+.gantt-track-full {
+  height: 12px;
+  background: var(--bg-2);
+}
+.gantt-track-full .gantt-bar {
+  border-right: 1px solid var(--bg);
+}
+.gantt-note {
+  display: block;
+  color: var(--ink-3);
+}
+.gantt-bar.is-live {
+  background: repeating-linear-gradient(115deg, var(--ink-3) 0 6px, var(--line-2) 6px 12px);
+  background-size: 200% 100%;
+  animation: gantt-live 1.1s linear infinite;
+}
+@keyframes gantt-live {
+  to {
+    background-position: 28px 0;
+  }
+}
+.rehearsal-sum {
+  font-size: var(--fs-s);
+}
+.rehearsal-total {
+  font-size: var(--fs-m);
+  font-weight: 500;
+}
+
+/* Without and with: the figure has already had its moment in the rooms, so it's smaller here, and flat. */
+.runpage .ww {
+  border: 1px solid var(--line-2);
+}
+.runpage .ww-hero {
+  padding: var(--s-4);
+  background: transparent;
+  border-bottom: 1px solid var(--line-2);
+}
+.runpage .ww-hero-label,
+.runpage .ww-hero-of {
+  color: var(--ink-2);
+  font-size: var(--fs-m);
+  font-weight: 400;
+}
+.runpage .ww-hero-num {
+  font-size: min(calc(100cqw / (var(--chars, 12) * 0.552)), 56px);
+  font-weight: 300;
+}
+.runpage .ww-table tbody strong {
+  font-weight: 400;
+}
+.runpage .ww-head-title {
+  font-size: var(--fs-m);
+  font-weight: 600;
+}
+.runpage .ww-table tbody td + td,
+.runpage .ww-head.is-with {
+  border-left-width: 1px;
+}
+.runpage .ww-stopped strong {
+  font-size: var(--fs-l);
+  font-weight: 600;
+}
+.runpage .bizmetric-delta {
+  font-weight: 400;
+}
+.runpage .undo-proof {
+  background: var(--bg-1);
+}
+.runpage .undo-counts dd {
+  font-weight: 400;
+}
+/* However long an undo statement is, it scrolls inside its own box and the page never widens. */
+.runpage .undo,
+.runpage .undo .fold,
+.runpage .undo .fold-body {
+  min-width: 0;
+  max-width: 100%;
+}
+.runpage .undo-sql {
+  max-width: 100%;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+/* Rail becomes chips under the verdict once there's no room for a column. */
+@media (max-width: 1120px) {
+  .run-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rail {
+    display: none;
+  }
+  .rail-chips {
+    position: relative;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 calc(var(--margin) * -1);
+    padding: 2px var(--margin);
+  }
+  .rail-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .rail-chips a {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 2px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--ink-2);
+    font-size: var(--fs-s);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+}
+@media (max-width: 1180px) and (min-width: 1000px) {
+  .runpage {
+    --ledger-w: 168px;
+  }
+  /* A narrow ledger shortens the words and keeps the measurement. */
+  .run-rooms .ledger-label {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+@media (max-width: 999px) {
+  .runhead {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .runhead {
+    min-height: 0;
+  }
+  .run-rooms-stage {
+    height: auto;
+  }
+  .run-rooms-stage > .rooms {
+    position: static;
+  }
+  .runpage {
+    --foot-h: auto;
+  }
+  /* Stacked, a long statement would push the rooms down a screen. The whole of it is in the plan. */
+  .run-rooms .room-command {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+}
+@media (max-width: 719px) {
+  .rail-chips a,
+  .runhead-jump .btn,
+  .run-rooms-controls .btn,
+  .run-rooms-controls .seg-btn {
+    min-height: 44px;
+  }
+  .decisionbar {
+    gap: 4px;
+    padding: 6px var(--gutter);
+  }
+  .decisionbar-hashes {
+    gap: 0 var(--s-2);
+  }
+  .decisionbar-actions {
+    width: 100%;
+  }
+  .decisionbar-actions .btn {
+    flex: 1 1 0;
+    min-height: 44px;
+    padding-inline: 6px;
+  }
+  .runpage {
+    padding-bottom: 136px;
+  }
+  .step-pill {
+    margin-left: 0;
+  }
+  .step-head {
+    flex-wrap: wrap;
+  }
+  .gantt-row,
+  .gantt-axis {
+    grid-template-columns: minmax(70px, 84px) minmax(0, 1fr) minmax(56px, 70px);
+    gap: 6px;
+  }
+  .gantt-axis-ticks > span:nth-child(even) {
+    display: none;
+  }
+  /* The rooms are stacked here, so prod's word is a long way down. The answer comes with the verdict. */
+  .runhead-proof {
+    display: flex;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rooms-scan {
+    display: none;
+  }
+  .flow-frame.can-flood:not(.is-flooded) .tnode {
+    opacity: 1;
+  }
 }
 
 /* Rehearsal */
@@ -135,80 +783,6 @@
   color: var(--ink);
   font-size: var(--fs-xl);
   font-weight: 600;
-}
-.phasebar {
-  display: flex;
-  gap: 2px;
-  height: 12px;
-  background: var(--bg-2);
-  overflow: hidden;
-}
-.phasebar .seg-plain {
-  display: block;
-  min-width: 3px;
-  background: var(--ink-3);
-  transition: flex-grow 0.4s ease;
-}
-.phasebar .seg-strong {
-  display: block;
-  min-width: 3px;
-  background: var(--ink);
-  transition: flex-grow 0.4s ease;
-}
-.phasebar.is-live {
-  background: repeating-linear-gradient(115deg, var(--bg-2) 0 14px, var(--line-2) 14px 28px);
-  background-size: 200% 100%;
-  animation: sweep 1.4s linear infinite;
-}
-@keyframes sweep {
-  to {
-    background-position: 61px 0;
-  }
-}
-.phases {
-  display: grid;
-  grid-template-columns: repeat(var(--phases, 7), minmax(0, 1fr));
-  gap: 0;
-  border-left: 1px solid var(--line);
-}
-.phase {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--s-1) var(--s-3) var(--s-1);
-  border-right: 1px solid var(--line);
-  min-width: 0;
-}
-.phase-label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--ink-3);
-  font-size: var(--fs-s);
-  line-height: 1.25;
-}
-.phase-ms {
-  font-size: var(--fs-l);
-  font-weight: 500;
-  white-space: nowrap;
-}
-.phase.is-strong .phase-label {
-  color: var(--ink);
-  font-weight: 600;
-}
-.phase.is-strong .phase-ms {
-  font-weight: 600;
-}
-.phase.is-pending .phase-ms,
-.phase.is-skipped .phase-ms,
-.phase.is-live .phase-ms {
-  color: var(--ink-3);
-  font-size: var(--fs-s);
-  font-weight: 400;
-}
-.phase-note {
-  color: var(--ink-3);
-  font-size: var(--fs-xs);
 }
 .eventlog {
   display: flex;
@@ -373,11 +947,51 @@
   flex-direction: column;
   gap: var(--s-4);
 }
+/* A bracket beside each step, with a pill carrying its real gate result and measured time. */
 .step {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
   min-width: 0;
+  padding-left: 14px;
+}
+.step::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: 6px;
+  border: 1px solid var(--line-2);
+  border-right: 0;
+}
+.step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.step-pill.is-bad {
+  border-color: var(--bad-line);
+  color: var(--bad);
+}
+.step-pill.is-caution {
+  border-color: var(--caution-line);
+  color: var(--caution-text);
+}
+.step-pill-sep {
+  color: var(--ink-3);
 }
 .step-head {
   display: flex;
@@ -455,16 +1069,18 @@
   background: var(--bg-inset);
   color: var(--ink-2);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 500;
   line-height: 15px;
   white-space: nowrap;
   pointer-events: none;
 }
 .flow-edge-label.is-dashed {
-  color: var(--caution-text);
+  color: var(--ink-3);
 }
 
+/* Flat, with one edge that says what happened. Deleted is a solid red edge, damaged a dashed one, and the tables the plan
+   named have a brighter frame. The flood lights them a level at a time, once. */
 .tnode {
   display: flex;
   flex-direction: column;
@@ -474,22 +1090,43 @@
   height: 86px;
   padding: 8px 11px;
   border: 1px solid var(--line-2);
-  border-left-width: 4px;
+  border-left: 3px solid var(--line-2);
+  border-radius: var(--radius);
   background: var(--bg-1);
   color: var(--ink);
+  transition: opacity var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 .tnode.is-deleted {
   border-left-color: var(--bad);
 }
 .tnode.is-updated {
-  border-left-color: var(--caution);
+  border-left: 3px dashed var(--bad);
 }
 .tnode.is-direct {
-  border-width: 2px;
-  border-left-width: 4px;
+  border-top-color: var(--ink-3);
+  border-right-color: var(--ink-3);
+  border-bottom-color: var(--ink-3);
+}
+.tnode.is-lit-off {
+  opacity: 0.35;
+}
+.tnode.is-lit-on {
   border-top-color: var(--ink);
   border-right-color: var(--ink);
   border-bottom-color: var(--ink);
+}
+.flow-frame.can-flood:not(.is-flooded) .tnode {
+  opacity: 0.25;
+}
+.flow-frame.is-flooded .tnode {
+  animation: tnode-flood 360ms var(--ease-out) both;
+  animation-delay: calc(var(--depth, 0) * 120ms);
+}
+@keyframes tnode-flood {
+  from {
+    opacity: 0.25;
+    border-left-color: var(--line-2);
+  }
 }
 .tnode-name {
   font-size: 13px;
@@ -505,8 +1142,8 @@
 }
 .tnode-rows strong {
   color: var(--ink);
-  font-size: 19px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 400;
   letter-spacing: -0.02em;
 }
 .tnode-via {
@@ -599,10 +1236,11 @@
   align-items: start;
 }
 .blast-big {
-  font-size: clamp(56px, 9.4vw, 124px);
-  font-weight: 500;
-  letter-spacing: -0.055em;
-  line-height: 0.98;
+  font-size: clamp(36px, 5vw, 88px);
+  font-weight: 300;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums slashed-zero;
 }
 .blast-big-label {
   margin-top: var(--s-2);
@@ -629,15 +1267,16 @@
   font-size: var(--fs-m);
 }
 .blast-part dd {
-  font-size: clamp(22px, 2.9vw, 36px);
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums slashed-zero;
 }
 .blast-part.is-hit dt,
 .blast-part.is-hit dd {
-  color: var(--bad);
-  font-weight: 600;
+  color: var(--ink);
+  font-weight: 500;
 }
 .blast-part-note {
   grid-column: 1 / -1;
@@ -647,8 +1286,7 @@
 .blast-ddl {
   grid-column: 1 / -1;
   padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--bad-line);
-  background: var(--bad-bg);
+  border: 1px solid var(--line-2);
   font-size: var(--fs-s);
 }
 
@@ -666,12 +1304,19 @@
   border-bottom: 1px solid var(--line);
 }
 .sentence-rows {
-  font-size: var(--fs-l);
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 400;
   text-align: right;
+  font-variant-numeric: tabular-nums slashed-zero;
 }
-.sentence.is-cascade .sentence-rows {
-  color: var(--bad);
+.sentence {
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.sentence.is-dim {
+  opacity: 0.4;
+}
+.sentence.is-lit {
+  box-shadow: inset 2px 0 0 var(--ink);
 }
 .sentence-text {
   min-width: 0;
@@ -702,6 +1347,15 @@
   display: block;
   height: 100%;
   background: var(--ink-2);
+  transform-origin: left center;
+}
+.pertable.is-seen .pctbar span {
+  animation: pctbar-grow var(--dur-enter) var(--ease-out) both;
+}
+@keyframes pctbar-grow {
+  from {
+    transform: scaleX(0);
+  }
 }
 .flagword {
   color: var(--bad);
@@ -965,14 +1619,21 @@
   flex-direction: column;
   gap: var(--s-3);
   padding: var(--s-5);
-  border: 2px solid var(--ink);
+  border: 1px solid var(--ink-3);
   background: var(--bg-1);
 }
 .decide-title {
   font-size: var(--fs-xl);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.015em;
   line-height: 1.2;
+}
+.hash-lock {
+  margin-right: 6px;
+  color: var(--ink-2);
+  vertical-align: -1px;
+  animation: stamp-land 200ms var(--ease-press) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
 }
 .hashrows {
   display: flex;
@@ -1017,18 +1678,19 @@
   flex-direction: column;
   gap: var(--s-3);
   padding: var(--s-5);
-  border: 2px solid var(--tone);
-  background: var(--tone-bg);
+  border: 1px solid var(--tone-line);
+  background: var(--bg-1);
 }
 .outcome-word {
   display: flex;
   align-items: center;
   gap: var(--s-3);
   color: var(--tone-text);
-  font-size: clamp(30px, 4.6vw, 56px);
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3vw, 48px);
   font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
+  line-height: 1;
+  text-transform: uppercase;
 }
 .outcome-word .mark {
   color: var(--tone);
@@ -1062,8 +1724,8 @@
 }
 .break-note {
   padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--caution-line);
-  background: var(--caution-bg);
+  border: 1px solid var(--line-2);
+  background: var(--bg-1);
   font-size: var(--fs-s);
   overflow-wrap: anywhere;
 }
@@ -1122,9 +1784,12 @@
   gap: 2px var(--s-3);
 }
 .breakres-code {
-  font-size: var(--fs-xl);
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 500;
   line-height: 1.2;
+}
+.stamp .breakres-code {
+  font: inherit;
 }
 .breakres-msg {
   flex: 1 1 240px;
@@ -1197,43 +1862,9 @@
   gap: var(--s-2);
 }
 
-@media (max-width: 1120px) {
-  .runpage {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .rail {
-    display: none;
-  }
-}
-
 @media (max-width: 860px) {
   .blast-hero {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .phases {
-    grid-template-columns: minmax(0, 1fr);
-    border-left: 0;
-    border-top: 1px solid var(--line);
-  }
-  .phase {
-    flex-direction: row;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 0 var(--s-2);
-    padding: 5px 0;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .phase-label {
-    flex: 1 1 auto;
-  }
-  .phase-ms {
-    font-size: var(--fs-m);
-  }
-  .phase-note {
-    order: 3;
-    width: 100%;
-    text-align: right;
   }
 }
 
@@ -1241,17 +1872,8 @@
   .budgetbox .plainlist {
     columns: 1;
   }
-  .runpage {
-    padding-top: var(--s-4);
-  }
   .runcol {
     gap: var(--s-5);
-  }
-  .runhead {
-    padding: var(--s-4);
-  }
-  .runhead-meta {
-    gap: var(--s-2) var(--s-5);
   }
   .story {
     flex-direction: column;

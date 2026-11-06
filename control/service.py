@@ -13,12 +13,12 @@ import yaml
 
 from control import approvals, evidence, llm, settings
 from control import gate as static_gate
-from control.agent import describe_schema, draft_guardrails, draft_host_guardrails, run_loop
+from control.agent import describe_schema, draft_guardrails, draft_host_guardrails, run_loop, second_opinion
 from control.apply import apply_host_plan, apply_plan
 from control.approvals import ApprovalError
 from control.plan import guardrails_hash, sha256_hex
 from control.runner_client import RunnerClient, RunnerError
-from control.snapshot import conn_from_target, fingerprint, take_snapshot
+from control.snapshot import conn_from_target, expected_clone, fingerprint, take_snapshot
 from control.store import Store
 
 log = logging.getLogger("shadowrun.service")
@@ -135,7 +135,7 @@ class Service:
             return {"snapshot_id": snapshot_id, "lsn": fp["lsn"], "tables": fp["tables"], "schema_sha256": fp["schema_sha256"], "digest": fp["digest"], "cached": True, "timing": {}}
         snap = await asyncio.to_thread(take_snapshot, conn)
         try:
-            loaded = await self.runner.put_snapshot(snap["snapshot_id"], snap["dump_path"])
+            loaded = await self.runner.put_snapshot(snap["snapshot_id"], snap["dump_path"], expected_clone(snap))
         finally:
             Path(snap["dump_path"]).unlink(missing_ok=True)
         snap.pop("dump_path")
@@ -257,6 +257,7 @@ class Service:
             )
             final = result["final"]
             run["final_attempt"] = final["n"]
+            await self._second_opinion(run, final)
             self._set_usage(run, sink)
             await self._prod_check(run, target, snap)
             await self._conclude(run, target, final)
@@ -267,6 +268,17 @@ class Service:
             self.event(run, "run_error", {"error": run["error"]})
             self._set_usage(run, sink)
             self.store.save_run(run)
+
+    async def _second_opinion(self, run: dict, final: dict) -> None:
+        """Only where a model wrote the plan from a request and it passed. A failed call leaves the decision to the rest."""
+        if not run.get("task") or run.get("submitted_steps") or final.get("verdict") != "passed":
+            return
+        try:
+            final["second_opinion"] = await asyncio.to_thread(second_opinion, run["task"], final)
+        except (llm.LLMError, ValueError) as e:
+            final["second_opinion"] = {"error": str(e)[:200]}
+        self.event(run, "second_opinion", {k: final["second_opinion"].get(k) for k in ("model", "verdict", "error")})
+        self.store.save_run(run)
 
     async def _prod_check(self, run: dict, target: dict, snap: dict) -> None:
         """Hash prod again from outside the sandbox. A rehearsal, whatever it did, must leave this unchanged."""
@@ -309,7 +321,9 @@ class Service:
         approvals.open_challenge(run)
         within = final["budget"]["within"]
         # A rehearse-only run, such as a pull request nobody has reviewed yet, never reaches prod by itself.
-        if within and target.get("auto_apply_within_budget") and not run.get("rehearse_only"):
+        # Nor does a plan a second model doubts: a model's doubt can add a person, and it can't remove one.
+        doubted = (final.get("second_opinion") or {}).get("verdict") in ("partly", "does_not")
+        if within and target.get("auto_apply_within_budget") and not run.get("rehearse_only") and not doubted:
             run["status"] = "approved"
             run["approval"] = approvals.grant_auto(run)
             self.event(run, "auto_approved_within_budget", {"limits": final["budget"]["limits"]})
@@ -317,7 +331,7 @@ class Service:
             await self.apply(run["id"], actor="budget-policy")
             return
         run["status"] = "awaiting_approval"
-        self.event(run, "awaiting_approval", {"reasons": final["budget"]["reasons"] or ["this run was asked to rehearse only"]})
+        self.event(run, "awaiting_approval", {"reasons": final["budget"]["reasons"] or (["a second model doubts this does what was asked"] if doubted else ["this run was asked to rehearse only"])})
         self.store.save_run(run)
 
     # ---------------------------------------------------------------- approve, reject
@@ -534,6 +548,10 @@ class Service:
         task.add_done_callback(self._tasks.discard)
         return doc
 
+    async def _golden_rows(self, snapshot_id: str) -> dict:
+        inspection = await self.runner.inspect(snapshot_id, sample_rows=0)
+        return {t["name"]: t["row_count"] for t in inspection.get("tables", [])}
+
     async def _drive_redteam(self, doc: dict) -> None:
         target = self.store.get_target(DEMO_TARGET_ID)
         try:
@@ -541,6 +559,7 @@ class Service:
             snap = await self.ensure_snapshot(target)
             doc["snapshot_id"] = snap["snapshot_id"]
             doc["prod_before"] = (await asyncio.to_thread(fingerprint, conn))["digest"]
+            golden_before = await self._golden_rows(snap["snapshot_id"])
             self.store.save_redteam(doc["id"], doc)
             for attack in await self.runner.attacks():
                 result = await self.runner.redteam(attack["id"], snap["snapshot_id"])
@@ -553,6 +572,8 @@ class Service:
                 doc["wall_two"] = {"error": str(e)[:300]}
             doc["prod_after"] = (await asyncio.to_thread(fingerprint, conn))["digest"]
             doc["prod_unchanged"] = doc["prod_before"] == doc["prod_after"]
+            # Nusa checks that its master rootfs survives. Here, a new clone after every attack has to match one from before them.
+            doc["golden_unchanged"] = bool(golden_before) and golden_before == await self._golden_rows(snap["snapshot_id"])
             doc["contained"] = sum(1 for a in doc["attacks"] if a["contained"])
             doc["total"] = len(doc["attacks"])
             doc["status"] = "done"

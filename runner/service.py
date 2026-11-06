@@ -4,6 +4,9 @@ This process holds no prod credential and no inference key. It receives a dump a
 """
 from __future__ import annotations
 
+import base64
+import json
+
 import asyncio
 import hmac
 import logging
@@ -90,7 +93,9 @@ async def put_snapshot(snapshot_id: str, request: Request) -> dict:
             async for chunk in request.stream():
                 size += len(chunk)
                 f.write(chunk)
-        info = await engine.ensure_golden(snapshot_id, path)
+        header = request.headers.get("x-sr-expected")
+        expected = json.loads(base64.b64decode(header)) if header else None
+        info = await engine.ensure_golden(snapshot_id, path, expected=expected)
         info["dump_bytes"] = size
         return info
     finally:

@@ -79,6 +79,10 @@ def markdown(run: dict) -> str:
     findings = (final.get("gate") or {}).get("findings", [])
     if findings:
         lines += ["Static gate:"] + [f"- `{f['rule']}`: {f['reason']}" for f in findings[:8]] + [""]
+    opinion = final.get("second_opinion") or {}
+    if opinion.get("verdict") in ("partly", "does_not"):
+        said = " ".join(x for x in (opinion.get("left_out"), opinion.get("added")) if x)
+        lines += [f"A second model ({opinion.get('model')}) doubts this does what was asked: {said}", ""]
     undo = final.get("undo") or {}
     if undo.get("verified"):
         lines += ["Undo plan generated and proved on the clone.", ""]

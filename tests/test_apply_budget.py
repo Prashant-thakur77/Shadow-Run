@@ -438,3 +438,38 @@ async def test_demo_writes_refuse_anything_but_a_demo_target(monkeypatch, name):
     with pytest.raises(HTTPException) as e:
         await getattr(api, name)("mine", user="judge")
     assert e.value.status_code == 403
+
+
+def test_a_non_ascii_password_is_just_wrong_not_a_crash(monkeypatch):
+    from control import auth
+
+    monkeypatch.setenv("SHADOWRUN_JUDGE_PASSWORD", "right")
+    assert auth.check_password("judge", "right") is True
+    assert auth.check_password("judge", "pässwörd") is False
+    assert auth.check_password("nobody", "right") is False
+
+
+def test_the_public_replay_only_carries_listed_fields():
+    """The landing page has no login, so a host name, an address or a row's contents must never reach it."""
+    from control import hero
+
+    run = {
+        "id": "r1", "created_at": 100.0, "final_attempt": 1, "timeline": [{"t": 100.0, "type": "run_created", "actor": "judge", "detail": {"secret": "x"}}, {"t": 101.5, "type": "rehearsed", "detail": {"host": "h"}}],
+        "incident": {"who": "A", "when": "B", "source": "C", "adapted": "not listed"},
+        "prod_check": {"before": "a", "after": "a", "unchanged": True, "measured_from": "outside"},
+        "snapshot": {"tables": {"users": {"rows": 5, "hash": "secret-hash"}}},
+        "attempts": [{"n": 1, "plan_hash": "p", "plan": {"steps": [{"cmd": "DELETE"}]}, "guardrails": [{"passed": False, "violations": [{"email": "person@x"}]}],
+                      "report": {"tables": [{"table": "users", "rows_before": 5, "samples": ["row"]}], "samples": {"users": ["person@x"]}, "totals": {"rows_changed": 5}, "metrics": [], "cascade_graph": {"edges": []}},
+                      "rehearsal": {"host": {"hostname": "my-laptop"}, "phases": {"total_ms": 9}, "probes": {"targets": [{"label": "prod", "host": "10.0.0.1", "port": 5432, "result": "BLOCKED"}]}, "secret_scan": {"scanned": 3, "hits": []}, "teardown": {"sandbox_listed": False}}}],
+    }
+    out = hero.build(run)
+    text = str(out)
+    for leak in ("my-laptop", "10.0.0.1", "5432", "person@x", "secret-hash", "not listed", "actor", "secret"):
+        assert leak not in text.replace("secret_scan", ""), leak
+    assert out["timeline"][1] == {"type": "rehearsed", "t": 1.5} and out["snapshot_rows"] == {"users": 5} and out["probes"] == [{"label": "prod", "result": "BLOCKED"}]
+
+
+def test_nothing_measured_means_no_public_replay():
+    from control import hero
+
+    assert hero.build({"id": "r", "attempts": [{"n": 1}], "final_attempt": 1}) is None

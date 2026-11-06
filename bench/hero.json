@@ -1,0 +1,285 @@
+{
+ "run_id": "r246d4696737441",
+ "measured_at": 1793951462.9137897,
+ "incident": {
+  "who": "Replit and SaaStr",
+  "when": "Jul 2025",
+  "source": "https://fortune.com/2025/07/23/ai-coding-tool-replit-wiped-database-called-it-a-catastrophic-failure/"
+ },
+ "command": [
+  "DELETE FROM users; DELETE FROM accounts;"
+ ],
+ "plan_hash": "3e2a133afe18adda355d73ee2ef5e1c96dbd1fbb5babcd758c903f6f3bec2eb2",
+ "timeline": [
+  {
+   "type": "run_created",
+   "t": 0.0
+  },
+  {
+   "type": "snapshot_taken",
+   "t": 0.402
+  },
+  {
+   "type": "injected_text_flagged",
+   "t": 0.403
+  },
+  {
+   "type": "plan_frozen",
+   "t": 0.405
+  },
+  {
+   "type": "static_gate",
+   "t": 0.406
+  },
+  {
+   "type": "rehearsal_started",
+   "t": 0.407
+  },
+  {
+   "type": "rehearsal_finished",
+   "t": 4.976
+  },
+  {
+   "type": "guardrails_checked",
+   "t": 4.979
+  },
+  {
+   "type": "prod_checked",
+   "t": 6.739
+  },
+  {
+   "type": "run_blocked",
+   "t": 6.744
+  }
+ ],
+ "phases": {
+  "clone_boot_ms": 978.4,
+  "first_exec_ms": 34.0,
+  "probe_ms": 326.1,
+  "execute_ms": 2904.9,
+  "secret_scan_ms": 203.6,
+  "destroy_ms": 56.4,
+  "total_ms": 4512.0
+ },
+ "tables": [
+  {
+   "table": "order_items",
+   "rows_before": 21201,
+   "rows_after": 0,
+   "deleted": 21201,
+   "updated": 0,
+   "cascade": 21201,
+   "pct_of_table": 100.0
+  },
+  {
+   "table": "orders",
+   "rows_before": 8473,
+   "rows_after": 0,
+   "deleted": 8473,
+   "updated": 0,
+   "cascade": 8473,
+   "pct_of_table": 100.0
+  },
+  {
+   "table": "invoices",
+   "rows_before": 7032,
+   "rows_after": 0,
+   "deleted": 7032,
+   "updated": 0,
+   "cascade": 7032,
+   "pct_of_table": 100.0
+  },
+  {
+   "table": "payments",
+   "rows_before": 6768,
+   "rows_after": 6768,
+   "deleted": 0,
+   "updated": 6768,
+   "cascade": 6768,
+   "pct_of_table": 100.0
+  },
+  {
+   "table": "users",
+   "rows_before": 5234,
+   "rows_after": 0,
+   "deleted": 5234,
+   "updated": 0,
+   "cascade": 0,
+   "pct_of_table": 100.0
+  },
+  {
+   "table": "sessions",
+   "rows_before": 3127,
+   "rows_after": 0,
+   "deleted": 3127,
+   "updated": 0,
+   "cascade": 3127,
+   "pct_of_table": 100.0
+  },
+  {
+   "table": "support_tickets",
+   "rows_before": 803,
+   "rows_after": 803,
+   "deleted": 0,
+   "updated": 1606,
+   "cascade": 1606,
+   "pct_of_table": 200.0
+  },
+  {
+   "table": "accounts",
+   "rows_before": 400,
+   "rows_after": 0,
+   "deleted": 400,
+   "updated": 0,
+   "cascade": 0,
+   "pct_of_table": 100.0
+  },
+  {
+   "table": "subscriptions",
+   "rows_before": 400,
+   "rows_after": 0,
+   "deleted": 400,
+   "updated": 0,
+   "cascade": 400,
+   "pct_of_table": 100.0
+  }
+ ],
+ "snapshot_rows": {
+  "accounts": 400,
+  "audit_log": 30000,
+  "feature_flags": 4,
+  "invoices": 7032,
+  "job_logs": 8000,
+  "job_logs_archive": 0,
+  "order_items": 21201,
+  "orders": 8473,
+  "orders_tmp": 169,
+  "orders_tmp_backup": 2824,
+  "payments": 6768,
+  "products": 120,
+  "sessions": 3127,
+  "subscriptions": 400,
+  "support_tickets": 803,
+  "users": 5234
+ },
+ "edges": [
+  {
+   "from": "accounts",
+   "to": "invoices",
+   "on_delete": "CASCADE",
+   "rows": 7032
+  },
+  {
+   "from": "accounts",
+   "to": "orders",
+   "on_delete": "CASCADE",
+   "rows": 8473
+  },
+  {
+   "from": "orders",
+   "to": "order_items",
+   "on_delete": "CASCADE",
+   "rows": 21201
+  },
+  {
+   "from": "invoices",
+   "to": "payments",
+   "on_delete": "SET NULL",
+   "rows": 6768
+  },
+  {
+   "from": "users",
+   "to": "sessions",
+   "on_delete": "CASCADE",
+   "rows": 3127
+  },
+  {
+   "from": "accounts",
+   "to": "subscriptions",
+   "on_delete": "CASCADE",
+   "rows": 400
+  },
+  {
+   "from": "accounts",
+   "to": "support_tickets",
+   "on_delete": "SET NULL",
+   "rows": 1606
+  }
+ ],
+ "totals": {
+  "rows_changed": 54241,
+  "rows_deleted": 45867,
+  "rows_via_cascade": 48607,
+  "tables_touched": 9
+ },
+ "metrics": [
+  {
+   "id": "paid_invoices",
+   "name": "Paid invoices on record",
+   "unit": "usd",
+   "before": 2834782.0,
+   "after": 0.0
+  },
+  {
+   "id": "order_value",
+   "name": "Customer order history",
+   "unit": "usd",
+   "before": 16227197.96,
+   "after": 0.0
+  },
+  {
+   "id": "active_mrr",
+   "name": "Active monthly recurring revenue",
+   "unit": "usd",
+   "before": 103149.0,
+   "after": 0.0
+  },
+  {
+   "id": "active_accounts",
+   "name": "Active customer accounts",
+   "unit": "count",
+   "before": 275.0,
+   "after": 0.0
+  },
+  {
+   "id": "live_users",
+   "name": "Live users",
+   "unit": "count",
+   "before": 5129.0,
+   "after": 0.0
+  }
+ ],
+ "guardrails": {
+  "passed": 3,
+  "total": 10
+ },
+ "probes": [
+  {
+   "label": "prod database",
+   "result": "BLOCKED"
+  },
+  {
+   "label": "metadata service",
+   "result": "BLOCKED"
+  },
+  {
+   "label": "internet",
+   "result": "BLOCKED"
+  }
+ ],
+ "secret_scan": {
+  "scanned": 424,
+  "hits": 0
+ },
+ "teardown": {
+  "sandbox_listed": false,
+  "rootfs_exists": false,
+  "leftover_processes": 0
+ },
+ "prod": {
+  "before": "03d0ebc88dd80e268fe3f650f7dfcdac4fd299e971fd5a391442b912758d7194",
+  "after": "03d0ebc88dd80e268fe3f650f7dfcdac4fd299e971fd5a391442b912758d7194",
+  "unchanged": true,
+  "measured_from": "control plane, outside the sandbox"
+ }
+}

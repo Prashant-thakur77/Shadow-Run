@@ -61,6 +61,19 @@ def agent_conn(dbname: str = DB):
     return psycopg.connect(f"host=/var/run/postgresql dbname={dbname} user=agent")
 
 
+def clone_differences(expected: dict, rows: dict, schema_sha256: str) -> list[str]:
+    """What's different between a restored clone and the prod snapshot it came from."""
+    problems = []
+    if expected.get("schema_sha256") and expected["schema_sha256"] != schema_sha256:
+        problems.append("its schema differs, so indexes, constraints or cascades may be missing")
+    want = expected.get("rows")
+    if want is not None:
+        for table in sorted(set(want) | set(rows)):
+            if want.get(table) != rows.get(table):
+                problems.append(f"{table} has {rows.get(table)} rows, and prod has {want.get(table)}")
+    return problems
+
+
 def op_prepare(job: dict) -> dict:
     """Restore the snapshot and install capture. Output of this op is the golden clone state."""
     timing: dict = {"postgres_start_ms": start_postgres()["ms"]}
@@ -83,6 +96,16 @@ def op_prepare(job: dict) -> dict:
     restore_err = r.stderr.strip()[:2000]
     if r.returncode not in (0, 1):
         raise RuntimeError(f"pg_restore failed rc={r.returncode}: {restore_err}")
+
+    # pg_restore exits 1 for harmless warnings and for real failures alike, such as a foreign key that couldn't be built.
+    # A clone missing one reports a smaller blast radius than prod's, so a clone that doesn't match can't become a golden.
+    if job.get("expected"):
+        with super_conn() as c:
+            cur = c.cursor()
+            problems = clone_differences(job["expected"], txrun.table_counts(cur), txrun.sha256_json(txrun.schema_state(cur)))
+        if problems:
+            return {"ok": False, "error": f"the clone does not match prod: {'; '.join(problems[:6])}. pg_restore said: {restore_err[-600:]}"}
+        timing["matches_prod"] = True
 
     t0 = time.perf_counter()
     with super_conn() as c:

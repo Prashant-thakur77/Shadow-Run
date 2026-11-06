@@ -10,9 +10,12 @@ import argparse
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
@@ -40,7 +43,40 @@ def load_env() -> None:
         for line in ENV_PATH.read_text().splitlines():
             if "=" in line and not line.lstrip().startswith("#"):
                 k, v = line.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip())
+                os.environ[k.strip()] = v.strip()
+
+
+@contextmanager
+def reachable(admin: dict) -> Iterator[dict]:
+    """Connection details that work from here. Some networks block Postgres's high port, so if the public host
+    doesn't answer, this goes through the control VM over SSH, which reaches the database inside the VPC."""
+    try:
+        socket.create_connection((admin["host"], int(admin["port"])), timeout=6).close()
+        yield admin
+        return
+    except OSError:
+        pass
+    control = load_state()["instances"]["control"]["main_ip"]
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        local_port = probe.getsockname()[1]
+    print(f"{admin['host']}:{admin['port']} isn't reachable from this network, so going through the control VM")
+    forward = f"127.0.0.1:{local_port}:{os.environ['SHADOWRUN_PROD_VPC_HOST']}:{admin['port']}"
+    tunnel = subprocess.Popen(["ssh", "-i", str(SSH_KEY), "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=30", "-N", "-L", forward, f"root@{control}"])
+    try:
+        for _ in range(40):
+            try:
+                socket.create_connection(("127.0.0.1", local_port), timeout=1).close()
+                break
+            except OSError:
+                if tunnel.poll() is not None:
+                    raise RuntimeError("the SSH tunnel to the control VM closed") from None
+                time.sleep(0.5)
+        else:
+            raise RuntimeError("the SSH tunnel to the control VM didn't open")
+        yield {**admin, "host": "127.0.0.1", "port": str(local_port)}
+    finally:
+        tunnel.terminate()
 
 
 def set_env(values: dict[str, str]) -> None:

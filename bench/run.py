@@ -41,7 +41,7 @@ from control.agent import call_planner, describe_schema, run_loop
 from control.apply import apply_host_plan, apply_plan
 from control.plan import PlanError, normalize_plan
 from control.runner_client import RunnerClient
-from control.snapshot import ProdConn, take_snapshot
+from control.snapshot import ProdConn, expected_clone, take_snapshot
 
 log = logging.getLogger("shadowrun.bench")
 ROOT = Path(__file__).resolve().parent.parent
@@ -97,7 +97,7 @@ async def prepare_task(ctx: Ctx, task: dict) -> None:
         ctx.templates[tid] = template
         snap = await asyncio.to_thread(take_snapshot, prod_conn(ctx, template))
         try:
-            await ctx.runner.put_snapshot(snap["snapshot_id"], snap["dump_path"])
+            await ctx.runner.put_snapshot(snap["snapshot_id"], snap["dump_path"], expected_clone(snap))
         finally:
             Path(snap["dump_path"]).unlink(missing_ok=True)
         snap.pop("dump_path")

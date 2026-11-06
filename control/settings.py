@@ -27,6 +27,7 @@ INFERENCE_KEY = os.environ.get("VULTR_INFERENCE_KEY", "")
 PLANNER_MODEL = os.environ.get("SHADOWRUN_MODEL", "qwen3.8-27b")
 GUARDRAIL_MODEL = os.environ.get("SHADOWRUN_GUARDRAIL_MODEL", "glm-5.3")
 EXPLAINER_MODEL = os.environ.get("SHADOWRUN_EXPLAINER_MODEL", "qwen3.8-27b")
+SECOND_OPINION_MODEL = os.environ.get("SHADOWRUN_SECOND_OPINION_MODEL", "glm-5.3-flash")
 SAFETY_MODEL = os.environ.get("SHADOWRUN_SAFETY_MODEL", "nemotron-3.5-content-safety")
 
 RUNNER_URL = os.environ.get("SHADOWRUN_RUNNER_URL", "http://127.0.0.1:8101")

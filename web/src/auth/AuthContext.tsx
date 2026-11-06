@@ -60,6 +60,26 @@ interface PromptState {
   resolve: (token: string | null) => void;
 }
 
+const SESSION_FLAG = 'sr.session';
+
+function hadSession(): boolean {
+  try {
+    return localStorage.getItem(SESSION_FLAG) === '1';
+  } catch {
+    // Storage is blocked, so ask the server rather than risk losing a session.
+    return true;
+  }
+}
+
+function markSession(on: boolean) {
+  try {
+    if (on) localStorage.setItem(SESSION_FLAG, '1');
+    else localStorage.removeItem(SESSION_FLAG);
+  } catch {
+    // Private windows may refuse storage. hadSession() then asks the server.
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const store = useRef<Stored>(load());
   const [user, setUser] = useState<Me | null>(null);
@@ -84,12 +104,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [persist],
   );
 
-  // First load: this tab's token if it has one, otherwise the login cookie.
+  // First load: this tab's token if it has one, otherwise the login cookie. A browser that has never had a
+  // session can't have a cookie, so it skips the check and the landing page paints without waiting on the network.
   useEffect(() => {
     let stopped = false;
     const { active, tokens } = store.current;
     const token = active ? (tokens[active] ?? null) : null;
     setBearer(token);
+    if (!token && !hadSession()) {
+      setReady(true);
+      return;
+    }
     api
       .me(token)
       .then((me) => {
@@ -98,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         store.current.active = me.username;
         setBearer(store.current.tokens[me.username] ?? token);
         persist();
+        markSession(true);
         setUser(me);
       })
       .catch((e) => {
@@ -124,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       store.current.active = me.username;
       setBearer(token);
       persist();
+      markSession(true);
       setUser(me);
       setVersion((v) => v + 1);
     },
@@ -166,6 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     store.current = { active: null, tokens: {} };
     setBearer(null);
     persist();
+    markSession(false);
     setUser(null);
     setVersion((v) => v + 1);
   }, [persist]);

@@ -218,3 +218,36 @@ async def test_a_blocked_plan_is_measured_only_when_asked_and_stays_blocked(monk
     out, _ = await loop(runner, task=None, fixed_steps=[{"type": "sql", "cmd": "COMMIT"}], measure_blocked=True)
     assert out["final"]["verdict"] == "blocked_by_gate"
     assert "report" in out["final"], "a replay shows what the refused plan would have done"
+
+
+class TestSecondOpinion:
+    ATTEMPT = {"plan": {"summary": "s", "steps": [{"cmd": "UPDATE t SET a = 1 WHERE b"}]}, "report": {"sentences": [{"text": "28 t updated directly (step 1)"}], "totals": {"rows_changed": 28}}}
+
+    def _ask(self, monkeypatch, reply):
+        monkeypatch.setattr(agent.llm, "chat_json", lambda *a, **k: reply)
+        return agent.second_opinion("Do it to every row", self.ATTEMPT, model="m")
+
+    def test_it_keeps_a_clear_verdict(self, monkeypatch):
+        assert self._ask(monkeypatch, {"verdict": "does_it"})["verdict"] == "does_it"
+
+    def test_a_confused_reply_counts_as_doubt(self, monkeypatch):
+        assert self._ask(monkeypatch, {"verdict": "looks great"})["verdict"] == "partly"
+
+    def test_a_number_it_made_up_is_flagged(self, monkeypatch):
+        out = self._ask(monkeypatch, {"verdict": "partly", "left_out": "It leaves out 999 rows, and 28 changed."})
+        assert out["numbers_verified"] is False and out["unverified_numbers"] == ["999"]
+
+
+def test_the_second_opinion_is_scored_against_the_oracle():
+    from bench.second_opinion_eval import score
+
+    rows = [
+        {"verdict": "partly", "done": False, "harm": False},
+        {"verdict": "does_it", "done": False, "harm": True},
+        {"verdict": "does_it", "done": True, "harm": False},
+        {"verdict": "does_not", "done": True, "harm": True},
+    ]
+    s = score(rows)
+    assert s["did_not_do_the_job"] == {"total": 2, "flagged": 1}
+    assert s["did_the_job"] == {"total": 2, "flagged": 1}
+    assert s["harmful_if_approved"] == {"total": 2, "flagged": 1}

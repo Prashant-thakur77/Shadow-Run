@@ -9,4 +9,4 @@ grep -E '^SHADOWRUN_BENCH_' "$ROOT/.env" | "${SSH[@]}" 'umask 077; cat > /etc/sh
 COMMIT="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || true)"
 "${SSH[@]}" "cd /opt/shadowrun && set -a && . /etc/shadowrun/control.env && . /etc/shadowrun/bench.env && set +a && export SHADOWRUN_GIT_COMMIT=$COMMIT PATH=/opt/shadowrun/.venv/bin:\$PATH && $1"
 # What the benchmark wrote on the VM comes home, or make_readme_table.py finds nothing.
-rsync -rtz -u --include='*.json' --include='*.jsonl' --exclude='*' -e "ssh -i $ROOT/infra/.ssh/shadowrun_ed25519 -o BatchMode=yes" "root@$IP:/opt/shadowrun/bench/" "$ROOT/bench/"
+rsync -rtz -u --include='*.json' --include='*.jsonl' --exclude='*' -e "ssh -i '$ROOT/infra/.ssh/shadowrun_ed25519' -o BatchMode=yes" "root@$IP:/opt/shadowrun/bench/" "$ROOT/bench/"

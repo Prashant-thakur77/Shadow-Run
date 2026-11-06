@@ -1,0 +1,682 @@
+/* The landing page's first screen: the nav, the headline and The Split. Sticky needs every ancestor free of
+   overflow: hidden, so nothing here sets it above a pinned stage. */
+.land {
+  --margin: clamp(16px, calc(40px + (100vw - 1280px) * 0.05), 96px);
+  --ledger-w: 190px;
+  --foot-h: 150px;
+  position: relative;
+  min-height: 100vh;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: center top;
+}
+
+.land-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--s-5);
+  height: var(--header-h);
+  padding: 0 var(--margin);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.land-nav-links {
+  display: flex;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.land-nav-links a {
+  color: var(--ink-3);
+  font-size: var(--fs-s);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.land-nav-links a:hover {
+  color: var(--ink);
+}
+.land-nav-right {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  margin-left: auto;
+  flex: none;
+}
+.land-nav-cta {
+  min-height: 32px;
+  padding: 4px 12px;
+}
+
+/* Hero */
+/* A definite height, so the stage takes what's left and its contents can't stretch it.
+   If the stage would fall below 420 px, the page scrolls rather than shrinking it. */
+.hero {
+  display: grid;
+  grid-template-rows: auto minmax(420px, 1fr) auto auto;
+  height: max(calc(100vh - var(--header-h)), 700px);
+  padding: 18px var(--margin) 10px;
+  gap: 12px;
+}
+.hero-title {
+  white-space: nowrap;
+}
+.hero-line {
+  display: block;
+  animation: hero-in 480ms var(--ease-enter) both;
+}
+.hero-line-1 {
+  color: var(--ink);
+}
+.hero-line-2 {
+  color: var(--ink-3);
+  animation-delay: 60ms;
+}
+@keyframes hero-in {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.hero-stage {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+}
+.hero-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1px;
+  align-items: center;
+  min-height: 46px;
+}
+.hero-bar-side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  min-width: 0;
+}
+.hero-bar-controls {
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
+.hero-note {
+  flex: 1 1 200px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.35;
+}
+/* Two lines reserved, so the text arriving can't change the stage's height and repaint prod. */
+.hero-caption {
+  max-width: none;
+  min-height: 33px;
+}
+
+/* The two rooms */
+.rooms {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  border-color: var(--line-2);
+}
+.rooms-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+.rooms-seam {
+  position: relative;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.rooms-hand {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 28px;
+  margin-top: -14px;
+  background: var(--ink);
+  opacity: 0;
+}
+.room {
+  display: grid;
+  grid-template-rows: 36px minmax(0, 1fr) var(--foot-h);
+  min-width: 0;
+  min-height: 0;
+}
+.room-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+  padding: 0 var(--s-3);
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+}
+.room-command {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-head-note {
+  flex: none;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.room-head-note-end {
+  margin-left: auto;
+}
+.room-body {
+  display: grid;
+  grid-template-columns: var(--ledger-w) minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+.room-prod .room-body {
+  grid-template-columns: minmax(0, 1fr) var(--ledger-w);
+}
+.room-field {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  margin: 12px;
+}
+.rooms-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+}
+.rooms-collapse {
+  position: absolute;
+  inset: 0;
+  transform-origin: center center;
+}
+.rooms-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  opacity: 0;
+  pointer-events: none;
+}
+.rooms-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(closest-side, var(--bad), transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+.rooms-label {
+  position: absolute;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 13px;
+  font-variant-numeric: tabular-nums slashed-zero;
+  white-space: nowrap;
+}
+.rooms-label.is-two-line {
+  display: block;
+}
+.rooms-label.is-two-line > span {
+  display: block;
+  line-height: 15px;
+}
+.rooms-label-rows {
+  color: var(--ink-2);
+}
+.rooms-label.is-bad .rooms-label-rows {
+  color: var(--bad);
+}
+.rooms-gone {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  text-align: center;
+}
+.rooms-gone-word {
+  color: var(--ink);
+  white-space: nowrap;
+}
+.rooms-gone-line {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* Ledger: real events, at the moment they landed, on the outer edge of each room. */
+.room-ledger {
+  min-height: 0;
+  padding: 10px var(--s-3);
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+}
+.room-ledger-cold {
+  border-right: 0;
+  border-left: 1px solid var(--line);
+}
+.ledger {
+  display: flex;
+  flex-direction: column;
+}
+.ledger-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.ledger-label {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+/* A long table or directory name gives way before its number does. */
+.ledger-row.is-table .ledger-label {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ledger-value {
+  flex: none;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+.ledger-value.is-good {
+  color: var(--good);
+}
+.ledger-value.is-bad {
+  color: var(--bad);
+}
+.ledger-lock {
+  flex: none;
+  color: var(--ink-2);
+}
+.ledger-row.is-skip {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px dashed var(--line-2);
+}
+
+/* Footers. Fixed height, so nothing landing here can resize a dot field. */
+.room-foot {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 10px var(--s-3) 10px;
+  border-top: 1px solid var(--line);
+  overflow: hidden;
+}
+.foot-big {
+  container-type: inline-size;
+  min-height: 64px;
+  display: flex;
+  align-items: flex-end;
+}
+.foot-figure {
+  display: block;
+  font-size: min(clamp(36px, 5vw, 88px), calc(100cqi / (var(--chars) * 0.552)));
+  line-height: 1;
+  white-space: nowrap;
+  animation: foot-land var(--dur-fast) var(--ease-press) both;
+}
+.foot-figure.is-bad {
+  color: var(--bad);
+}
+@keyframes foot-land {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.foot-rows {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+.foot-rows-label {
+  color: var(--ink-3);
+  font-size: var(--fs-s);
+}
+.foot-pending {
+  color: var(--ink-3);
+  font-size: var(--fs-s);
+}
+.foot-caption {
+  min-height: 17px;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 17px;
+}
+.foot-cells {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: end;
+  margin-top: auto;
+  padding-top: 4px;
+}
+.foot-cells dt {
+  color: var(--ink-3);
+  font-size: 11px;
+  line-height: 13px;
+}
+.foot-cells dd {
+  min-height: 18px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums slashed-zero;
+  white-space: nowrap;
+}
+/* Everything is laid out from the first frame, so nothing shifts when a value lands. */
+.foot-cells .is-pending dd {
+  visibility: hidden;
+}
+.foot-cells dd.is-bad-word {
+  color: var(--bad);
+}
+
+.room-foot-prod {
+  gap: 4px;
+}
+.prod-waiting {
+  margin-top: auto;
+  color: var(--ink-3);
+  font-size: var(--fs-s);
+}
+.prod-word {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: 64px;
+}
+.prod-same {
+  white-space: nowrap;
+}
+.prod-same.is-good {
+  color: var(--good);
+}
+.prod-same.is-bad {
+  color: var(--bad);
+}
+.prod-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 6px;
+  font-size: var(--fs-s);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.prod-verdict.is-good {
+  color: var(--good);
+}
+.prod-verdict.is-bad {
+  color: var(--bad);
+}
+.prod-hashes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s-5);
+  margin-top: auto;
+}
+.prod-hashes > div {
+  display: flex;
+  gap: var(--s-2);
+  align-items: baseline;
+}
+.prod-hashes dt {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.prod-hashes dd {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+.prod-note {
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.room-undrawn {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+/* Nothing measured: two empty frames and the words. */
+.rooms-empty .room {
+  grid-template-rows: 36px minmax(0, 1fr);
+}
+.room-body-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+.rooms-notyet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  max-width: 44ch;
+  padding: var(--s-5);
+}
+.rooms-notyet p {
+  color: var(--ink-2);
+}
+
+/* Viewports a little short for the stage: keep the same parts, tighter. */
+@media (max-height: 840px) and (min-width: 720px) {
+  .hero {
+    gap: 9px;
+    padding-top: 12px;
+    padding-bottom: 6px;
+  }
+}
+@media (max-width: 1180px) and (min-width: 1000px) {
+  .land {
+    --ledger-w: 150px;
+  }
+  .land-nav-links {
+    display: none;
+  }
+  .foot-cells {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .foot-cells > div:nth-child(n + 3) {
+    display: none;
+  }
+}
+
+/* Tablets and phones: the seam turns horizontal, clone above and prod below. */
+@media (max-width: 999px) {
+  .land {
+    --foot-h: auto;
+    background-size: 32px 32px;
+  }
+  .land-nav-links {
+    display: none;
+  }
+  .land-nav {
+    gap: var(--s-2);
+  }
+  .land-nav-right {
+    gap: var(--s-3);
+  }
+  .land-nav-cta,
+  .land-nav .textbtn,
+  .land-nav .brand {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .hero {
+    display: block;
+    height: auto;
+    padding-top: var(--s-4);
+  }
+  .hero-title {
+    white-space: normal;
+    font-size: clamp(36px, 10.6vw, 56px);
+  }
+  .hero-stage {
+    margin-top: var(--s-4);
+  }
+  .rooms {
+    height: auto;
+  }
+  .rooms-grid {
+    display: flex;
+    flex-direction: column;
+  }
+  .rooms-seam {
+    width: 100%;
+    height: 1px;
+  }
+  .rooms-hand {
+    display: none;
+  }
+  .room {
+    display: flex;
+    flex-direction: column;
+  }
+  /* 300 px of field fits the phone's scale, twice the rows per dot of a desktop. */
+  .room-body {
+    display: block;
+    height: 320px;
+  }
+  .room-field {
+    height: calc(100% - 20px);
+    margin: 10px;
+  }
+  .room-head {
+    flex-wrap: wrap;
+    gap: 2px var(--s-3);
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .room-command {
+    flex-basis: 100%;
+    order: 3;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .room-foot {
+    min-height: 132px;
+  }
+  .foot-cells {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px var(--s-3);
+  }
+  .foot-cells dd {
+    white-space: normal;
+  }
+  .prod-word {
+    flex-wrap: wrap;
+  }
+  .rooms-latest {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--s-2);
+    min-height: 30px;
+    padding: 6px var(--s-3);
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-2);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .rooms-latest .is-good {
+    color: var(--good);
+  }
+  .rooms-latest .is-bad {
+    color: var(--bad);
+  }
+  .rooms-events {
+    margin: 0;
+    border-width: 1px 0 0;
+  }
+  .rooms-events > summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .hero-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--s-3);
+    margin-top: var(--s-4);
+  }
+  .hero-bar-side,
+  .hero-bar-controls {
+    justify-content: flex-start;
+  }
+  .hero-bar .btn,
+  .hero-bar .seg-btn,
+  .fold > summary,
+  .account .btn,
+  .account .input {
+    min-height: 44px;
+  }
+  .fold > summary {
+    display: flex;
+    align-items: center;
+  }
+  .hero-bar .btn-primary {
+    width: 100%;
+  }
+  .hero-note {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .hero-caption {
+    margin-top: var(--s-3);
+  }
+  .rooms-gone .t-dot {
+    font-size: 48px;
+  }
+}
+@media (min-width: 1000px) {
+  .rooms-latest {
+    display: none;
+  }
+}

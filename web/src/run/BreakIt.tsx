@@ -4,6 +4,7 @@ import type { Run } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { asText } from '../lib/format';
 import { Mark } from '../ui/bits';
+import { Stamp } from '../ui/Stamp';
 import { measureProdBeforeApply } from './ProdProof';
 
 export interface BreakResult {
@@ -31,13 +32,20 @@ interface Control {
 }
 
 function ResultLine({ r }: { r: BreakResult }) {
+  const refused = r.matched && r.status >= 400;
   return (
     <div className={`breakres${r.matched ? ' is-match' : ' is-miss'}`}>
       <div className="breakres-req mono">
         {r.request} <span className="muted">as {r.as}</span>
       </div>
       <div className="breakres-out">
-        <span className="breakres-code mono">{r.status || 'no response'}</span>
+        {refused ? (
+          <Stamp tone="good" land>
+            Refused <span className="breakres-code">{r.status}</span>
+          </Stamp>
+        ) : (
+          <span className="breakres-code mono">{r.status || 'no response'}</span>
+        )}
         <span className="breakres-msg">{r.outcome ? <><code className="mono">{r.outcome}</code> </> : null}{r.message}</span>
         <span className="breakres-verdict">
           <Mark tone={r.matched ? 'good' : 'bad'} size={13} />

@@ -421,3 +421,23 @@ async def test_a_plan_keeps_running_normally_after_the_read_only_guardrails(gold
     result = rec["result"]
     assert result["ok"] and result["guardrails"][0]["passed"] is True
     assert result["undo"]["verified"] is True, result["undo"]
+
+
+async def test_a_clone_missing_rows_or_constraints_cant_become_a_golden(demo_dump):
+    """pg_restore exits 1 for warnings and for a foreign key it couldn't build alike. A partial clone would report a smaller
+    blast radius than prod's, so it has to be refused. The expected values here are deliberately wrong."""
+    from runner.engine import SandboxFailure
+
+    eng = Engine()
+    for expected, word in (({"rows": {"users": 1}}, "does not match prod"), ({"schema_sha256": "not-the-real-one"}, "schema differs")):
+        sid = f"s{uuid.uuid4().hex[:20]}"
+        with pytest.raises(SandboxFailure, match=word):
+            await eng.ensure_golden(sid, demo_dump, expected=expected)
+        assert not await eng.has_golden(sid), "a refused clone must not be left behind as a golden"
+
+
+async def test_the_clone_has_room_for_a_large_restore(golden):
+    """The runtime's default root disk is 4 GB, and a bigger database silently lost its foreign keys. It's sparse, so size costs nothing."""
+    eng, sid = golden
+    rec = await eng.rehearse(rid(), sid, [{"statements": ["SELECT 1"]}], [], attack_shell="df -m / | tail -1 | awk '{print $2}'")
+    assert int((rec.get("attack") or {}).get("output_tail", "0").strip().split()[-1]) > 16000, rec.get("attack")

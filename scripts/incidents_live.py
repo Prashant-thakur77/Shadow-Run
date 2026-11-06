@@ -13,6 +13,16 @@ sys.path.insert(0, str(ROOT))
 from checker.controls import load_env, login, wait  # noqa: E402
 
 
+def hero_from(judge) -> dict | None:
+    from control.hero import INCIDENT, build
+
+    for summary in judge.get("/api/runs?limit=60").json():
+        run = judge.get(f"/api/runs/{summary['id']}").json()
+        if (run.get("incident") or {}).get("id") == INCIDENT:
+            return build(run)
+    return None
+
+
 def main() -> int:
     load_env()
     url = os.environ.get("SHADOWRUN_URL") or json.loads((ROOT / "infra/STATE.json").read_text())["public_url"]
@@ -40,6 +50,8 @@ def main() -> int:
             print("     ", m[:110], flush=True)
     doc = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "url": url, "incidents": out, "rerun": "python scripts/incidents_live.py"}
     (ROOT / "bench/incidents.json").write_text(json.dumps(doc, indent=1) + "\n")
+    # The landing page falls back to this replay on a stack that hasn't run one yet.
+    (ROOT / "bench/hero.json").write_text(json.dumps(hero_from(judge), indent=1) + "\n")
     judge.post("/api/demo/reset").raise_for_status()
     judge.post("/api/demo/reset?target_id=demo-host").raise_for_status()
     return 0 if not any(r["reached_prod"] for r in out) else 1

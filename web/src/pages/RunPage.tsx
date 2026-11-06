@@ -1,39 +1,133 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import './_styles';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BlastSection } from '../run/Blast';
 import { BreakItPanel, type BreakResult } from '../run/BreakIt';
-import { DecisionSection } from '../run/Decision';
+import { DecisionBar, DecisionSection } from '../run/Decision';
 import { ExplanationSection } from '../run/Explanation';
 import { FlagsSection } from '../run/Flags';
 import { FooterSection } from '../run/Footer';
 import { GuardrailsSection } from '../run/Guardrails';
+import { handedOffRun } from '../run/handoff';
 import { IncidentBanner } from '../run/IncidentBanner';
 import { LearnSection } from '../run/Learn';
 import { showsComparison, WithWithout } from '../run/WithWithout';
-import { RunHeader } from '../run/Header';
+import { RunHeader, TaskBlock } from '../run/Header';
 import { AttemptsSection } from '../run/Attempts';
 import { PlanSection } from '../run/Plan';
 import { StoppedProof, UndoRoundTrip } from '../run/ProdProof';
 import { RehearsalSection } from '../run/Rehearsal';
 import { RunRecordSection } from '../run/RunRecord';
+import { RunRooms } from '../run/RunRooms';
 import { notifyProdChanged } from '../api/client';
-import { selectedAttempt, statusWord, storySteps } from '../run/derive';
+import { failedGuardrails, selectedAttempt, statusWord, storySteps } from '../run/derive';
 import { useRun } from '../run/useRun';
-import { isInProgress, statusInfo } from '../lib/status';
+import { isInProgress, statusInfo, type Tone } from '../lib/status';
 import { showTarget } from '../lib/target';
 import { Link } from '../lib/router';
 import { Boundary, Loading, Mark, Notice, Section } from '../ui/bits';
+import { Label } from '../ui/Label';
+import { TwoRoomsEmpty } from '../ui/TwoRooms';
 
 interface Item {
   id: string;
   title: string;
   aside?: ReactNode;
   body: ReactNode;
+  /** Zone three: the record. Folded until someone asks for it. */
+  record?: boolean;
+  /** A failure this section found, shown as a small mark in the rail. */
+  alert?: Tone;
+}
+
+/** The frames drawn empty and the run id, plus the task when Home handed it over, so its view transition has somewhere to land. */
+function RunLoading({ id, error }: { id: string; error: string | null }) {
+  const handed = handedOffRun(id);
+  return (
+    <div className="runpage">
+      <div className="run-verdict">
+        <header className="runhead tone-neutral">
+          <div className="runhead-verdict">
+            <Label>The verdict</Label>
+            <p className="runhead-word t-display-l">{error ? 'Not loaded' : 'Loading'}</p>
+          </div>
+          <div className="runhead-facts">
+            {handed && <TaskBlock text={handed.text} plan={handed.plan} />}
+            <p className="mono runhead-loadingid">{id}</p>
+          </div>
+        </header>
+        {error ? (
+          <Notice tone="bad" title="Could not load this run.">
+            {error}
+          </Notice>
+        ) : (
+          <div className="run-rooms is-empty">
+            <TwoRoomsEmpty loading clone={<Loading>Reading the run</Loading>} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A section in zone three: one line until it's opened. It stays mounted, so typing into Learn survives being folded. */
+function RecordSection({ item, index, open, onToggle }: { item: Item; index: string; open: boolean; onToggle: (id: string, open: boolean) => void }) {
+  return (
+    <details className="section record-section" id={item.id} open={open} onToggle={(e) => onToggle(item.id, (e.target as HTMLDetailsElement).open)}>
+      <summary className="section-head">
+        <span className="section-index mono">{index}</span>
+        <h2 className="section-title" id={`${item.id}-title`}>
+          {item.title}
+        </h2>
+        {item.aside && <div className="section-aside">{item.aside}</div>}
+      </summary>
+      <div className="section-body">
+        <Boundary label={item.title}>{item.body}</Boundary>
+      </div>
+    </details>
+  );
+}
+
+/** One pill that travels along the line to the section in view. */
+function Rail({ items, activeId, info, word, onGo }: { items: Item[]; activeId: string; info: { tone: Tone }; word: string; onGo: (id: string) => void }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    const pill = pillRef.current;
+    if (!track || !pill) return;
+    const link = track.querySelector<HTMLElement>('a.is-on');
+    pill.style.opacity = link ? '1' : '0';
+    if (link) pill.style.transform = `translateY(${link.offsetTop + link.offsetHeight / 2 - 6}px)`;
+  }, [activeId, items.length]);
+  return (
+    <aside className="rail" aria-label="Sections of this run">
+      <div className={`rail-status tone-${info.tone}`}>
+        <Mark tone={info.tone} size={13} />
+        {word}
+      </div>
+      <div className="rail-track" ref={trackRef}>
+        <span className="rail-pill" ref={pillRef} aria-hidden="true" />
+        <ol className="rail-list">
+        {items.map((it, i) => (
+          <li key={it.id} className={it.record && !items[i - 1]?.record ? 'rail-break' : undefined}>
+            <a href={`#${it.id}`} className={activeId === it.id ? 'is-on' : undefined} aria-current={activeId === it.id ? 'true' : undefined} onClick={() => onGo(it.id)}>
+              <span className="mono rail-n">{String(i + 1).padStart(2, '0')}</span>
+              <span className="rail-title">{it.title}</span>
+              {it.alert && <Mark tone={it.alert} size={11} />}
+            </a>
+          </li>
+        ))}
+        </ol>
+      </div>
+    </aside>
+  );
 }
 
 export function RunPage({ id }: { id: string }) {
   const { run, error, notFound, setRun, pollFast } = useRun(id);
   const [picked, setPicked] = useState<number | null>(null);
-  const [activeId, setActiveId] = useState<string>('rehearsal');
+  const [activeId, setActiveId] = useState<string>('decision');
+  const [openRecord, setOpenRecord] = useState<Record<string, boolean>>({});
 
   const inProgress = isInProgress(run?.status);
   const attempt = useMemo(() => (run ? selectedAttempt(run, picked) : null), [run, picked]);
@@ -60,15 +154,50 @@ export function RunPage({ id }: { id: string }) {
     if (fromApply && (run?.status === 'rolled_back' || run?.status === 'drift_detected')) window.scrollTo({ top: 0 });
   }, [run?.status]);
 
-  // Arriving at a section link, such as "Try to break it" on the home page. Sections appear as the run moves.
+  const toggleRecord = useCallback((itemId: string, open: boolean) => {
+    setOpenRecord((prev) => (!!prev[itemId] === open ? prev : { ...prev, [itemId]: open }));
+  }, []);
+
+  // Someone who rejected a plan has a reason in hand, and this is where it turns into a guardrail.
+  useEffect(() => {
+    if (run?.status === 'rejected') toggleRecord('learn', true);
+  }, [run?.status, toggleRecord]);
+
+  // Arriving at a section link, such as "Try to break it" on the home page. Sections appear as the run moves, and the ones
+  // above the target keep growing as they load, so this follows the target until the page settles or the person scrolls.
   const jumped = useRef(false);
   useEffect(() => {
     if (jumped.current || !location.hash) return;
-    const el = document.getElementById(location.hash.slice(1));
+    const hash = location.hash.slice(1);
+    const el = document.getElementById(hash);
     if (!el) return;
     jumped.current = true;
-    el.scrollIntoView();
-  }, [run?.status]);
+    if (el.tagName === 'DETAILS') toggleRecord(hash, true);
+    const follow = () => el.scrollIntoView({ behavior: 'instant' });
+    follow();
+    const grown = new ResizeObserver(follow);
+    grown.observe(document.querySelector('.runpage') ?? document.body);
+    const stop = () => {
+      grown.disconnect();
+      window.clearTimeout(timer);
+      for (const type of ['wheel', 'touchstart', 'keydown']) window.removeEventListener(type, stop);
+    };
+    const timer = window.setTimeout(stop, 2000);
+    for (const type of ['wheel', 'touchstart', 'keydown']) window.addEventListener(type, stop, { passive: true });
+  }, [run?.status, toggleRecord]);
+
+  // A section link on a page that's already here, such as going back. A closed fold has nothing to scroll to.
+  useEffect(() => {
+    const onHash = () => {
+      const hash = location.hash.slice(1);
+      const el = hash ? document.getElementById(hash) : null;
+      if (el?.tagName !== 'DETAILS' || (el as HTMLDetailsElement).open) return;
+      toggleRecord(hash, true);
+      requestAnimationFrame(() => el.scrollIntoView());
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, [toggleRecord]);
 
   // Highlight the section in view in the rail.
   useEffect(() => {
@@ -95,26 +224,25 @@ export function RunPage({ id }: { id: string }) {
       </div>
     );
   }
-  if (!run) {
-    return (
-      <div className="page">
-        {error ? (
-          <Notice tone="bad" title="Could not load this run.">
-            {error}
-          </Notice>
-        ) : (
-          <Loading>Loading the run</Loading>
-        )}
-      </div>
-    );
-  }
+  if (!run) return <RunLoading id={id} error={error} />;
 
   const info = statusInfo(run.status);
   const selectedN = attempt?.n ?? null;
   const flags = run.data_flags ?? [];
   const waitingForAttempts = inProgress && !(run.attempts?.length);
+  const failedHere = attempt ? failedGuardrails(attempt) : 0;
+  const anyAttemptFailed = (run.attempts ?? []).some((a) => a.verdict && a.verdict !== 'passed');
+  const gateVerdict = attempt?.gate?.verdict;
 
-  const items: Item[] = [];
+  // Zone two is the evidence, with the decision first. Zone three is the record, folded.
+  const items: Item[] = [
+    {
+      id: 'decision',
+      title: 'Decision',
+      alert: run.status === 'awaiting_approval' || run.status === 'approved' ? 'wait' : undefined,
+      body: <DecisionSection run={run} setRun={setRun} pollFast={pollFast} />,
+    },
+  ];
   if (showsComparison(run)) {
     items.push({
       id: 'compare',
@@ -122,49 +250,6 @@ export function RunPage({ id }: { id: string }) {
       body: <WithWithout run={run} />,
     });
   }
-  items.push(
-    {
-      id: 'rehearsal',
-      title: 'Rehearsal',
-      aside: <span className="muted">Disposable clone, microVM, network: {attempt?.rehearsal?.limits?.network ?? 'none'}</span>,
-      body: <RehearsalSection run={run} attempt={attempt} inProgress={inProgress} />,
-    },
-  );
-  if (steps.length > 1) {
-    items.push({
-      id: 'attempts',
-      title: 'Attempts',
-      body: <AttemptsSection run={run} steps={steps} selected={selectedN} onSelect={setPicked} />,
-    });
-  }
-  if (!waitingForAttempts) {
-    if (attempt?.plan || attempt?.gate) {
-      items.push({ id: 'plan', title: 'Plan', body: <PlanSection attempt={attempt} /> });
-    }
-    if (attempt) {
-      items.push({
-        id: 'blast',
-        title: 'Blast radius',
-        aside: <span className="muted">Measured on the clone</span>,
-        body: <BlastSection attempt={attempt} />,
-      });
-    }
-    if (attempt || (run.guardrails?.length ?? 0) > 0) {
-      items.push({ id: 'guardrails', title: 'Guardrails', body: <GuardrailsSection run={run} attempt={attempt} /> });
-    }
-    if (attempt?.report || attempt?.explanation) {
-      items.push({
-        id: 'explanation',
-        title: 'Explanation',
-        aside: <span className="muted">Commentary. Decides nothing.</span>,
-        body: <ExplanationSection run={run} attempt={attempt} />,
-      });
-    }
-    if (attempt) {
-      items.push({ id: 'record', title: 'Run record', body: <RunRecordSection attempt={attempt} /> });
-    }
-  }
-  items.push({ id: 'decision', title: 'Decision', body: <DecisionSection run={run} setRun={setRun} pollFast={pollFast} /> });
   if (showBreakIt) {
     items.push({
       id: 'break',
@@ -173,11 +258,61 @@ export function RunPage({ id }: { id: string }) {
       body: <BreakItPanel run={run} setRun={setRun} pollFast={pollFast} results={breakResults} setResults={setBreakResults} />,
     });
   }
+  items.push({
+    id: 'rehearsal',
+    title: 'Rehearsal',
+    aside: <span className="muted">Disposable clone, microVM, network: {attempt?.rehearsal?.limits?.network ?? 'none'}</span>,
+    alert: attempt?.rehearsal?.sandbox_error || attempt?.rehearsal?.contained === false ? 'bad' : undefined,
+    body: <RehearsalSection run={run} attempt={attempt} inProgress={inProgress} selected={selectedN} onSelect={setPicked} />,
+  });
+  if (steps.length > 1) {
+    items.push({
+      id: 'attempts',
+      title: 'Attempts',
+      alert: anyAttemptFailed ? 'bad' : undefined,
+      body: <AttemptsSection run={run} steps={steps} selected={selectedN} onSelect={setPicked} />,
+    });
+  }
+  if (!waitingForAttempts) {
+    if (attempt?.plan || attempt?.gate) {
+      items.push({
+        id: 'plan',
+        title: 'Plan',
+        alert: gateVerdict === 'block' ? 'bad' : gateVerdict === 'review' ? 'caution' : undefined,
+        body: <PlanSection attempt={attempt} />,
+      });
+    }
+    if (attempt) {
+      items.push({
+        id: 'blast',
+        title: 'Blast radius',
+        aside: <span className="muted">Measured on the clone</span>,
+        alert: (attempt.report?.capture_gaps?.length ?? 0) > 0 ? 'bad' : (attempt.report?.unlogged_changes?.length ?? 0) > 0 ? 'caution' : undefined,
+        body: <BlastSection attempt={attempt} seeded={run.target_id?.startsWith('demo') ?? false} />,
+      });
+    }
+    if (attempt || (run.guardrails?.length ?? 0) > 0) {
+      items.push({ id: 'guardrails', title: 'Guardrails', alert: failedHere > 0 ? 'bad' : undefined, body: <GuardrailsSection run={run} attempt={attempt} /> });
+    }
+    if (attempt?.report || attempt?.explanation) {
+      items.push({
+        id: 'explanation',
+        title: 'Explanation',
+        record: true,
+        aside: <span className="muted">Commentary. Decides nothing.</span>,
+        body: <ExplanationSection run={run} attempt={attempt} />,
+      });
+    }
+    if (attempt) {
+      items.push({ id: 'record', title: 'Run record', record: true, alert: attempt.rehearsal?.contained === false ? 'bad' : undefined, body: <RunRecordSection attempt={attempt} /> });
+    }
+  }
   // Learning needs a plan of SQL statements, so a Linux host has nothing to offer here.
   if (['rejected', 'applied', 'awaiting_approval'].includes(run.status) && run.final?.report?.kind !== 'host' && run.final?.plan) {
     items.push({
       id: 'learn',
       title: 'Turn this into a guardrail',
+      record: true,
       aside: <span className="muted">Learn from a rejection</span>,
       body: <LearnSection run={run} />,
     });
@@ -186,35 +321,38 @@ export function RunPage({ id }: { id: string }) {
     items.push({
       id: 'flags',
       title: 'Data flags',
+      record: true,
+      alert: 'caution',
       aside: <span className="muted">Stored text that reads like instructions</span>,
       body: <FlagsSection flags={flags} />,
     });
   }
   if (!inProgress || run.rerun) {
-    items.push({ id: 'commands', title: 'Commands and evidence', body: <FooterSection run={run} /> });
+    items.push({ id: 'commands', title: 'Commands and evidence', record: true, body: <FooterSection run={run} /> });
   }
 
+  const word = statusWord(run, info.label);
+  const goTo = (itemId: string) => {
+    if (items.find((it) => it.id === itemId)?.record) toggleRecord(itemId, true);
+  };
+  const number = (it: Item) => String(items.indexOf(it) + 1).padStart(2, '0');
+
   return (
-    <div className="runpage">
-      <aside className="rail" aria-label="Sections of this run">
-        <div className={`rail-status tone-${info.tone}`}>
-          <Mark tone={info.tone} size={13} />
-          {statusWord(run, info.label)}
-        </div>
-        <ol className="rail-list">
-          {items.map((it, i) => (
-            <li key={it.id}>
-              <a href={`#${it.id}`} className={activeId === it.id ? 'is-on' : undefined}>
-                <span className="mono rail-n">{String(i + 1).padStart(2, '0')}</span>
-                {it.title}
-              </a>
-            </li>
-          ))}
-        </ol>
-      </aside>
-      <div className="runcol">
+    <div className={run.status === 'awaiting_approval' || run.status === 'approved' ? 'runpage is-waiting' : 'runpage'}>
+      <div className="run-verdict">
         <Boundary label="header">
-          <RunHeader run={run} />
+          <div className="run-fold">
+            <RunHeader run={run} />
+            <nav className="rail-chips" aria-label="Sections of this run, phone">
+              {items.map((it) => (
+                <a key={it.id} href={`#${it.id}`} onClick={() => goTo(it.id)}>
+                  {it.alert && <Mark tone={it.alert} size={11} />}
+                  {it.title}
+                </a>
+              ))}
+            </nav>
+            <RunRooms run={run} attempt={attempt} picked={picked} />
+          </div>
           {run.incident && <IncidentBanner incident={run.incident} />}
           <UndoRoundTrip run={run} />
           <StoppedProof run={run} />
@@ -224,12 +362,33 @@ export function RunPage({ id }: { id: string }) {
             {error}
           </Notice>
         )}
-        {items.map((it, i) => (
-          <Section key={it.id} id={it.id} index={String(i + 1).padStart(2, '0')} title={it.title} aside={it.aside}>
-            <Boundary label={it.title}>{it.body}</Boundary>
-          </Section>
-        ))}
       </div>
+      <div className="run-body">
+        <Rail items={items} activeId={activeId} info={info} word={word} onGo={goTo} />
+        <div className="runcol">
+          <div className="run-zone-label">
+            <Label>The evidence</Label>
+          </div>
+          {items
+            .filter((it) => !it.record)
+            .map((it) => (
+              <Section key={it.id} id={it.id} index={number(it)} title={it.title} aside={it.aside}>
+                <Boundary label={it.title}>{it.body}</Boundary>
+              </Section>
+            ))}
+          {items.some((it) => it.record) && (
+            <div className="run-zone-label run-zone-record">
+              <Label>The record</Label>
+            </div>
+          )}
+          {items
+            .filter((it) => it.record)
+            .map((it) => (
+              <RecordSection key={it.id} item={it} index={number(it)} open={!!openRecord[it.id]} onToggle={toggleRecord} />
+            ))}
+        </div>
+      </div>
+      <DecisionBar run={run} setRun={setRun} pollFast={pollFast} />
     </div>
   );
 }

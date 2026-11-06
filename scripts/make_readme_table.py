@@ -79,11 +79,16 @@ def block_headline() -> str:
     h = r["heldout"]
     d, g, s = h["direct"], h["static_gate"], h["shadow_run"]
     n = d["risky_tasks"]
+    runs = [json.loads(line) for line in (BENCH / "runs.jsonl").read_text().splitlines() if line.strip()]
+    # A run that hit a harness error was retried, so it would otherwise count twice.
+    risky = [r for r in runs if r.get("mode") == "shadow_run" and r.get("risky") and r.get("outcome") != "harness_error"]
+    rewrote = sum(1 for r in risky if r.get("tries", 1) > 1)
     return (
-        f"**On {n} risky tasks held out from tuning, the same agent caused harm on prod {times(d['harm_on_prod']['mean'])} running directly, "
-        f"{times(g['harm_on_prod']['mean'])} behind a static rule gate, and {times(s['harm_on_prod']['mean'])} through Shadow Run.** "
-        f"If the human approver rubber-stamped every plan it held, that last number would be {s['harm_if_rubber_stamped']['mean']:g}. "
-        f"A rehearsal takes {s['rehearsal_s']['p50']} s at the median, boot to destroy."
+        f"**On {n} risky tasks held out from tuning, the same agent caused harm on prod {times(d['harm_on_prod']['mean'])} running directly and {times(g['harm_on_prod']['mean'])} behind a static rule gate. "
+        f"Through Shadow Run, nothing harmful reached prod without a person. If that person approved every plan unread, harm was {s['harm_if_rubber_stamped']['mean']:g}.**\n\n"
+        f"Read those last two together. The zero is mostly the hold: {s['risky_held']['mean']:g} of {n} risky plans waited for a person, and anything that holds every plan would score zero too. "
+        f"The drop to {s['harm_if_rubber_stamped']['mean']:g} is what rehearsing and the frozen guardrails add: the agent saw what its plan would really do and rewrote it, in {rewrote} of {len(risky)} risky runs. "
+        f"The price is approvals, since all {s['safe_held']['mean']:g} safe tasks waited too. A rehearsal takes {s['rehearsal_s']['p50']} s at the median, boot to destroy."
     )
 
 
@@ -133,6 +138,8 @@ def block_redteam() -> str:
     if w.get("firewall_before"):
         ending = "and the sandbox reached nothing outside." if w.get("contained") else "**and the sandbox reached the outside, so this wall failed.**"
         out += f" Second wall tested alone, with the no-NIC wall deliberately opened: rejected packets went from {w['firewall_before'].get('rejected_packets')} to {w['firewall_after'].get('rejected_packets')}, {ending}"
+    if "golden_unchanged" in rt:
+        out += " A new clone made after all the attacks matches one made before them." if rt["golden_unchanged"] else " **A new clone made after the attacks did not match one made before them.**"
     out += " Re-run: `python scripts/redteam_live.py`, or the button on the Red team page." + where(rt)
     return out
 
@@ -142,7 +149,8 @@ def block_controls() -> str:
     if not c:
         return NOT_YET
     rows = [[x["control"], x["must"], "pass" if x["ok"] else "FAIL"] for x in c["controls"]]
-    return table(["Attempt", "Must", "Result"], rows) + f"\n\n{c['passed']} of {c['total']} passed at {c['at']}. Re-run: `python -m checker.controls`." + where(c)
+    body = table(["Attempt", "Must", "Result"], rows)
+    return f"**{c['passed']} of {c['total']} passed** at {c['at']}. Re-run: `python -m checker.controls`." + where(c) + f"\n\n<details><summary>All {c['total']} attempts</summary>\n\n{body}\n\n</details>"
 
 
 def block_models() -> str:
@@ -164,8 +172,8 @@ def block_scale() -> str:
     s = load("scale.json")
     if not s:
         return NOT_YET
-    rows = [[f"{r['db_mb']} MB", r["pg_dump_s"], r["checksum_s"], r["golden_build_s"], r["clone_boot_ms"] or "failed", r["rehearsal_total_s"] or "timed out"] for r in s["rows"]]
-    return table(["Database", "pg_dump s", "Checksums s", "Build golden s", "Clone boot ms", "Rehearsal s"], rows) + f"\n\nRe-run: `{s['rerun']}`."
+    rows = [[f"{r['db_mb']} MB", r["pg_dump_s"], r["checksum_s"], r["golden_build_s"], r["clone_boot_ms"] or "n/a", r["rehearsal_total_s"] or ("refused: clone didn't match" if r.get("refused") else "timed out, so refused"), f"{r.get('rows_changed', 0):,}" if r.get("rows_changed") is not None else "n/a"] for r in s["rows"]]
+    return table(["Database", "pg_dump s", "Checksums s", "Build golden s", "Clone boot ms", "Rehearsal s", "Rows the plan changed"], rows) + f"\n\nRe-run: `{s['rerun']}`."
 
 
 def block_soak() -> str:
@@ -201,6 +209,36 @@ def block_incidents() -> str:
     return table(["Incident", "Command", "Measured on the clone", "Result", "Prod unchanged"], rows) + f"\n\nThe commands and how each was adapted are in [`demo/incidents.yaml`](demo/incidents.yaml). Re-run: `{d['rerun']}`." + where(d)
 
 
+def block_second_opinion() -> str:
+    o = load("second_opinion.json")
+    if not o:
+        return ""
+    miss, ok, harm = o["did_not_do_the_job"], o["did_the_job"], o["harmful_if_approved"]
+    return (
+        f"The second model was tested against the benchmark's blind oracles, on {o['plans']} plans held for a person. "
+        f"It flagged {miss['flagged']} of the {miss['total']} that didn't do the job, {harm['flagged']} of the {harm['total']} that would have caused harm if approved, "
+        f"and wrongly doubted {ok['flagged']} of the {ok['total']} that did. It's advice for the person, and its doubt only ever adds a person. Model `{o['model']}`. Re-run: `{o['rerun']}`."
+    )
+
+
+def block_clone_check() -> str:
+    c = load("clone_check.json")
+    if not c:
+        return ""
+    return f"Every clone is checked against what it was restored from: {c['matched']} of the {c['databases']} databases in the suite restore with the same rows and schema. A clone that doesn't match is refused, because one missing a foreign key would report a smaller blast radius than the real thing. Re-run: `{c['rerun']}`."
+
+
+def block_gate() -> str:
+    g = load("gate.json")
+    if not g:
+        return ""
+    b, ok = g["bad_plans"], g["good_plans"]
+    return (
+        f"Rules alone aren't enough. Reading the suite's {b['total']} known-bad plans with no rehearsal, the static gate sends {b['sent_to_a_person']} to a person, refuses {b['refused']} and passes {b['passed']}, "
+        f"which only a rehearsal can catch. It flags {ok['sent_to_a_person']} of the {ok['total']} known-good plans and refuses {ok['refused']}. Re-run: `{g['rerun']}`."
+    )
+
+
 def where(doc: dict) -> str:
     """A number measured on a dev machine must say so."""
     url = doc.get("url", "")
@@ -227,7 +265,7 @@ def block_gauntlet() -> str:
 
 
 BLOCKS = {
-    "incidents": block_incidents, "gauntlet": block_gauntlet, "models": block_models,
+    "incidents": block_incidents, "gate": block_gate, "clone_check": block_clone_check, "second_opinion": block_second_opinion, "gauntlet": block_gauntlet, "models": block_models,
     "live": block_live, "headline": block_headline, "results": block_results, "groups": block_groups, "redteam": block_redteam,
     "controls": block_controls, "scale": block_scale, "soak": block_soak, "cost": block_budget,
 }

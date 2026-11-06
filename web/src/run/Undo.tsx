@@ -42,7 +42,7 @@ function Statements({ run }: { run: Run }) {
           {!statements && !error && <Loading>Loading the statements</Loading>}
           {statements?.length === 0 && <p className="muted">The server has no stored statements for this run.</p>}
           {statements?.map((s, i) => (
-            <pre className="sql undo-sql" key={i}>
+            <pre className="sql undo-sql" key={i} tabIndex={0}>
               {clip(s)}
             </pre>
           ))}

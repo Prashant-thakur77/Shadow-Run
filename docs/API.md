@@ -81,6 +81,10 @@ Host targets (`GET /api/targets` lists `demo-host` with `kind: "host"`): `report
 
 Start body, optional: `{rounds: 1-10, policy: "named_scope" | "row_budget_only"}`. `row_budget_only` is a what-if baseline: rounds only rehearse, so it can't reach prod. Summary adds `held_for_a_person` and `would_auto_apply`; each round adds `would_auto_apply`, `held_because`, `changed_columns`. `POST /api/gauntlet/{id}/replay` runs every attack that got past the rules against the rules as they stand now, each on a new clone, and sets `replay: {guardrails, total, caught, did_not_run, attacks: [{n, idea, ran, caught, caught_by}]}`.
 
+**Landing page replay.** `GET /api/public` has `hero`: one real replay of the SaaStr incident's command, with fields listed one by one in `control/hero.py`, or `null` if nothing has been measured, or if the deployment has no open demo. `GET /api/receipts` items for negative controls have `got`, the server's actual reply.
+
+**Second opinion.** On a run where a model wrote the plan from a request, and it passed, the final attempt has `second_opinion: {model, verdict: does_it|partly|does_not, left_out, added, numbers_verified, unverified_numbers}`, or `{error}`. Anything but `does_it` holds the plan for a person even inside the auto-apply list. It never removes a hold.
+
 **Rehearse only.** `POST /api/runs` takes `rehearse_only: true`. The run then waits for a person even inside the auto-apply list. The CLI's `--rehearse-only` and the GitHub Action use it.
 
 **Auto-apply list.** `target.budget.auto_apply_scope` is `{table: "*" | [columns]}` for Postgres and `target.budget.auto_apply_paths` is a list of path prefixes for hosts. A change outside it needs a person, however small. Reports add `changed_columns: {table: {column: updates}}`.

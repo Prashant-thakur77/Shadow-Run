@@ -1,8 +1,8 @@
 {
-  "at": "2026-11-05T21:13:22Z",
-  "url": "https://45-76-245-71.sslip.io",
-  "passed": 18,
-  "total": 18,
+  "at": "2026-11-06T07:48:19Z",
+  "url": "https://144-202-92-64.sslip.io",
+  "passed": 33,
+  "total": 33,
   "controls": [
     {
       "control": "Requester approves their own run",
@@ -32,7 +32,7 @@
       "control": "Apply with no approval",
       "must": "409",
       "ok": true,
-      "got": "409 this run is awaiting_approval; an approval can be used once"
+      "got": "409 this run has no approval yet"
     },
     {
       "control": "Correct approval by a different person",
@@ -50,13 +50,13 @@
       "control": "Apply the approved plan",
       "must": "committed, counts equal rehearsal",
       "ok": true,
-      "got": "status=applied counts={'sessions': {'ins': 0, 'upd': 0, 'del': 2120}}"
+      "got": "status=applied counts={'sessions': {'ins': 0, 'upd': 0, 'del': 2125}}"
     },
     {
       "control": "Prod really changed after apply",
       "must": "digest differs",
       "ok": true,
-      "got": "92f8af482ae8 -> 40f0585788b9"
+      "got": "03d0ebc88dd8 -> a028bb097115"
     },
     {
       "control": "Evidence bundle written to Object Storage",
@@ -64,8 +64,8 @@
       "ok": true,
       "got": {
         "store": "vultr-object-storage",
-        "key": "runs/r5f4039d153ac41/evidence.json",
-        "bytes": 12851
+        "key": "runs/r27684b2866b346/evidence.json",
+        "bytes": 16151
       }
     },
     {
@@ -74,8 +74,8 @@
       "ok": true,
       "got": {
         "store": "vultr-object-storage",
-        "key": "backups/r5f4039d153ac41/pre-apply.dump",
-        "bytes": 1243086
+        "key": "backups/r27684b2866b346/pre-apply.dump",
+        "bytes": 1243941
       }
     },
     {
@@ -94,13 +94,13 @@
       "control": "Prod changed after rehearsal; drift check off",
       "must": "rolled_back on count mismatch, nothing applied",
       "ok": true,
-      "got": "status=rolled_back reason=row counts differ from the rehearsal on 1 table(s) mismatches=[{'table': 'users', 'rehearsal': {'ins': 0, 'upd': 616, 'del': 0}, 'actual': {'ins': 0, 'upd': 617, 'del': 0}}] prod unchanged=True"
+      "got": "status=rolled_back reason=row content differs from the rehearsal on 1 table(s); row counts differ from the rehearsal on 1 table(s) mismatches=[{'table': 'users', 'rehearsal': {'ins': 0, 'upd': 616, 'del': 0}, 'actual': {'ins': 0, 'upd': 617, 'del': 0}}] prod unchanged=True"
     },
     {
       "control": "Cascade trap via the API: guardrail stops it",
       "must": "blocked",
       "ok": true,
-      "got": "status=blocked failed=['No paid invoice is lost', 'Total paid revenue is unchanged', 'No payment loses its invoice', 'Every active account keeps a live billing contact']"
+      "got": "status=blocked failed=['No paid invoice is lost', 'Total paid revenue is unchanged', 'No payment loses its invoice', 'Every active account keeps a live billing contact', 'No customer order is lost', 'Users are retired with deleted_at, never deleted']"
     },
     {
       "control": "Approve a blocked plan anyway",
@@ -115,13 +115,103 @@
       "got": "status=blocked verdict=blocked_by_gate"
     },
     {
+      "control": "Plan that only misbehaves on prod (branches on current_user), counts identical, approved by a person",
+      "must": "rolled back on row content, prod unchanged",
+      "ok": true,
+      "got": "status=rolled_back reason=row content differs from the rehearsal on 1 table(s) prod unchanged=True"
+    },
+    {
+      "control": "The same trick on a listed column, so no person is looking",
+      "must": "rolled back on row content, prod unchanged",
+      "ok": true,
+      "got": "status=rolled_back reason=row content differs from the rehearsal on 1 table(s) prod unchanged=True"
+    },
+    {
+      "control": "Column rewrite that fires no row trigger and moves no statistic",
+      "must": "not auto-applied, flagged as unmeasured",
+      "ok": true,
+      "got": "status=awaiting_approval flagged=True"
+    },
+    {
+      "control": "Small rewrite of a billing column, inside the row budget and past every guardrail",
+      "must": "needs a person",
+      "ok": true,
+      "got": "status=awaiting_approval reasons=['invoices is not on the auto-apply list']"
+    },
+    {
+      "control": "Turn off SSO: one row, on a listed table, in a column that isn't listed",
+      "must": "needs a person",
+      "ok": true,
+      "got": "status=awaiting_approval reasons=['feature_flags.enabled is not on the auto-apply list']"
+    },
+    {
+      "control": "A pull request rehearses a change on the auto-apply list",
+      "must": "never reaches prod by itself",
+      "ok": true,
+      "got": "status=awaiting_approval prod unchanged=True"
+    },
+    {
+      "control": "A small change to a column on the list",
+      "must": "applies with no person, and the report names the column",
+      "ok": true,
+      "got": "status=applied columns={'feature_flags': {'note': 1}}"
+    },
+    {
+      "control": "DELETE hidden in a CTE, under budget",
+      "must": "needs a person",
+      "ok": true,
+      "got": "status=awaiting_approval"
+    },
+    {
+      "control": "DELETE hidden in a function body, under budget",
+      "must": "needs a person, rows still measured",
+      "ok": true,
+      "got": "status=awaiting_approval rows_deleted=50"
+    },
+    {
+      "control": "Plan rewrites the guardrail baseline to hide its damage",
+      "must": "blocked",
+      "ok": true,
+      "got": "status=blocked verdict=blocked_by_gate"
+    },
+    {
+      "control": "Deferred trigger that fires at COMMIT, after the checks",
+      "must": "its damage is measured, and it needs a person",
+      "ok": true,
+      "got": "status=awaiting_approval audit_log deleted=30000"
+    },
+    {
+      "control": "A plan comes with an undo, proved on a clone before anyone approves",
+      "must": "verified",
+      "ok": true,
+      "got": "verified=True rows restored=2125 reverted=3"
+    },
+    {
+      "control": "A second clone reproduces the result before anyone approves",
+      "must": "reproduced",
+      "ok": true,
+      "got": "{'ok': True, 'differs': [], 'sandbox': 'sr-run-r0fc1de3675bf40a1b', 'ms': 2561.3, 'contained': True}"
+    },
+    {
+      "control": "Apply a change, then undo it through the same pipeline",
+      "must": "prod's hash returns to its exact starting value",
+      "ok": true,
+      "got": "03d0ebc88dd8 -> 3856afeb1cd5 -> 03d0ebc88dd8"
+    },
+    {
+      "control": "A reviewer's rejection becomes a guardrail, proved on a clone, and the same plan then fails",
+      "must": "blocked",
+      "ok": true,
+      "got": "rule=\"A product's price must never drop below half of its previous value\" proved=True same plan: blocked"
+    },
+    {
       "control": "Audit log hash chain verifies",
       "must": "ok",
       "ok": true,
       "got": {
         "ok": true,
-        "events": 80,
-        "head": "5b83e926ed4cd2b0d5526e8b382adf8e4087b55cc5b5fed69c2176c9e01a0407"
+        "events": 308,
+        "head": "e1bb1d7f3b4e1f7c3602955d319a6a47f90bf9ecd80e0d66870993c3637ab71e"
       }
     }
   ]

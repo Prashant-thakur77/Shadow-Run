@@ -1,12 +1,18 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import './_styles';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { ApiError, api, errorText } from '../api/client';
 import type { RunSummary, Target } from '../api/types';
 import { MISSING, num, ms, short, usd, when } from '../lib/format';
+import { useReducedMotion } from '../lib/media';
 import { Link, navigate } from '../lib/router';
 import { isInProgress, statusInfo } from '../lib/status';
 import { orderTargets, showTarget, targetLabel } from '../lib/target';
 import { useAsync } from '../lib/useAsync';
 import { Loading, Mark, Notice } from '../ui/bits';
+import { Frame } from '../ui/Frame';
+import { PrimaryButton } from '../ui/Halftone';
+import { Label } from '../ui/Label';
+import { handOffRun } from '../run/handoff';
 
 const EXAMPLES = {
   postgres: {
@@ -108,6 +114,7 @@ export function HomePage() {
     setBusy(true);
     try {
       const res = await api.startRun({ ...body, target_id: target?.id });
+      handOffRun(res.id, mode === 'task' ? task.trim() : plan.trim(), mode === 'plan');
       navigate(`/runs/${encodeURIComponent(res.id)}`);
     } catch (err) {
       setBusy(false);
@@ -118,22 +125,23 @@ export function HomePage() {
 
   return (
     <div className="page home">
-      <StartHere targetId={list.find((t) => t.kind !== 'host')?.id} onError={setError} />
       <div className="home-grid">
-        <form className="taskbox" onSubmit={start}>
-          {list.length > 1 && (
-            <div className="target-pick target-pick-home">
-              <span className="label">Target</span>
-              <div className="seg" role="group" aria-label="Target">
-                {list.map((t) => (
-                  <button key={t.id} type="button" className={t.id === target?.id ? 'seg-btn is-on' : 'seg-btn'} aria-pressed={t.id === target?.id} onClick={() => pick(t.id)}>
-                    {targetLabel(t)}
-                  </button>
-                ))}
+        <form className={busy ? 'taskbox is-sending' : 'taskbox'} onSubmit={start}>
+          <div className="taskbox-top">
+            <Label>New task</Label>
+            {list.length > 1 && (
+              <div className="target-pick-home">
+                <span className="target-pick-name">{target?.name}</span>
+                <div className="seg" role="group" aria-label="Target">
+                  {list.map((t) => (
+                    <button key={t.id} type="button" className={t.id === target?.id ? 'seg-btn is-on' : 'seg-btn'} aria-pressed={t.id === target?.id} onClick={() => pick(t.id)}>
+                      {targetLabel(t)}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <span className="muted target-pick-name">{target?.name}</span>
-            </div>
-          )}
+            )}
+          </div>
           <div className="taskbox-head">
             <h1 className="taskbox-title">{mode === 'task' ? 'Give the agent a task' : `Paste a ${planWord} plan`}</h1>
             <div className="seg" role="group" aria-label="Input type">
@@ -146,6 +154,7 @@ export function HomePage() {
             </div>
           </div>
 
+          <Frame className="taskbox-frame">
           {mode === 'task' ? (
             <textarea
               className="taskbox-input"
@@ -167,11 +176,12 @@ export function HomePage() {
               onChange={(e) => setPlan(e.target.value)}
             />
           )}
+          </Frame>
 
           <div className="taskbox-foot">
-            <button className="btn btn-primary btn-large" type="submit" disabled={busy}>
+            <PrimaryButton className="btn-large" type="submit" disabled={busy}>
               {busy ? 'Starting' : 'Rehearse on a clone'}
-            </button>
+            </PrimaryButton>
             <span className="muted taskbox-hint">Nothing touches prod until it has been rehearsed.</span>
           </div>
           {error && (
@@ -181,13 +191,13 @@ export function HomePage() {
           )}
 
           <div className="examples">
-            <h2 className="examples-title">{mode === 'task' ? 'Examples' : 'Example plans'}</h2>
+            <h2 className="examples-title t-label">{mode === 'task' ? 'Examples' : 'Example plans'}</h2>
             {mode === 'task' ? (
               <ul className="example-list">
                 {examples.tasks.map((t) => (
                   <li key={t}>
                     <button type="button" className={task === t ? 'example is-on' : 'example'} onClick={() => setTask(t)}>
-                      {t}
+                      <span className="example-text">{t}</span>
                     </button>
                   </li>
                 ))}
@@ -208,7 +218,7 @@ export function HomePage() {
         </form>
 
         <aside className="pipeline" aria-label="What happens to a plan">
-          <h2 className="pipeline-title">What happens to a plan</h2>
+          <h2 className="pipeline-title t-label">What happens to a plan</h2>
           <ol className="pipeline-list">
             {examples.pipeline.map((p) => (
               <li key={p}>{p}</li>
@@ -216,6 +226,8 @@ export function HomePage() {
           </ol>
         </aside>
       </div>
+
+      <StartHere targetId={list.find((t) => t.kind !== 'host')?.id} onError={setError} />
 
       <RecentRuns kinds={Object.fromEntries(list.map((t) => [t.id, t.kind]))} />
     </div>
@@ -247,7 +259,7 @@ function StartHere({ targetId, onError }: { targetId?: string; onError: (message
   };
   return (
     <section className="starthere" aria-labelledby="starthere-title">
-      <h2 className="starthere-title" id="starthere-title">
+      <h2 className="starthere-title t-label" id="starthere-title">
         Start here
       </h2>
       <ol className="starthere-list">
@@ -305,11 +317,19 @@ function RecentRuns({ kinds }: { kinds: Record<string, string | undefined> }) {
   const fromPeople = all.filter((r) => r.source !== 'api');
   const hidden = all.length - fromPeople.length;
   const shown = showAll ? all : fromPeople.slice(0, RECENT_SHOWN);
+  // One log scale for every bar in the list, so rows can be compared at a glance.
+  const scaleMax = Math.max(1, ...shown.map((r) => r.rows_changed ?? 0));
+  // Rows may fade in on first load. Polling afterwards must not trigger anything.
+  const reduced = useReducedMotion();
+  const settled = useRef(false);
+  useEffect(() => {
+    if (runs.data) settled.current = true;
+  }, [runs.data]);
 
   return (
     <section className="recent" aria-labelledby="recent-title">
       <div className="recent-head">
-        <h2 className="recent-title" id="recent-title">
+        <h2 className="recent-title t-label" id="recent-title">
           Recent runs
         </h2>
         {hidden > 0 && (
@@ -323,19 +343,8 @@ function RecentRuns({ kinds }: { kinds: Record<string, string | undefined> }) {
       {runs.data && shown.length === 0 && <p className="muted">{hidden > 0 ? 'No runs from this page or an agent yet.' : 'No runs yet.'}</p>}
       {shown.length > 0 && (
         <div className="runlist">
-          <div className="runlist-head" aria-hidden="true">
-            <span>Status</span>
-            <span>Task or plan</span>
-            <span>By</span>
-            <span>Started</span>
-            <span className="num">Rows changed</span>
-            <span className="num">Via cascade</span>
-            <span className="num">Guardrails failed</span>
-            <span className="num">Rehearsal</span>
-            <span className="num">Cost</span>
-          </div>
-          {shown.map((r) => (
-            <RunRow key={r.id} run={r} isHost={kinds[r.target_id ?? ''] === 'host'} />
+          {shown.map((r, i) => (
+            <RunRow key={r.id} run={r} isHost={kinds[r.target_id ?? ''] === 'host'} index={i} scaleMax={scaleMax} animate={!settled.current && !reduced} />
           ))}
         </div>
       )}
@@ -343,32 +352,63 @@ function RecentRuns({ kinds }: { kinds: Record<string, string | undefined> }) {
   );
 }
 
-function RunRow({ run, isHost }: { run: RunSummary; isHost: boolean }) {
+function age(t: number | undefined): string {
+  if (typeof t !== 'number') return MISSING;
+  const seconds = Math.max(0, Date.now() / 1000 - t);
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.round(seconds / 3600)}h`;
+  return `${Math.round(seconds / 86400)}d`;
+}
+
+function RunRow({ run, isHost, index, scaleMax, animate }: { run: RunSummary; isHost: boolean; index: number; scaleMax: number; animate: boolean }) {
   const info = statusInfo(run.status);
   const attempts = run.attempts ?? 0;
+  const rows = run.rows_changed;
+  const share = typeof rows === 'number' && rows > 0 ? Math.log10(rows + 1) / Math.log10(scaleMax + 1) : 0;
+  const meta = [
+    run.requester ?? MISSING,
+    when(run.created_at),
+    !isHost && run.rows_via_cascade ? `${num(run.rows_via_cascade)} via cascade` : null,
+    run.guardrails_failed ? `${num(run.guardrails_failed)} guardrails failed` : null,
+    run.rehearsal_ms != null ? ms(run.rehearsal_ms) : null,
+    run.cost_usd != null ? usd(run.cost_usd) : null,
+    attempts > 1 ? `${attempts} attempts` : null,
+  ].filter(Boolean);
   return (
-    <Link href={`/runs/${encodeURIComponent(run.id)}`} className="runrow">
+    <Link href={`/runs/${encodeURIComponent(run.id)}`} className="runrow" style={{ '--row': index, animation: animate ? undefined : 'none' } as CSSProperties}>
       <span className={`runrow-status tone-${info.tone}`}>
         <Mark tone={info.tone} size={13} />
         {info.label}
       </span>
-      <span className="runrow-task">
-        {run.task ? (
-          <span className="runrow-tasktext">{run.task}</span>
-        ) : (
-          <span className="runrow-tasktext">
-            {run.plan_preview ? <code className="mono">{run.plan_preview}</code> : <>{isHost ? 'Shell plan' : 'SQL plan'} <code className="mono muted">{short(run.plan_hash, 10)}</code></>}
-          </span>
-        )}
-        {attempts > 1 && <span className="muted runrow-attempts">{attempts} attempts</span>}
+      <span className="runrow-main">
+        <span className="runrow-tasktext">
+          {run.task ? run.task : run.plan_preview ? <code className="mono">{run.plan_preview}</code> : <>{isHost ? 'Shell plan' : 'SQL plan'}</>}
+        </span>
+        <span className="runrow-meta">{meta.join(' · ')}</span>
       </span>
-      <span className="runrow-cell mono" data-label="By">{run.requester ?? MISSING}</span>
-      <span className="runrow-cell mono" data-label="Started">{when(run.created_at)}</span>
-      <span className="runrow-cell mono num" data-label={isHost ? 'Files changed' : 'Rows changed'}>{isHost ? (run.files_changed != null ? `${num(run.files_changed)} files` : MISSING) : num(run.rows_changed)}</span>
-      <span className="runrow-cell mono num" data-label="Via cascade">{isHost ? MISSING : num(run.rows_via_cascade)}</span>
-      <span className="runrow-cell mono num" data-label="Guardrails failed">{num(run.guardrails_failed)}</span>
-      <span className="runrow-cell mono num" data-label="Rehearsal">{ms(run.rehearsal_ms)}</span>
-      <span className="runrow-cell mono num" data-label="Cost">{usd(run.cost_usd)}</span>
+      <span className="runrow-rows">
+        {isHost ? (
+          <>
+            <span />
+            <span>{run.files_changed != null ? `${num(run.files_changed)} files` : MISSING}</span>
+          </>
+        ) : (
+          <>
+            <span className="runrow-bar" aria-hidden="true">
+              <i style={{ width: `${(share * 100).toFixed(1)}%` }} />
+            </span>
+            <span>
+              {num(rows)}
+              <span className="sr-only"> rows changed</span>
+            </span>
+          </>
+        )}
+      </span>
+      <code className="runrow-hash">{short(run.plan_hash, 10)}</code>
+      <span className="runrow-age" title={when(run.created_at)}>
+        {age(run.created_at)}
+      </span>
     </Link>
   );
 }

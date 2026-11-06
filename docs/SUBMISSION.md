@@ -18,11 +18,11 @@ Shadow Run sits between an agent and production and holds the only credential. T
 
 A small change goes through alone only if it stays on a list of tables and columns the team named as low-risk. Everything else waits for a different person, who approves those exact hashes, and a changed or replayed approval gets a 409. The same plan then runs on prod in one transaction, with the touched tables locked and re-checked for drift. If row counts, row content, schema or guardrails differ from the rehearsal at all, it rolls back. A backup and a signed evidence bundle go to Object Storage.
 
-(Fill in after the final benchmark: run scripts/make_submission.py again.)   7 of 7 red-team attacks contained, checked from the host, with prod's hash unchanged. 18 of 18 attempts to break the approval and apply were refused or rolled back as designed. The rubber-stamp gap and the other limits are published in the README: side effects outside the target can't be rehearsed, some harm needs a person to notice, and clone cost grows with database size.
+On 23 risky tasks held out from tuning, the same agent caused harm on prod 10.67 times running directly and 11 times behind a static rule gate. Through Shadow Run, nothing harmful reached prod without a person, because 22.67 of those plans waited for one. If that person approved every plan unread, harm was 2.67, because the agent had seen the measured damage and rewritten its plans. On 20 tasks adapted from the outside SABER benchmark: 5 direct, 4 static gate, 0 through Shadow Run with no person, 2.33 if every plan were approved unread. A rehearsal takes 2.98 s at the median, and a task costs $0.00348 in inference. 7 of 7 red-team attacks contained, checked from the host, with prod's hash unchanged. 33 of 33 attempts to break the approval and apply were refused or rolled back as designed. The rubber-stamp gap and the other limits are published in the README: side effects outside the target can't be rehearsed, some harm needs a person to notice, and clone cost grows with database size.
 
 Every plan that passes also comes with an undo, written from the row log and proved on the clone before anyone approves: its check is that each touched table's content hash returns to where it started. A second microVM has to reproduce the result. The report states what a plan does to the numbers a business watches, in dollars, not only in rows, and the commands behind real incidents can be replayed on a clone from the web app.
 
-We attacked our own policy. An attacker model told every guardrail and the auto-apply rule got 5 of 7 damaging plans past a row limit, with no person looking, so auto-apply now works from a named list. 4 of the same attacker's 6 damaging plans would still apply alone, but they can only change what the owner listed: feature_flags.note. What it finds becomes a candidate rule, which counts only if it holds on the clean database, fails on the attack and lets ordinary changes through. Replayed against the rules they taught, 6 of 6 of those attacks are now stopped.
+We attacked our own policy. An attacker model told every guardrail and the auto-apply rule got 5 of 7 damaging plans past a row limit, with no person looking, so auto-apply now works from a named list. 5 of the same attacker's 7 damaging plans would still apply alone, but they can only change what the owner listed: feature_flags.note. What it finds becomes a candidate rule, which counts only if it holds on the clean database, fails on the attack and lets ordinary changes through. Replayed against the rules they taught, 7 of 7 of those attacks are now stopped.
 
 It ships as an MCP server, so OpenCode, Claude Code or Cursor can route risky actions through it, plus a web app, a CLI and a GitHub Action that posts what a migration really does on the pull request. Every LLM call goes to Vultr Serverless Inference, and the model never grades itself: it proposes plans and explains results, while Postgres measures and frozen checks decide.
 
@@ -38,7 +38,7 @@ Challenge 1: Blast Radius Zero
 
 ## Links
 
-Application URL: https://45-76-245-71.sslip.io
+Application URL: https://144-202-92-64.sslip.io
 
 GitHub: https://github.com/Prashant-thakur77/Shadow-Run
 
@@ -54,7 +54,7 @@ Every LLM call goes to Vultr Serverless Inference. Each rehearsal is a throwaway
 
 We also attacked our own auto-apply policy with a Vultr-hosted model, and published what it found.
 
-Try it at https://45-76-245-71.sslip.io, code at https://github.com/Prashant-thakur77/Shadow-Run.
+Try it at https://144-202-92-64.sslip.io, code at https://github.com/Prashant-thakur77/Shadow-Run.
 
 ## Use case and how the agent executes real tasks
 

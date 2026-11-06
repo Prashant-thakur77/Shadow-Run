@@ -1,12 +1,11 @@
+import './styles/fonts.css';
+import './styles/tokens.css';
+import './styles/base.css';
+import './styles/type.css';
+import './styles/shell.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import './styles/tokens.css';
-import './styles/base.css';
-import './styles/shell.css';
-import './styles/pages.css';
-import './styles/run.css';
-import './styles/features.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

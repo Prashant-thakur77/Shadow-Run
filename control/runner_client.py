@@ -1,6 +1,9 @@
 """Talks to the runner on the VX1. In dev both ends can be one process via a local runner."""
 from __future__ import annotations
 
+import base64
+import json
+
 from pathlib import Path
 
 import httpx
@@ -39,14 +42,21 @@ class RunnerClient:
             r = await c.get(f"{self.url}/snapshots/{snapshot_id}", headers=self._headers())
         return r.status_code == 200 and r.json().get("exists") is True
 
-    async def put_snapshot(self, snapshot_id: str, dump_path: str | Path) -> dict:
+    async def drop_snapshot(self, snapshot_id: str) -> None:
+        async with httpx.AsyncClient(timeout=120) as c:
+            await c.delete(f"{self.url}/snapshots/{snapshot_id}", headers=self._headers())
+
+    async def put_snapshot(self, snapshot_id: str, dump_path: str | Path, expected: dict | None = None) -> dict:
         async def body():
             with open(dump_path, "rb") as f:
                 while chunk := f.read(1 << 20):
                     yield chunk
 
-        async with httpx.AsyncClient(timeout=900) as c:
-            r = await c.put(f"{self.url}/snapshots/{snapshot_id}", content=body(), headers=self._headers())
+        async with httpx.AsyncClient(timeout=1700) as c:
+            headers = self._headers()
+            if expected:
+                headers["x-sr-expected"] = base64.b64encode(json.dumps(expected).encode()).decode()
+            r = await c.put(f"{self.url}/snapshots/{snapshot_id}", content=body(), headers=headers)
         if r.status_code != 200:
             raise RunnerError(f"runner put_snapshot -> {r.status_code}: {r.text[:300]}")
         return r.json()

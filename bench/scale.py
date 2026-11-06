@@ -15,8 +15,8 @@ from pathlib import Path
 import psycopg
 
 from bench.run import load_config
-from control.runner_client import RunnerClient
-from control.snapshot import ProdConn, take_snapshot
+from control.runner_client import RunnerClient, RunnerError
+from control.snapshot import ProdConn, expected_clone, take_snapshot
 from demo.seed import seed
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -39,9 +39,14 @@ async def measure(admin: dict, runner: RunnerClient, scale: float) -> dict:
         conn = ProdConn(admin["host"], str(admin["port"]), admin["user"], admin["password"], name, admin.get("sslmode", "require"))
         snap = await asyncio.to_thread(take_snapshot, conn)
         t0 = time.perf_counter()
-        loaded = await runner.put_snapshot(snap["snapshot_id"], snap["dump_path"])
+        try:
+            loaded = await runner.put_snapshot(snap["snapshot_id"], snap["dump_path"], expected_clone(snap))
+        except RunnerError as e:
+            # A clone that doesn't match prod is refused, and that's a result to publish, not a crash.
+            return {"scale": scale, "db_mb": round(size / 1e6), "users": users, "seed_s": seed_s, "dump_mb": round(snap["bytes"] / 1e6, 1), "refused": str(e)[:600], "rehearsals_ok": 0, "rehearsal_total_s": None, "clone_boot_ms": None, "checksum_s": round(snap["timing"]["checksum_ms"] / 1000, 2), "pg_dump_s": round(snap["timing"]["pg_dump_ms"] / 1000, 2), "golden_build_s": None}
+        finally:
+            Path(snap["dump_path"]).unlink(missing_ok=True)
         golden_s = round(time.perf_counter() - t0, 2)
-        Path(snap["dump_path"]).unlink(missing_ok=True)
         rehearsals = []
         for _ in range(3):
             rec = await runner.rehearse(f"sc{uuid.uuid4().hex[:10]}", snap["snapshot_id"], [{"statements": [TRAP]}], [], max_duration=280)
@@ -59,8 +64,13 @@ async def measure(admin: dict, runner: RunnerClient, scale: float) -> dict:
             "pg_dump_s": round(snap["timing"]["pg_dump_ms"] / 1000, 2),
             "golden_build_s": golden_s,
             "restore_in_vm_s": round((loaded.get("timing") or {}).get("restore_ms", 0) / 1000, 2),
+            "golden_cached": bool(loaded.get("cached")),
             "clone_boot_ms": (mid.get("phases") or {}).get("clone_boot_ms"),
             "rehearsal_total_s": round(mid["phases"]["total_ms"] / 1000, 2) if mid else None,
+            "rehearsal_each_s": [round(r["phases"]["total_ms"] / 1000, 2) for r in best],
+            "execute_s": round(mid["phases"]["execute_ms"] / 1000, 2) if mid else None,
+            # A time means little without what was done in it, and the same plan can touch a different share of a bigger seed.
+            "rows_changed": sum(c["rows"] for c in (mid.get("result") or {}).get("changes", [])) if mid else None,
             "rehearsals_ok": len(ok),
             "errors": [str(r.get("sandbox_error") or (r.get("result") or {}).get("error"))[:200] for r in rehearsals if r not in ok][:2],
         }

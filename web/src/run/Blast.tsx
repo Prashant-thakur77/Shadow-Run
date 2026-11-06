@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { Attempt, Report, ReportTable } from '../api/types';
 import { isNum, num, pct } from '../lib/format';
 import { dollarsLost, hasMoved, metricDelta, metricValue } from './metrics';
@@ -97,14 +98,14 @@ function Warnings({ report }: { report: Report }) {
   );
 }
 
-function Metrics({ report }: { report: Report }) {
+function Metrics({ report, seeded }: { report: Report; seeded: boolean }) {
   const metrics = report.metrics ?? [];
   if (!metrics.length) return null;
   const moved = metrics.filter(hasMoved);
   const still = metrics.filter((m) => !hasMoved(m));
   return (
     <div className="bizmetrics">
-      <h3 className="subhead">What it is worth</h3>
+      <h3 className="subhead">{seeded ? 'What it is worth, on this seeded demo' : 'What it is worth'}</h3>
       {moved.length > 0 ? (
         <ul className="bizmetric-list">
           {moved.map((m) => {
@@ -142,7 +143,7 @@ function Metrics({ report }: { report: Report }) {
   );
 }
 
-function Sentences({ report }: { report: Report }) {
+function Sentences({ report, lit }: { report: Report; lit?: string[] | null }) {
   const items = report.sentences ?? [];
   if (!items.length) return null;
   return (
@@ -153,7 +154,7 @@ function Sentences({ report }: { report: Report }) {
         const lead = isNum(s.rows) ? String(s.rows) : null;
         const rest = lead && text.startsWith(lead) ? text.slice(lead.length).trim() : text;
         return (
-          <li key={i} className={s.via === 'cascade' ? 'sentence is-cascade' : 'sentence'}>
+          <li key={i} className={`sentence${s.via === 'cascade' ? ' is-cascade' : ''}${lit ? (s.table && lit.includes(s.table) ? ' is-lit' : ' is-dim') : ''}`}>
             <span className="sentence-rows mono">{lead ? num(s.rows) : ''}</span>
             <span className="sentence-text">
               {rest}
@@ -200,8 +201,31 @@ function TableRow({ t, columns }: { t: ReportTable; columns?: Record<string, num
   );
 }
 
-export function BlastSection({ attempt }: { attempt: Attempt | null }) {
+/** Fires once, the first time the element comes into view. */
+function useSeen(ref: RefObject<HTMLElement>): boolean {
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || seen) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setSeen(true);
+        observer.disconnect();
+      },
+      { threshold: 0.15 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
+  return seen;
+}
+
+export function BlastSection({ attempt, seeded = false }: { attempt: Attempt | null; seeded?: boolean }) {
   const report = attempt?.report;
+  const [lit, setLit] = useState<string[] | null>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const tableSeen = useSeen(tableRef);
   if (!report) {
     return (
       <>
@@ -240,13 +264,13 @@ export function BlastSection({ attempt }: { attempt: Attempt | null }) {
       <Warnings report={report} />
       {gateRefused}
       <Hero report={report} />
-      <Metrics report={report} />
-      <Sentences report={report} />
+      <Metrics report={report} seeded={seeded} />
+      <Sentences report={report} lit={lit} />
 
       {hasGraph && (
         <div className="blast-graph">
           <h3 className="subhead">Where it spread</h3>
-          <CascadeGraph nodes={graph?.nodes ?? []} edges={graph?.edges ?? []} />
+          <CascadeGraph nodes={graph?.nodes ?? []} edges={graph?.edges ?? []} onHover={setLit} />
           <p className="legend">
             <span className="legend-item">
               <span className="legend-line" /> CASCADE deletes the child rows
@@ -259,7 +283,7 @@ export function BlastSection({ attempt }: { attempt: Attempt | null }) {
       )}
 
       {(report.tables?.length ?? 0) > 0 && (
-        <div>
+        <div ref={tableRef} className={tableSeen ? 'pertable is-seen' : 'pertable'}>
           <h3 className="subhead">Per table</h3>
           <div className="scroll-x">
             <table className="data">

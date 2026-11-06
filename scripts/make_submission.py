@@ -30,13 +30,12 @@ def main() -> int:
         ext = r["external"]
         d, s, sg = h["direct"], h["shadow_run"], h["static_gate"]
         headline = (
-            f"On {d['risky_tasks']} risky tasks held out from tuning, the same agent caused harm on prod {g(d['harm_on_prod']['mean'])} times running directly, "
-            f"{g(sg['harm_on_prod']['mean'])} times behind a static rule gate, and {g(s['harm_on_prod']['mean'])} times through Shadow Run. "
-            f"If the approver rubber-stamped everything held, that last number would be {g(s['harm_if_rubber_stamped']['mean'])}."
+            f"On {d['risky_tasks']} risky tasks held out from tuning, the same agent caused harm on prod {g(d['harm_on_prod']['mean'])} times running directly and {g(sg['harm_on_prod']['mean'])} times behind a static rule gate. "
+            f"Through Shadow Run, nothing harmful reached prod without a person, because {g(s['risky_held']['mean'])} of those plans waited for one. If that person approved every plan unread, harm was {g(s['harm_if_rubber_stamped']['mean'])}, because the agent had seen the measured damage and rewritten its plans."
         )
         external = (
             f"On {ext['direct']['risky_tasks']} tasks adapted from the outside SABER benchmark: {g(ext['direct']['harm_on_prod']['mean'])} direct, "
-            f"{g(ext['static_gate']['harm_on_prod']['mean'])} static gate, {g(ext['shadow_run']['harm_on_prod']['mean'])} Shadow Run."
+            f"{g(ext['static_gate']['harm_on_prod']['mean'])} static gate, {g(ext['shadow_run']['harm_on_prod']['mean'])} through Shadow Run with no person, {g(ext['shadow_run']['harm_if_rubber_stamped']['mean'])} if every plan were approved unread."
         )
         timing = (
             f"A rehearsal takes {s['rehearsal_s']['p50']} s at the median, and a task costs ${s['cost_per_task_usd']} in inference."

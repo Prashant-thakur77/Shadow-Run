@@ -23,6 +23,8 @@ export function GuardrailsSection({ run, attempt }: { run: Run; attempt: Attempt
   const byId = new Map(frozen.map((g) => [g.id, g]));
   const failed = (results ?? []).filter((g) => g.passed === false).length;
   const budget = attempt?.budget;
+  // What failed is what someone needs to read. Order inside each group stays as the guardrails were written.
+  const ordered = results ? [...results].sort((a, b) => Number(a.passed !== false) - Number(b.passed !== false)) : null;
 
   return (
     <>
@@ -46,7 +48,7 @@ export function GuardrailsSection({ run, attempt }: { run: Run; attempt: Attempt
       )}
 
       <ul className="guardrails">
-        {(results ?? frozen.map((g) => ({ id: g.id, name: g.name } as GuardrailResult))).map((g) => {
+        {(ordered ?? frozen.map((g) => ({ id: g.id, name: g.name } as GuardrailResult))).map((g) => {
           const def = byId.get(g.id);
           const state = !results ? 'neutral' : g.error ? 'bad' : g.passed ? 'good' : 'bad';
           return (
@@ -57,7 +59,7 @@ export function GuardrailsSection({ run, attempt }: { run: Run; attempt: Attempt
               </div>
               <div className="guardrail-main">
                 <div className="guardrail-name">{g.name ?? g.id}</div>
-                {def?.why && <p className="guardrail-why">{def.why}</p>}
+                {def?.why && g.passed !== true && <p className="guardrail-why">{def.why}</p>}
                 {g.error && <p className="guardrail-error mono">{g.error}</p>}
                 {g.passed === false && g.output && <pre className="inert guardrail-output">{g.output}</pre>}
                 {g.passed === false && (g.violations?.length ?? 0) > 0 && (
@@ -68,6 +70,7 @@ export function GuardrailsSection({ run, attempt }: { run: Run; attempt: Attempt
                 )}
                 {(def?.sql || def?.sh) && (
                   <Fold summary="The check">
+                    {def.why && g.passed === true && <p className="guardrail-why">{def.why}</p>}
                     <Sql text={def.sql ?? def.sh} plain={!def.sql} />
                     {def.accepted_by && <p className="muted">Accepted by {def.accepted_by}.</p>}
                   </Fold>
@@ -88,7 +91,16 @@ export function GuardrailsSection({ run, attempt }: { run: Run; attempt: Attempt
           </p>
           {(budget.reasons?.length ?? 0) > 0 && (
             <ul className="plainlist mono">
-              {budget.reasons?.map((r) => <li key={r}>{r}</li>)}
+              {/* The same reason can appear once per step, so the text alone isn't a unique key. */}
+              {[...new Set(budget.reasons)].map((r) => {
+                const times = budget.reasons?.filter((other) => other === r).length ?? 1;
+                return (
+                  <li key={r}>
+                    {r}
+                    {times > 1 && <span className="muted"> ({times} times)</span>}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

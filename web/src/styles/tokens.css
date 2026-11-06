@@ -1,57 +1,60 @@
-/* Graphite and paper, with one signal yellow. Red and green mean measured outcomes and nothing else.
-   good and bad are colour-blind safe against each other (checked with a CVD simulation),
-   and every use also carries a shape and a word. */
+/* Near-black with a slight green cast, and paper. Red and green mean measured outcomes and nothing else:
+   bad is harm a measurement found, good is proved safe by a measurement, caution is waiting on a person.
+   Every state also carries a shape and a word. Before a measurement exists, everything is neutral. */
 :root,
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #121513;
-  --bg-1: #191d1a;
-  --bg-2: #222723;
-  --bg-inset: #0c0e0d;
-  --line: #2c322d;
-  --line-2: #4a524c;
-  --ink: #eeece4;
-  --ink-2: #bcbdb3;
-  --ink-3: #91948a;
-  --invert-bg: #eeece4;
-  --invert-ink: #121513;
+  --bg: #0a0c0b;
+  --bg-1: #111413;
+  --bg-2: #191d1b;
+  --bg-inset: #060807;
+  --line: #242a27;
+  --line-2: #3d4642;
+  --ink: #f1efe7;
+  --ink-2: #b9bbb1;
+  --ink-3: #8d9188;
+  --invert-bg: #f1efe7;
+  --invert-ink: #0a0c0b;
   --invert-hover: #ffffff;
-  --mark-cut: #121513;
+  --mark-cut: #0a0c0b;
 
-  --good: #34d3a4;
-  --good-bg: #10261f;
+  --good: #3ddba9;
+  --good-bg: #0b1c16;
   --good-line: #1e5c49;
-  --bad: #ff6650;
-  --bad-bg: #2b1512;
+  --bad: #ff5a45;
+  --bad-bg: #1e0f0c;
   --bad-line: #7a2e23;
   --caution: #eec84e;
   --caution-text: #eec84e;
-  --caution-bg: #27220f;
+  --caution-bg: #1d1a0b;
   --caution-line: #6c5b1c;
+
+  --dot-idle: #5f6a64;
+  --grid: rgb(241 239 231 / 0.05);
 
   --shadow-dialog: 0 18px 60px rgb(0 0 0 / 0.6);
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
-  --bg: #f6f4ec;
-  --bg-1: #fdfcf7;
-  --bg-2: #eceade;
-  --bg-inset: #efede2;
-  --line: #d8d5c6;
-  --line-2: #a9a696;
-  --ink: #161916;
-  --ink-2: #41453e;
-  --ink-3: #62655c;
-  --invert-bg: #161916;
-  --invert-ink: #f6f4ec;
+  --bg: #f4f2ea;
+  --bg-1: #fbfaf5;
+  --bg-2: #e9e6da;
+  --bg-inset: #ecebe0;
+  --line: #d6d3c4;
+  --line-2: #a5a292;
+  --ink: #141613;
+  --ink-2: #3f433c;
+  --ink-3: #5f6359;
+  --invert-bg: #141613;
+  --invert-ink: #f4f2ea;
   --invert-hover: #000000;
-  --mark-cut: #fdfcf7;
+  --mark-cut: #fbfaf5;
 
-  --good: #007a5c;
-  --good-bg: #dff0e8;
+  --good: #00705a;
+  --good-bg: #dbeee6;
   --good-line: #8fcab6;
-  --bad: #c8350a;
+  --bad: #c02f08;
   --bad-bg: #fae4da;
   --bad-line: #e8a990;
   --caution: #c79a00;
@@ -59,19 +62,56 @@
   --caution-bg: #f7edc6;
   --caution-line: #d4bd6a;
 
+  --dot-idle: #8b8877;
+  --grid: rgb(20 22 19 / 0.06);
+
   --shadow-dialog: 0 18px 60px rgb(40 40 20 / 0.25);
 }
 
+/* The one inverted surface. Inside it, the light values apply whatever the page's theme is. */
+.on-paper {
+  color-scheme: light;
+  --bg: #f4f2ea;
+  --bg-1: #fbfaf5;
+  --bg-2: #e9e6da;
+  --bg-inset: #ecebe0;
+  --line: #d6d3c4;
+  --line-2: #a5a292;
+  --ink: #141613;
+  --ink-2: #3f433c;
+  --ink-3: #5f6359;
+  --invert-bg: #141613;
+  --invert-ink: #f4f2ea;
+  --invert-hover: #000000;
+  --mark-cut: #fbfaf5;
+  --good: #00705a;
+  --good-bg: #dbeee6;
+  --good-line: #8fcab6;
+  --bad: #c02f08;
+  --bad-bg: #fae4da;
+  --bad-line: #e8a990;
+  --caution: #c79a00;
+  --caution-text: #6f5400;
+  --caution-bg: #f7edc6;
+  --caution-line: #d4bd6a;
+  --dot-idle: #8b8877;
+  --grid: rgb(20 22 19 / 0.06);
+  background: var(--bg);
+  color: var(--ink);
+}
+
 :root {
-  --font-sans: 'Schibsted Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --font-display: 'Archivo Display', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --font-dot: 'Doto', 'Geist Mono', ui-monospace, monospace;
 
   --fs-xs: 12px;
-  --fs-s: 13.5px;
+  --fs-s: 13px;
   --fs-m: 15px;
   --fs-l: 18px;
   --fs-xl: 24px;
-  --fs-2xl: 34px;
+  --fs-2xl: clamp(30px, 3vw, 48px);
 
   --s-1: 4px;
   --s-2: 8px;
@@ -85,11 +125,32 @@
   --radius: 2px;
   --gutter: 28px;
   --page-max: 1320px;
+  --header-h: 56px;
+  --bottombar-h: 0px;
+
+  /* Motion. Anything tied to a clock or to scroll position is linear and uses none of these. */
+  --dur-press: 80ms;
+  --dur-hover: 120ms;
+  --dur-fast: 160ms;
+  --dur-panel: 280ms;
+  --dur-digit: 320ms;
+  --dur-enter: 560ms;
+  --dur-wipe: 720ms;
+
+  --ease-hover: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-wipe: cubic-bezier(0.86, 0, 0.07, 1);
+  --ease-press: cubic-bezier(0.4, 0, 0, 1);
+
+  --hover-colors: color var(--dur-hover) var(--ease-hover), background-color var(--dur-hover) var(--ease-hover),
+    border-color var(--dur-hover) var(--ease-hover), text-decoration-color var(--dur-hover) var(--ease-hover);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 719px) {
   :root {
     --gutter: 16px;
-    --fs-2xl: 28px;
+    --fs-2xl: 30px;
+    --bottombar-h: 56px;
   }
 }

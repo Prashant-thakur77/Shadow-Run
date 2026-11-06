@@ -5,6 +5,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 export PATH="$ROOT/.venv/bin:$ROOT/scripts/dev/bin:$PATH" PYTHONPATH="$ROOT"
 umask 022
+# /tmp is a small tmpfs with a per-user quota here, and other projects fill it. Clones and dumps are large.
+mkdir -p "$ROOT/var/tmp"
+export TMPDIR="$ROOT/var/tmp"
 TOKEN="$(grep '^RUNNER_TOKEN=' var/local/control.env | cut -d= -f2-)"
 if [ -f var/local/runner.pid ]; then kill "$(cat var/local/runner.pid)" 2>/dev/null || true; fi
 if [ -f var/local/control.pid ]; then kill "$(cat var/local/control.pid)" 2>/dev/null || true; fi

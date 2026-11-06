@@ -1,18 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, errorText, notifyProdChanged } from '../api/client';
 import type { Counts, FileCounts, Run } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
-import { bytes, clockTime, ms, num, when } from '../lib/format';
+import { bytes, clockTime, ms, num, short, when } from '../lib/format';
 import { Link, navigate } from '../lib/router';
 import { Hash, Mark, Notice, Tag } from '../ui/bits';
 import { narrowedRows } from './derive';
 import { hashMovedSinceRehearsal, measureProdBeforeApply } from './ProdProof';
 import { UndoPanel } from './Undo';
 
-function HashRow({ label, value }: { label: string; value?: string | null }) {
+function HashRow({ label, value, locked, index }: { label: string; value?: string | null; locked?: boolean; index: number }) {
   return (
-    <div className="hashrow">
-      <dt>{label}</dt>
+    <div className="hashrow" style={{ '--i': index } as React.CSSProperties}>
+      <dt>
+        {locked && (
+          <svg className="hash-lock" width="10" height="11" viewBox="0 0 10 11" role="img" aria-label="locked">
+            <path d="M2.5 4.5V3a2.5 2.5 0 0 1 5 0v1.5" fill="none" stroke="currentColor" />
+            <rect x="1" y="4.5" width="8" height="6" fill="currentColor" />
+          </svg>
+        )}
+        {label}
+      </dt>
       <dd>
         <Hash value={value} full />
       </dd>
@@ -20,12 +28,13 @@ function HashRow({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-function ThreeHashes({ plan, guardrails, report }: { plan?: string | null; guardrails?: string | null; report?: string | null }) {
+/** Once approved, each hash gets a lock in turn. */
+function ThreeHashes({ plan, guardrails, report, locked }: { plan?: string | null; guardrails?: string | null; report?: string | null; locked?: boolean }) {
   return (
     <dl className="hashrows">
-      <HashRow label="Plan" value={plan} />
-      <HashRow label="Guardrails" value={guardrails} />
-      <HashRow label="Report" value={report} />
+      <HashRow label="Plan" value={plan} locked={locked} index={0} />
+      <HashRow label="Guardrails" value={guardrails} locked={locked} index={1} />
+      <HashRow label="Report" value={report} locked={locked} index={2} />
     </dl>
   );
 }
@@ -147,7 +156,7 @@ function ApplyPanel({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) => v
           ? 'Applying runs this same hashed plan on the server. A filesystem has no transactions, so a state archive is kept, and the server is restored if files or services differ from the rehearsal. The approval works once.'
           : 'Applying runs this same hashed plan on prod in one transaction. If the counts differ from the rehearsal, the transaction rolls back. The approval works once.'}
       </p>
-      <ThreeHashes plan={a?.plan_hash} guardrails={a?.guardrails_hash} report={a?.report_hash} />
+      <ThreeHashes plan={a?.plan_hash} guardrails={a?.guardrails_hash} report={a?.report_hash} locked />
       {a?.signature && (
         <p className="muted">
           Signature <Hash value={a.signature} chars={16} />
@@ -487,6 +496,33 @@ function Outcome({ run }: { run: Run }) {
 }
 
 /** The retry loop can narrow a request until it passes, so whoever decides is told when the plan shrank. */
+/** A different model read the request against the final plan. Its doubt adds a person, and it never removes one. */
+function SecondOpinionNotice({ run }: { run: Run }) {
+  const opinion = run.final?.second_opinion;
+  if (!opinion || opinion.error || !opinion.verdict) return null;
+  const said = [opinion.left_out, opinion.added].filter(Boolean);
+  if (opinion.verdict === 'does_it') {
+    return (
+      <p className="muted">
+        Second opinion from <code className="mono">{opinion.model}</code>: this does what was asked. It has no say over what is safe.
+      </p>
+    );
+  }
+  return (
+    <Notice tone="caution" title={`A second model ${opinion.verdict === 'does_not' ? "doesn't think this does" : 'thinks this only partly does'} what you asked`}>
+      {said.map((line) => (
+        <span className="narrowed-line" key={line}>
+          {line}
+        </span>
+      ))}
+      <span className="narrowed-line muted">
+        From <code className="mono">{opinion.model}</code>, which didn't write the plan. Its doubt can add a person, and it can't remove one.
+        {opinion.numbers_verified === false ? ' Some numbers it states are not in the measurements.' : ''}
+      </span>
+    </Notice>
+  );
+}
+
 function NarrowedNotice({ run }: { run: Run }) {
   const rows = narrowedRows(run);
   if (!rows || !['awaiting_approval', 'approved', 'applied', 'no_change'].includes(run.status)) return null;
@@ -522,12 +558,104 @@ function Badges({ run }: { run: Run }) {
   );
 }
 
+/** Keeps the decision one move away while it's waiting: the three hashes and the one action. It steps aside while the
+ *  decision itself is on screen, so nothing is offered twice. */
+export function DecisionBar({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) => void; pollFast: (on: boolean) => void }) {
+  const { switchTo } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [panelInView, setPanelInView] = useState(false);
+  const waiting = run.status === 'awaiting_approval' || run.status === 'approved';
+
+  useEffect(() => {
+    const el = document.getElementById('decision');
+    if (!el || !waiting) return;
+    const observer = new IntersectionObserver(([entry]) => setPanelInView(entry.isIntersecting), { threshold: 0.25 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [waiting, run.status]);
+
+  if (!waiting || panelInView) return null;
+
+  const c = run.challenge;
+  const a = run.approval;
+  const other = run.requester === 'reviewer' ? 'judge' : 'reviewer';
+  const hashes = run.status === 'approved' ? [a?.plan_hash, a?.guardrails_hash, a?.report_hash] : [c?.plan_hash, c?.guardrails_hash, c?.report_hash];
+
+  const act = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <aside className="decisionbar" aria-label="The decision">
+      <dl className="decisionbar-hashes">
+        {['plan', 'guardrails', 'report'].map((label, i) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd className="mono">{short(hashes[i], 8).replace('…', '')}</dd>
+          </div>
+        ))}
+      </dl>
+      {error && <p className="error-line decisionbar-error" role="alert">{error}</p>}
+      <div className="decisionbar-actions">
+        {run.status === 'approved' ? (
+          run.can?.apply ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy}
+              onClick={() =>
+                void act(async () => {
+                  pollFast(true);
+                  try {
+                    await measureProdBeforeApply(run);
+                    setRun(await api.apply(run.id));
+                    notifyProdChanged();
+                  } finally {
+                    pollFast(false);
+                  }
+                })
+              }
+            >
+              {busy ? 'Applying' : 'Apply this plan'}
+            </button>
+          ) : (
+            <a className="btn" href="#decision">
+              See why this account can't apply
+            </a>
+          )
+        ) : run.can?.approve ? (
+          <button type="button" className="btn btn-primary" disabled={busy || !c} onClick={() => void act(async () => c && setRun(await api.approve(run.id, c)))}>
+            {busy ? 'Approving' : 'Approve these hashes'}
+          </button>
+        ) : (
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void act(() => switchTo(other))}>
+            Switch to {other}
+          </button>
+        )}
+        <a className="btn" href="#decision">
+          Read the decision
+        </a>
+      </div>
+    </aside>
+  );
+}
+
 export function DecisionSection({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) => void; pollFast: (on: boolean) => void }) {
   // Undo is offered while a person decides, and after the change is on prod.
   const showUndo = ['awaiting_approval', 'approved', 'applied'].includes(run.status);
   return (
     <>
       <Badges run={run} />
+      <SecondOpinionNotice run={run} />
       <NarrowedNotice run={run} />
       <DecisionPanel run={run} setRun={setRun} pollFast={pollFast} />
       {showUndo && <UndoPanel run={run} />}

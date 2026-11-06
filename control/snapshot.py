@@ -58,6 +58,11 @@ def fingerprint(conn: ProdConn) -> dict:
     return {"tables": checks, "schema_sha256": schema, "lsn": lsn, "digest": sha256_hex({"t": checks, "s": schema})}
 
 
+def expected_clone(snap: dict) -> dict:
+    """What a clone restored from this snapshot has to contain, so the runner can refuse a partial one."""
+    return {"schema_sha256": snap.get("schema_sha256"), "rows": {t: v["rows"] for t, v in (snap.get("tables") or {}).items()}}
+
+
 def take_snapshot(conn: ProdConn, out_dir: Path | None = None) -> dict:
     """Hold one REPEATABLE READ snapshot open, checksum inside it, and pg_dump that same snapshot."""
     out_dir = Path(out_dir or settings.SNAP_DIR)

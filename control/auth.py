@@ -52,7 +52,10 @@ def verify_token(token: str) -> str | None:
 
 def check_password(username: str, password: str) -> bool:
     u = users().get(username)
-    return bool(u and u["password"] and hmac.compare_digest(u["password"], password))
+    if not (u and u["password"]):
+        return False
+    # Hash both sides first, as Airlock does: lengths don't leak, and non-ASCII input can't raise.
+    return hmac.compare_digest(hashlib.sha256(u["password"].encode()).digest(), hashlib.sha256(password.encode()).digest())
 
 
 def current_user(authorization: str = Header(default=""), sr_session: str = Cookie(default="")) -> str:

@@ -9,6 +9,10 @@ html {
   scroll-behavior: smooth;
   scroll-padding-top: 76px;
 }
+/* Lenis does its own smoothing on the landing page, and the two fight. */
+html.lenis {
+  scroll-behavior: auto !important;
+}
 
 body {
   margin: 0;
@@ -16,8 +20,9 @@ body {
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: var(--fs-m);
-  line-height: 1.5;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 h1,
@@ -44,6 +49,7 @@ a {
   color: inherit;
   text-decoration-color: var(--line-2);
   text-underline-offset: 3px;
+  transition: var(--hover-colors);
 }
 
 a:hover {
@@ -54,7 +60,7 @@ code,
 pre,
 .mono {
   font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums slashed-zero;
 }
 
 code {
@@ -255,6 +261,10 @@ textarea {
   line-height: 1.3;
   text-decoration: none;
   cursor: pointer;
+  transition: var(--hover-colors), transform var(--dur-press) var(--ease-press);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 .btn:hover:not(:disabled) {
   background: var(--bg-2);
@@ -299,6 +309,7 @@ textarea {
   text-decoration-color: var(--line-2);
   text-underline-offset: 3px;
   cursor: pointer;
+  transition: var(--hover-colors);
 }
 .textbtn:hover {
   color: var(--ink);
@@ -315,6 +326,7 @@ textarea {
   line-height: 18px;
   cursor: pointer;
   white-space: nowrap;
+  transition: var(--hover-colors);
 }
 .copy:hover {
   color: var(--ink);
@@ -352,6 +364,7 @@ textarea {
   font-weight: 500;
   line-height: 1.4;
   cursor: pointer;
+  transition: var(--hover-colors);
 }
 .seg-btn + .seg-btn {
   border-left: 1px solid var(--line-2);
@@ -393,8 +406,11 @@ textarea {
 }
 
 .error-line {
-  color: var(--bad);
+  padding-left: var(--s-2);
+  border-left: 2px solid var(--ink);
+  color: var(--ink);
   font-size: var(--fs-s);
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
@@ -465,6 +481,7 @@ textarea {
   font-size: var(--fs-s);
   font-weight: 500;
   overflow-wrap: anywhere;
+  transition: var(--hover-colors);
 }
 .fold > summary:hover {
   background: var(--bg-2);
@@ -509,6 +526,7 @@ textarea {
 
 /* Tables */
 .scroll-x {
+  position: relative;
   max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;

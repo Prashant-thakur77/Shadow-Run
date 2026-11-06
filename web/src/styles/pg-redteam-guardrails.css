@@ -1,0 +1,2154 @@
+/* Red team and Guardrails. Everything is scoped under the page's own class, so it wins over the shared
+   rules in pages.css and features.css whatever order the chunks load in. Those rules stay as they are. */
+
+/* A caption's code stays at the caption's size: 11 px is the floor. */
+.redteam .figure-caption code,
+.gr .figure-caption code {
+  font-size: inherit;
+}
+
+/* Folds on these two pages share one marker, which turns and lines up with whatever sits beside it. */
+.redteam .fold > summary,
+.gr .fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  list-style: none;
+}
+.redteam .fold > summary::-webkit-details-marker,
+.gr .fold > summary::-webkit-details-marker {
+  display: none;
+}
+.redteam .fold > summary::before,
+.gr .fold > summary::before {
+  content: '';
+  flex: none;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid currentColor;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.redteam .fold[open] > summary::before,
+.gr .fold[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+/* ------------------------------------------------------------------ Red team */
+
+.redteam {
+  gap: var(--s-4);
+}
+:root:has(.redteam) {
+  /* The prod strip is pinned to the bottom, so a focused control must not end up behind it. */
+  scroll-padding-bottom: 150px;
+}
+
+.redteam .rt-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--s-4) var(--s-7);
+}
+.redteam .rt-head-text {
+  gap: var(--s-2);
+}
+.redteam .rt-head-text .page-lead {
+  max-width: 62ch;
+  font-size: var(--fs-m);
+  line-height: 1.5;
+}
+.redteam .rt-head-side {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: end;
+  gap: 6px var(--s-5);
+}
+.redteam .rt-result {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.redteam .rt-score {
+  color: var(--ink);
+  font-weight: 300;
+  white-space: nowrap;
+}
+.redteam .rt-score.is-good {
+  color: var(--good);
+}
+.redteam .rt-score.is-bad {
+  color: var(--bad);
+}
+.redteam .rt-score-empty {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-s);
+}
+.redteam .rt-result-right {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 132px;
+}
+.redteam .rt-score-word {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.redteam .rt-ticks {
+  display: inline-flex;
+  gap: 3px;
+}
+.redteam .rt-ticks li {
+  width: 14px;
+  height: 6px;
+  border: 1px solid var(--line-2);
+}
+.redteam .rt-actions {
+  display: flex;
+  gap: var(--s-2);
+}
+.redteam .rt-replay {
+  /* Wide enough for both of its labels, so it never resizes the row. */
+  min-width: 148px;
+}
+.redteam .rt-actions-note {
+  grid-column: 1 / -1;
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  text-align: right;
+}
+
+.redteam .rt-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-1) var(--s-5);
+  padding: 0;
+  border: 0;
+}
+.redteam .rt-meta {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--fs-s);
+}
+.redteam .rt-summary-wall {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-s);
+  text-decoration: none;
+}
+.redteam .rt-summary-wall.is-good {
+  color: var(--good);
+}
+.redteam .rt-summary-wall.is-bad {
+  color: var(--bad);
+}
+.redteam .rt-summary-wall:hover {
+  text-decoration: underline;
+}
+
+/* The chambers and the wall sit on the hot side. The prod strip pins to the bottom of this box. */
+.redteam .rt-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.redteam .rt-figure {
+  min-width: 0;
+}
+.redteam .rt-frame {
+  background: var(--line);
+}
+.redteam .rt-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1px;
+}
+.redteam .rt-chamber {
+  display: flex;
+  flex-direction: column;
+  grid-column: span 3;
+  min-width: 0;
+  background: var(--bg);
+}
+.redteam .rt-chamber:nth-child(n + 5) {
+  grid-column: span 4;
+}
+
+/* A screen is dark on paper too, so the dark values apply here in either theme. */
+.redteam .rt-screen,
+.redteam .rt-wall-screen {
+  --ink: #f1efe7;
+  --ink-2: #b9bbb1;
+  --ink-3: #8d9188;
+  --line: #242a27;
+  --line-2: #3d4642;
+  --good: #3ddba9;
+  --bad: #ff5a45;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+.redteam .rt-screen {
+  --screen-h: 178px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  height: var(--screen-h);
+  overflow: hidden;
+  background-color: #1a1f1c;
+  background-image:
+    linear-gradient(rgb(241 239 231 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(241 239 231 / 0.05) 1px, transparent 1px);
+  background-size: 22px 22px;
+  transition: background-color var(--dur-panel) linear;
+}
+/* A dead screen: no grid, nearly black. Seven of these going dark in turn is the page. */
+.redteam .stage-dead .rt-screen,
+.redteam .stage-landed .rt-screen {
+  background-color: #060807;
+  background-image: none;
+}
+.redteam .rt-screen-head {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  height: 28px;
+  padding: 0 var(--s-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.redteam .rt-screen-n {
+  color: var(--ink-3);
+  white-space: pre;
+}
+.redteam .rt-screen-id {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+}
+.redteam .rt-screen-nic {
+  margin-left: auto;
+}
+.redteam .rt-screen-nic.is-bad {
+  color: var(--bad);
+}
+.redteam .rt-screen-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+/* The scan line runs only while a real job runs, or while its replay does. */
+.redteam .rt-scan {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: var(--ink);
+  box-shadow: 0 0 10px 1px rgb(241 239 231 / 0.35);
+  animation: rt-scan 1.25s linear infinite;
+}
+@keyframes rt-scan {
+  to {
+    transform: translateY(calc(var(--screen-h) - 28px));
+  }
+}
+.redteam .is-live .rt-screen {
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+/* The console. Lines stack from the bottom and the oldest scroll off the top. */
+.redteam .rt-live {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: var(--s-2) var(--s-3);
+  overflow: hidden;
+  transform-origin: center;
+}
+.redteam .rt-log {
+  display: flex;
+  flex-direction: column;
+  font-size: 11.5px;
+  line-height: 17px;
+}
+.redteam .rt-log-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.redteam .rt-log-line > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.redteam .rt-log-line.is-output {
+  color: var(--ink);
+}
+.redteam .rt-log-value {
+  flex: none;
+  color: var(--ink-2);
+}
+
+/* CRT-off: down to a line over the measured destroy time, then out. */
+.redteam .stage-dying .rt-live {
+  background: #8d9188;
+  animation:
+    rt-crt-y var(--crt-y) linear both,
+    rt-crt-x var(--crt-x) linear var(--crt-y) forwards;
+}
+.redteam .stage-dying .rt-log {
+  visibility: hidden;
+}
+@keyframes rt-crt-y {
+  from {
+    transform: scale(1, 1);
+  }
+  to {
+    transform: scale(1, 0.012);
+  }
+}
+@keyframes rt-crt-x {
+  from {
+    transform: scale(1, 0.012);
+    background: #f1efe7;
+  }
+  to {
+    transform: scale(0, 0.012);
+    background: #f1efe7;
+  }
+}
+
+/* What's left: the last lines burned in, and the word. */
+.redteam .rt-dead {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--s-1);
+  padding: var(--s-2) var(--s-3) var(--s-3);
+}
+.redteam .stage-landed .rt-dead {
+  animation: rt-burn var(--dur-panel) linear both;
+}
+@keyframes rt-burn {
+  from {
+    opacity: 0;
+  }
+}
+.redteam .rt-burn {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(transparent, #000 16px);
+  mask-image: linear-gradient(transparent, #000 16px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  color: var(--ink-3);
+  font-size: 11px;
+  line-height: 15px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.redteam .rt-dead-foot {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  flex: none;
+  gap: 2px var(--s-3);
+}
+.redteam .rt-gone {
+  flex: none;
+  color: var(--ink);
+  font-size: 48px;
+  line-height: 0.9;
+}
+.redteam .rt-gone.is-bad {
+  color: var(--bad);
+}
+.redteam .rt-gone-lines {
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 14px;
+}
+.redteam .rt-gone-lines .is-bad {
+  color: var(--bad);
+}
+
+.redteam .rt-chamber-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.redteam .rt-chamber-verdict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  min-height: 26px;
+}
+.redteam .stage-landed .stamp {
+  animation: stamp-land 200ms var(--ease-press) both;
+}
+.redteam .rt-chamber-ran {
+  color: var(--ink-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.redteam .rt-chamber-waiting {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.redteam .rt-title {
+  font-size: var(--fs-m);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+}
+.redteam .rt-expected {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.4;
+}
+.redteam .rt-expected-word {
+  color: var(--ink-3);
+}
+.redteam .rt-note {
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+}
+
+/* One time scale across the run. Execute is the bright part. */
+.redteam .rt-bar {
+  margin-top: auto;
+  height: 6px;
+  background: linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat;
+}
+.redteam .rt-bar-fill {
+  display: flex;
+  gap: 1px;
+  height: 100%;
+}
+.redteam .rt-bar-fill i {
+  display: block;
+  flex-basis: 0;
+  min-width: 1px;
+  background: var(--ink-3);
+}
+.redteam .rt-bar-fill i.is-execute {
+  background: var(--ink);
+}
+
+.redteam .rt-folds {
+  display: flex;
+  flex-direction: column;
+  margin: 0 calc(var(--s-3) * -1) calc(var(--s-3) * -1);
+  border-top: 1px solid var(--line);
+}
+.redteam .rt-folds .fold {
+  border: 0;
+  border-radius: 0;
+}
+.redteam .rt-folds .fold + .fold {
+  border-top: 1px solid var(--line);
+}
+.redteam .rt-folds .fold > summary {
+  padding: 7px var(--s-3);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  line-height: 18px;
+}
+.redteam .rt-folds-row {
+  padding: 7px var(--s-3);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: 18px;
+}
+.redteam .rt-folds-row + .rt-folds-row {
+  border-top: 1px solid var(--line);
+}
+.redteam .rt-fold-sum {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+}
+.redteam .rt-folds .fold-body {
+  padding: var(--s-2) var(--s-3) var(--s-3);
+}
+.redteam .rt-checks {
+  gap: 5px;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
+.redteam .rt-check {
+  grid-template-columns: 14px 44px minmax(0, 1fr);
+}
+.redteam .rt-check-word {
+  font-size: 11px;
+  line-height: 17px;
+}
+.redteam .rt-check-detail {
+  font-size: 11px;
+}
+.redteam .rt-facts {
+  flex-direction: column;
+  gap: 2px;
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+}
+.redteam .rt-facts > div {
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.redteam .rt-facts dd {
+  text-align: right;
+}
+.redteam .rt-inside .inert {
+  font-size: 11.5px;
+}
+
+/* The second wall. When it failed it says so, in the largest type on the page. */
+.redteam .rt-wall {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  background: var(--bg);
+}
+.redteam .rt-wall.is-pending {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border-color: var(--line);
+  border-style: dashed;
+}
+.redteam .rt-wall.is-bad {
+  border-color: var(--bad);
+  background: var(--bad-bg);
+}
+.redteam .rt-wall.is-good {
+  border-color: var(--good-line);
+}
+.redteam .rt-wall-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  min-width: 0;
+}
+.redteam .rt-wall-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.redteam .rt-wall-title {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.redteam .rt-wall-word {
+  flex-wrap: wrap;
+  font-size: clamp(48px, 5vw, 72px);
+  white-space: nowrap;
+}
+.redteam .rt-wall.is-bad .rt-wall-word {
+  color: var(--bad);
+}
+.redteam .rt-wall.is-good .rt-wall-word {
+  color: var(--good);
+}
+.redteam .rt-wall-what {
+  max-width: 54ch;
+  font-size: var(--fs-m);
+  line-height: 1.45;
+}
+.redteam .rt-wall .rt-checks {
+  font-size: var(--fs-s);
+}
+.redteam .rt-wall-counter {
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line-2);
+}
+.redteam .rt-wall.is-bad .rt-wall-counter {
+  border-color: var(--bad-line);
+}
+.redteam .rt-wall-counter-label {
+  margin-bottom: var(--s-1);
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+}
+.redteam .rt-wall.is-bad .rt-wall-counter-label,
+.redteam .rt-wall.is-bad .rt-wall-reason {
+  color: var(--ink-2);
+}
+.redteam .rt-wall-count {
+  font-size: 40px;
+  letter-spacing: -0.04em;
+}
+.redteam .rt-wall-count-empty {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.redteam .rt-wall-reason {
+  font-size: var(--fs-xs);
+}
+.redteam .rt-wall-screen {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #060807;
+}
+.redteam .rt-wall-output {
+  flex: 1;
+  padding: var(--s-3);
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.redteam .rt-wall-output .is-bad {
+  color: var(--bad);
+}
+
+/* Prod. It has no transitions and no animation at all. */
+.redteam .rt-prod {
+  position: sticky;
+  bottom: var(--bottombar-h);
+  z-index: 15;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-2) var(--s-6);
+  /* One height in every state: when a value lands, nothing on the strip may shift. */
+  height: 96px;
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--line-2);
+  border-radius: 0;
+  background: var(--bg);
+}
+.redteam .rt-prod.is-good,
+.redteam .rt-prod.is-pending {
+  background: var(--bg);
+  border-color: var(--line-2);
+}
+.redteam .rt-prod.is-bad {
+  border-color: var(--bad);
+  background: var(--bad-bg);
+}
+.redteam .rt-prod-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+}
+.redteam .rt-prod-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--s-3);
+}
+.redteam .rt-prod-title {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.redteam .rt-prod-source {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.redteam .rt-prod-verdict {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 2px var(--s-3);
+}
+.redteam .rt-prod-word {
+  font-size: 48px;
+  white-space: nowrap;
+}
+.redteam .rt-prod.is-good .rt-prod-word {
+  color: var(--good);
+}
+.redteam .rt-prod.is-bad .rt-prod-word {
+  color: var(--bad);
+}
+.redteam .rt-prod-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.redteam .rt-prod.is-good .rt-prod-state {
+  color: var(--good);
+}
+.redteam .rt-prod.is-bad .rt-prod-state {
+  color: var(--bad);
+}
+.redteam .rt-prod.is-pending .rt-prod-state {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+}
+.redteam .rt-hashes {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  justify-self: end;
+  max-width: 100%;
+}
+.redteam .rt-hash-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--s-2);
+}
+.redteam .rt-hash-row dt {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.redteam .rt-hash-row dd {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.redteam .rt-hash-text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.redteam .rt-hash-text code {
+  font-size: inherit;
+  overflow-wrap: normal;
+}
+.redteam .rt-hash-short {
+  display: none;
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.redteam .rt-hash-waiting {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.redteam .rt-wait-short {
+  display: none;
+}
+.redteam .rt-hash-diff {
+  color: var(--bad);
+  text-decoration: underline;
+}
+
+.redteam .rt-prod-notes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2) var(--s-6);
+  margin-top: calc(var(--s-1) * -1);
+}
+.redteam .rt-prod-why {
+  display: flex;
+  gap: var(--s-2);
+  max-width: none;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.45;
+}
+.redteam .rt-prod-why .mark {
+  margin-top: 3px;
+}
+
+@media (max-width: 1180px) {
+  .redteam .rt-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .redteam .rt-head-side {
+    justify-content: start;
+  }
+  .redteam .rt-actions-note {
+    text-align: left;
+  }
+}
+@media (max-width: 999px) {
+  .redteam .rt-chamber,
+  .redteam .rt-chamber:nth-child(n + 5) {
+    grid-column: span 6;
+  }
+  .redteam .rt-chamber:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .redteam .rt-wall {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .redteam .rt-hashes {
+    justify-self: stretch;
+  }
+  .redteam .rt-prod-notes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Short windows can't spare the room for a pinned strip. */
+@media (max-height: 620px) {
+  .redteam .rt-prod {
+    position: static;
+  }
+}
+@media (max-width: 719px) {
+  :root:has(.redteam) {
+    scroll-padding-bottom: calc(var(--bottombar-h) + 110px);
+  }
+  /* Tap targets on a phone are at least 44 px. */
+  .redteam .copy,
+  .gr .copy {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 10px;
+  }
+  .redteam .textbtn,
+  .redteam .rt-summary-wall {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .gr .btn,
+  .gr .seg-btn {
+    min-height: 44px;
+  }
+  .redteam .rt-head-side {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .redteam .rt-actions {
+    width: 100%;
+  }
+  .redteam .rt-actions .btn {
+    flex: 1;
+    min-height: 46px;
+    min-width: 0;
+  }
+  .redteam .rt-folds-row {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .redteam .rt-chamber,
+  .redteam .rt-chamber:nth-child(n + 5) {
+    grid-column: 1 / -1;
+  }
+  .redteam .rt-folds .fold > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  /* Pinned at the bottom of a phone, the strip stays small: the state and three short hashes. */
+  .redteam .rt-prod {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    height: 68px;
+    padding: 6px var(--s-3);
+  }
+  .redteam .rt-prod-side {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-2);
+  }
+  .redteam .rt-prod .rt-prod-word {
+    display: none;
+  }
+  .redteam .rt-prod .frame-tick,
+  .redteam .rt-prod-source {
+    display: none;
+  }
+  .redteam .rt-hashes {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: var(--s-2);
+  }
+  .redteam .rt-hash-row {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 0;
+    min-width: 0;
+  }
+  .redteam .rt-hash-row dd {
+    overflow: hidden;
+  }
+  .redteam .rt-wait-long {
+    display: none;
+  }
+  .redteam .rt-wait-short {
+    display: inline;
+  }
+  .redteam .rt-hash-text,
+  .redteam .rt-hash-row .copy {
+    display: none;
+  }
+  .redteam .rt-hash-short {
+    display: inline;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .redteam .rt-hash-waiting {
+    font-size: 11px;
+    line-height: 1.25;
+  }
+  .redteam .rt-wall-output {
+    font-size: 12px;
+  }
+}
+
+/* ---------------------------------------------------------------- Guardrails */
+
+.gr {
+  gap: var(--s-4);
+}
+.gr .gr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-6);
+}
+.gr .gr-head-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.gr .gr-head .page-lead {
+  font-size: var(--fs-m);
+}
+
+/* The headline: what the table below says, in one line, as a link to it. */
+.gr .gr-measured {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-3);
+  padding: 10px var(--s-3);
+  border: 1px solid var(--line-2);
+  border-left-width: 3px;
+  font-size: var(--fs-s);
+  text-decoration: none;
+  transition: var(--hover-colors);
+}
+.gr .gr-measured .mark {
+  align-self: center;
+}
+.gr .gr-measured.is-bad {
+  border-color: var(--bad-line);
+  border-left-color: var(--bad);
+  background: var(--bad-bg);
+}
+.gr .gr-measured.is-good {
+  border-color: var(--good-line);
+  border-left-color: var(--good);
+  background: var(--good-bg);
+}
+.gr .gr-measured-text {
+  flex: 1;
+  min-width: 0;
+}
+.gr .gr-measured strong {
+  font-weight: 500;
+}
+.gr .gr-measured.is-bad strong,
+.gr .gr-measured.is-bad code {
+  color: var(--bad);
+}
+.gr .gr-measured-more {
+  color: var(--ink-2);
+}
+.gr .gr-measured-go {
+  flex: none;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: 3px;
+}
+.gr .gr-measured:hover .gr-measured-go {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+
+.gr .gr-layout {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s-6);
+}
+.gr .gr-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-7);
+  min-width: 0;
+}
+
+/* Side nav: a pill on a line, with one element that travels. */
+.gr .gr-nav {
+  position: sticky;
+  top: calc(var(--gr-bar, var(--header-h)) + var(--s-5));
+}
+.gr .gr-nav-list {
+  --step: 36px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line-2);
+}
+.gr .gr-nav-pill {
+  position: absolute;
+  top: 0;
+  left: -2px;
+  width: 3px;
+  height: var(--step);
+  background: var(--ink);
+  transform: translateY(calc(var(--active, 0) * var(--step)));
+  transition: transform var(--dur-panel) var(--ease-out);
+}
+.gr .gr-nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: var(--step);
+  padding: 0 0 0 var(--s-3);
+  color: var(--ink-3);
+  font-size: var(--fs-s);
+  line-height: 1.2;
+  text-decoration: none;
+  transition: var(--hover-colors);
+}
+.gr .gr-nav-link:hover {
+  color: var(--ink);
+}
+.gr .gr-nav-link.is-on {
+  color: var(--ink);
+  font-weight: 500;
+}
+.gr .gr-nav-n {
+  flex: none;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.gr .section {
+  gap: var(--s-4);
+  padding-top: 0;
+  border-top: 0;
+  scroll-margin-top: var(--s-3);
+}
+.gr .section-head {
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line-2);
+  align-items: baseline;
+}
+.gr .section-index {
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+.gr .section-index::before {
+  content: '[ ';
+}
+.gr .section-index::after {
+  content: ' ]';
+}
+.gr .section-body > p,
+.gr .gr-lead {
+  max-width: 76ch;
+  color: var(--ink-2);
+}
+
+/* Frozen rules: a lock, a name and a sentence. The SQL waits in a fold. */
+.gr .gr-rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+.gr .gr-rule {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: var(--s-3);
+  padding: var(--s-3);
+  background: var(--bg);
+  min-width: 0;
+}
+.gr .gr-rule:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+.gr .gr-lock {
+  margin-top: 4px;
+  color: var(--ink-3);
+  /* The locks close in turn on first load. Only the glyph moves, and the text is already there. */
+  animation: gr-lock var(--dur-fast) var(--ease-press) calc(24ms * var(--i, 0)) backwards;
+}
+@keyframes gr-lock {
+  from {
+    transform: translateY(-3px) scale(1.25);
+    opacity: 0.3;
+  }
+}
+.gr .gr-rule .mark {
+  margin-top: 3px;
+}
+.gr .gr-rule-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.gr .gr-rule-name {
+  font-size: var(--fs-m);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+  overflow-wrap: anywhere;
+}
+.gr .gr-rule-why {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.4;
+}
+.gr .gr-rule .fold {
+  margin-top: 2px;
+  border: 0;
+}
+.gr .gr-rule .fold > summary {
+  width: fit-content;
+  padding: 2px 0;
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.gr .gr-rule .fold > summary:hover {
+  background: none;
+  color: var(--ink);
+}
+.gr .gr-rule .fold-body {
+  padding: 4px 0 0;
+  border-top: 0;
+}
+.gr .gr-rule .sql {
+  font-size: 12px;
+}
+.gr .guardrail-who {
+  font-size: var(--fs-xs);
+}
+.gr .gr-draft-state {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.gr .gr-rule.is-good .gr-draft-state {
+  color: var(--good);
+}
+.gr .gr-rule.is-bad .gr-draft-state {
+  color: var(--bad);
+}
+.gr .drafts {
+  padding-top: 0;
+  border-top: 0;
+}
+.gr .drafts-head p {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+
+/* Gauntlet */
+.gr .gauntlet {
+  gap: var(--s-5);
+}
+.gr .gauntlet-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--s-4) var(--s-6);
+}
+.gr .gauntlet-why {
+  flex: none;
+  max-width: 62ch;
+  font-size: var(--fs-m);
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.gr .gauntlet-go {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.gr .gauntlet-warn {
+  max-width: 38ch;
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  text-align: right;
+}
+
+/* The reach table: the signature of this page. */
+.gr .gt-published-figure {
+  min-width: 0;
+}
+.gr .gt-published {
+  display: block;
+  gap: 0;
+}
+.gr .gt-published-inner {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.gr .gt-published-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-4) var(--s-4) var(--s-3);
+}
+.gr .gt-published-title {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+.gr .gt-published .tablewrap {
+  overflow: visible;
+}
+.gr .gt-table {
+  table-layout: fixed;
+}
+.gr .gt-table th,
+.gr .gt-table td {
+  padding: var(--s-3);
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.gr .gt-table th:first-child {
+  width: 23%;
+  padding-left: var(--s-4);
+}
+.gr .gt-table th:nth-child(n + 2):nth-child(-n + 4) {
+  width: 9.5%;
+}
+.gr .gt-table th:nth-child(5) {
+  width: 10.5%;
+}
+.gr .gt-table thead th {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  vertical-align: bottom;
+  border-top: 1px solid var(--line);
+  border-bottom-color: var(--line-2);
+}
+.gr .gt-table tbody th {
+  min-width: 0;
+  font-size: var(--fs-m);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+}
+.gr .gt-table td.num {
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.gr .gt-table td.gt-alone {
+  font-size: 40px;
+  font-weight: 300;
+  letter-spacing: -0.04em;
+}
+.gr .gt-alone.is-bad {
+  color: var(--bad);
+}
+.gr .gt-alone.is-good {
+  color: var(--good);
+}
+.gr .gt-reach {
+  padding-right: var(--s-4);
+}
+.gr .gt-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gr .gt-token {
+  position: relative;
+  display: inline-block;
+  padding: 3px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.gr .gt-token.is-open {
+  border-color: var(--bad);
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+.gr .gt-token.is-closed {
+  border-color: var(--line);
+  color: var(--ink-3);
+}
+.gr .gt-token.is-closed::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 5px;
+  right: 5px;
+  height: 1px;
+  background: var(--ink-2);
+  transform-origin: left center;
+}
+/* Before the table scrolls in, closed tokens read as open. Then they strike through, one after another. */
+.gr .gt-reach-armed .gt-token.is-closed,
+.gr .gt-reach-play .gt-token.is-closed {
+  border-color: var(--bad);
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+.gr .gt-reach-armed .gt-token.is-closed::after {
+  transform: scaleX(0);
+}
+.gr .gt-reach-play .gt-token.is-closed {
+  animation: gt-close var(--dur-fast) linear calc(120ms * var(--i) + 400ms) forwards;
+}
+.gr .gt-reach-play .gt-token.is-closed::after {
+  animation: gt-strike var(--dur-panel) linear calc(120ms * var(--i) + 240ms) both;
+}
+@keyframes gt-strike {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes gt-close {
+  to {
+    border-color: var(--line);
+    background: transparent;
+    color: var(--ink-3);
+  }
+}
+
+/* Two results, either side of a seam. They get the same weight: what's still open and what's now closed. */
+.gr .gt-seam {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+}
+.gr .gt-seam-side {
+  display: flex;
+  gap: var(--s-4);
+  align-items: flex-start;
+  padding: var(--s-4);
+  min-width: 0;
+}
+.gr .gt-seam-side + .gt-seam-side {
+  border-left: 1px solid var(--line-2);
+}
+.gr .gt-seam-figure {
+  flex: none;
+  white-space: nowrap;
+}
+.gr .gt-seam-side.is-bad .gt-seam-figure {
+  color: var(--bad);
+}
+.gr .gt-seam-side.is-good .gt-seam-figure {
+  color: var(--good);
+}
+.gr .gt-reach-armed .gt-seam-stopped .gt-seam-figure {
+  color: var(--ink);
+}
+.gr .gt-reach-play .gt-seam-stopped.is-good .gt-seam-figure {
+  animation: gt-land var(--dur-fast) var(--ease-press) calc(120ms * var(--strikes, 0) + 520ms) backwards;
+}
+@keyframes gt-land {
+  from {
+    color: var(--ink);
+    transform: scale(1.05);
+  }
+}
+.gr .gt-seam-stopped .gt-seam-figure {
+  transform-origin: left center;
+}
+.gr .gt-seam-text {
+  min-width: 0;
+  font-size: var(--fs-m);
+  line-height: 1.4;
+}
+.gr .gt-seam-reach {
+  margin-top: 2px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+.gr .gt-seam-side.is-bad .gt-seam-reach code {
+  color: var(--bad);
+}
+.gr .gt-published .fold {
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+.gr .gt-published .fold > summary {
+  padding: var(--s-2) var(--s-4);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+}
+.gr .gt-published .fold-body {
+  padding: var(--s-2) var(--s-4) var(--s-3);
+  border-top: 0;
+  font-size: var(--fs-s);
+}
+.gr .gt-published.is-empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-5);
+  border: 1px dashed var(--line-2);
+}
+.gr .gt-empty-word {
+  color: var(--ink-2);
+}
+
+/* Latest run */
+.gr .gt-latest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.gr .gt-latest-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+}
+.gr .gt-latest-id {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+}
+.gr .gt-summary {
+  gap: var(--s-1);
+  padding: 0;
+  border-left: 0;
+  background: none;
+}
+.gr .gt-summary.tone-bad {
+  background: none;
+}
+.gr .gt-summary-lead {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+.gr .gt-summary-verdict {
+  color: var(--tone-text);
+}
+.gr .gt-summary.tone-bad .gt-summary-lead {
+  color: inherit;
+}
+.gr .gt-summary-lead .mono {
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+.gr .gt-summary-reach {
+  font-size: var(--fs-l);
+  letter-spacing: 0;
+}
+.gr .gt-summary-line {
+  max-width: 76ch;
+}
+.gr .gt-replay {
+  padding: var(--s-3);
+  border-color: var(--line-2);
+}
+.gr .gt-replay-head p {
+  font-size: var(--fs-s);
+  flex: 1 1 280px;
+}
+
+/* Rounds at a glance */
+.gr .gt-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.gr .gt-strip-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 56px;
+  height: 32px;
+  padding: 0 var(--s-2);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+  transition: var(--hover-colors);
+}
+a.gt-strip-cell:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+.gr .gt-strip-cell.is-pending {
+  border-style: dashed;
+  color: var(--ink-3);
+}
+
+/* The rounds, as a timeline: a line, with an outcome mark at each round. */
+.gr .gt-rounds {
+  position: relative;
+  gap: 0;
+}
+.gr .gt-rounds::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 11px;
+  width: 1px;
+  background: var(--line-2);
+}
+.gr .gt-round {
+  position: relative;
+  padding: 0 0 var(--s-6) 44px;
+  border: 0;
+  background: none;
+  gap: var(--s-2);
+  scroll-margin-top: calc(var(--header-h) + var(--s-3));
+}
+.gr .gt-round.is-bad {
+  border: 0;
+  background: none;
+}
+.gr .gt-round.is-good {
+  border: 0;
+}
+.gr .gt-round.is-pending {
+  border: 0;
+  padding-bottom: var(--s-3);
+}
+.gr .gt-node {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  background: var(--bg);
+}
+.gr .gt-round.is-pending .gt-node::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border: 1px dashed var(--line-2);
+}
+.gr .gt-round-head {
+  min-height: 23px;
+  gap: 2px var(--s-3);
+  align-items: baseline;
+}
+.gr .gt-n {
+  font-size: var(--fs-xs);
+}
+.gr .gt-outcome {
+  margin: 0;
+  font-size: var(--fs-l);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+.gr .gt-round.is-caution .gt-outcome {
+  color: var(--caution-text);
+}
+.gr .gt-round.is-bad .gt-outcome {
+  color: var(--bad);
+}
+.gr .gt-round.is-good .gt-outcome {
+  color: var(--good);
+}
+.gr .gt-idea {
+  max-width: 78ch;
+  color: var(--ink);
+}
+.gr .gt-verdict {
+  gap: 4px;
+  max-width: 78ch;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+.gr .gt-verdict strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.gr .gt-held {
+  gap: 1px;
+  padding-left: var(--s-3);
+  border-left: 1px solid var(--line-2);
+  font-size: var(--fs-xs);
+}
+.gr .gt-round .fold {
+  border-color: var(--line);
+}
+.gr .gt-round > .fold > summary {
+  padding: 6px var(--s-3);
+  font-size: var(--fs-xs);
+}
+.gr .gt-round .sql {
+  font-size: 12px;
+}
+
+/* A candidate rule. Its three proofs are the card. */
+.gr .candidate {
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--line-2);
+  background: var(--bg-1);
+}
+.gr .candidate.is-proved {
+  border-color: var(--line-2);
+}
+.gr .candidate.is-unproved {
+  border-color: var(--bad-line);
+}
+.gr .candidate-label {
+  margin: 0;
+}
+.gr .candidate-name {
+  margin: 0;
+  font-size: var(--fs-m);
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.gr .candidate .guardrail-why {
+  max-width: 78ch;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+.gr .proof-ticks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: var(--s-1);
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+.gr .proof-tick {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2px var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  background: var(--bg);
+  min-width: 0;
+}
+.gr .proof-tick .mark {
+  grid-row: span 2;
+}
+.gr .proof-tick-word {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1.2;
+}
+.gr .proof-tick.is-good .proof-tick-word {
+  color: var(--good);
+}
+.gr .proof-tick.is-bad .proof-tick-word {
+  color: var(--bad);
+}
+.gr .proof-tick.is-neutral .proof-tick-word {
+  color: var(--ink-3);
+}
+.gr .proof-tick-what {
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+}
+.gr .proof-tick .proof-error {
+  grid-column: 1 / -1;
+}
+.gr .candidate-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-2) var(--s-3);
+  margin-top: var(--s-1);
+}
+.gr .candidate-foot > .btn {
+  flex: none;
+}
+.gr .candidate-foot .fold {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.gr .candidate-foot .fold > summary {
+  padding: 6px var(--s-3);
+  font-size: var(--fs-xs);
+}
+.gr .learned {
+  margin: var(--s-1) 0;
+  padding: var(--s-1) 0 var(--s-1) var(--s-2);
+  border-left: 2px solid var(--line-2);
+}
+
+/* Budget */
+.gr .auto-list {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  align-items: end;
+  gap: var(--s-4) var(--s-6);
+  margin-bottom: 0;
+}
+.gr .auto-list-items {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.gr .auto-list-title {
+  font-size: var(--fs-l);
+  font-weight: 600;
+  line-height: 1.25;
+}
+.gr .auto-list-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gr .auto-token {
+  display: inline-block;
+  padding: 6px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  font-size: 18px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.gr .auto-list-why {
+  max-width: 62ch;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+.gr .budget-lead {
+  font-size: var(--fs-s);
+}
+.gr .budget > div {
+  padding: var(--s-3);
+}
+.gr .budget dt {
+  font-size: var(--fs-xs);
+}
+.gr .budget dd {
+  margin-top: 2px;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+/* The schema, as a floor plan */
+.gr .gr-plan {
+  min-width: 0;
+}
+.gr .gr-plan-box {
+  min-width: 0;
+}
+.gr .gr-plan-svg {
+  display: block;
+  overflow: visible;
+}
+.gr .gr-plan-square {
+  stroke: var(--line);
+  stroke-width: 0.6;
+}
+.gr .gr-plan-wall {
+  fill: var(--bg);
+  fill-opacity: 0.55;
+  stroke: var(--ink-2);
+  stroke-width: 1.25;
+}
+.gr .gr-plan-door {
+  fill: none;
+  stroke: var(--line-2);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.gr .gr-plan-door.is-cascade {
+  stroke: var(--ink-3);
+  stroke-dasharray: none;
+}
+.gr .gr-plan-node {
+  fill: var(--bg);
+  stroke: var(--ink-2);
+}
+.gr .gr-plan-node.is-cascade {
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+.gr .gr-plan-origin {
+  fill: var(--bg);
+  stroke: var(--ink-2);
+}
+.gr .gr-plan-label {
+  fill: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums slashed-zero;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+}
+.gr .gr-plan-rows {
+  fill: var(--ink-2);
+}
+.gr .gr-tables-head {
+  margin: var(--s-2) 0 0;
+}
+
+/* Connect an agent */
+.gr .connect-keys {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+.gr .connect-keys > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--s-3);
+  background: var(--bg);
+  min-width: 0;
+}
+.gr .connect-keys dt {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+}
+.gr .connect-keys dd {
+  overflow-wrap: anywhere;
+}
+.gr .connect-recipes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4) var(--s-5);
+  align-items: start;
+}
+.gr .connect-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.gr .connect-recipe .subhead {
+  margin: var(--s-1) 0 0;
+}
+.gr .connect-recipe > p {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+.gr .codeblock {
+  position: relative;
+  min-width: 0;
+}
+.gr .codeblock .sql {
+  padding-right: 64px;
+  font-size: 12px;
+}
+.gr .codeblock .copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--bg-inset);
+}
+
+.gr .democtl p:first-child {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+
+/* Below 1040 px the top bar has two rows until the phone layout takes over, so everything that sits under it sits lower. */
+@media (min-width: 720px) and (max-width: 1040px) {
+  .gr {
+    --gr-bar: 95px;
+  }
+  :root:has(.gr),
+  :root:has(.redteam) {
+    scroll-padding-top: 110px;
+  }
+}
+@media (max-width: 1099px) {
+  .gr .gt-table th:nth-child(n + 2):nth-child(-n + 4) {
+    width: 10.5%;
+  }
+  .gr .gt-table th:first-child {
+    width: 22%;
+  }
+  .gr .gt-table td.num {
+    font-size: 20px;
+  }
+}
+/* Too narrow for the table's columns: each policy becomes its own block. */
+@media (max-width: 999px) {
+  .gr .gr-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-4);
+  }
+  /* The nav becomes a row of chips that stays under the header. */
+  .gr .gr-nav {
+    position: sticky;
+    top: var(--gr-bar, var(--header-h));
+    z-index: 20;
+    margin: 0 calc(var(--gutter) * -1);
+    background: var(--bg);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .gr .gr-nav-list {
+    flex-direction: row;
+    gap: var(--s-1);
+    padding: 6px var(--gutter);
+    overflow-x: auto;
+    border-left: 0;
+    scrollbar-width: none;
+  }
+  .gr .gr-nav-list::-webkit-scrollbar {
+    display: none;
+  }
+  .gr .gr-nav-pill {
+    display: none;
+  }
+  .gr .gr-nav-link {
+    height: 44px;
+    padding: 0 var(--s-3);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius);
+    white-space: nowrap;
+  }
+  .gr .gr-nav-link.is-on {
+    border-color: var(--invert-bg);
+    background: var(--invert-bg);
+    color: var(--invert-ink);
+  }
+  .gr .gr-nav-link.is-on .gr-nav-n {
+    color: inherit;
+  }
+  .gr .section {
+    scroll-margin-top: 56px;
+  }
+  .gr .gt-round {
+    scroll-margin-top: calc(var(--header-h) + 64px);
+  }
+}
+@media (max-width: 860px) {
+  .gr .gt-table,
+  .gr .gt-table tbody,
+  .gr .gt-table tr {
+    display: block;
+    width: 100%;
+  }
+  .gr .gt-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+  .gr .gt-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    padding: var(--s-3) var(--s-4);
+    border-top: 1px solid var(--line-2);
+  }
+  .gr .gt-table tbody th,
+  .gr .gt-table tbody th:first-child {
+    grid-column: 1 / -1;
+    width: auto;
+    padding: 0 0 var(--s-2);
+    border: 0;
+  }
+  .gr .gt-table td {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 0 var(--s-2) var(--s-2) 0;
+    border: 0;
+    text-align: left;
+  }
+  .gr .gt-table td[data-label]::before {
+    content: attr(data-label);
+    color: var(--ink-3);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.25;
+    letter-spacing: 0;
+    flex: 1;
+  }
+  .gr .gt-table td.num {
+    font-size: 24px;
+  }
+  .gr .gt-table td.gt-alone {
+    font-size: 24px;
+  }
+  .gr .gt-table td.gt-reach {
+    grid-column: 1 / -1;
+    padding: var(--s-1) 0 0;
+    gap: var(--s-1);
+  }
+  .gr .gt-seam {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gr .gt-seam-side + .gt-seam-side {
+    border-top: 1px solid var(--line-2);
+    border-left: 0;
+  }
+  .gr .gauntlet-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gr .gauntlet-go {
+    align-items: stretch;
+  }
+  .gr .gauntlet-warn {
+    max-width: none;
+    text-align: left;
+  }
+}
+@media (max-width: 719px) {
+  .gr .gr-measured {
+    flex-wrap: wrap;
+  }
+  .gr .gr-measured .mark {
+    align-self: flex-start;
+    margin-top: 3px;
+  }
+  .gr .gr-measured-text {
+    flex-basis: calc(100% - 30px);
+  }
+  .gr .gr-measured-go {
+    margin-left: 27px;
+    min-height: 24px;
+  }
+  .gr .gr-rules {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gr .gr-rule:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+  .gr .gr-rule .fold > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .gr .gr-rule .sql,
+  .gr .gt-round .sql,
+  .gr .codeblock .sql {
+    overflow-x: auto;
+    white-space: pre;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  .gr .gt-summary-lead {
+    font-size: var(--fs-l);
+  }
+  .gr .gt-summary-reach {
+    font-size: var(--fs-m);
+  }
+  .gr .gt-strip-cell {
+    min-width: 44px;
+    height: 44px;
+  }
+  .gr .gt-round {
+    padding-left: 34px;
+  }
+  .gr .proof-ticks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gr .candidate-foot .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+  .gr .candidate-foot .fold {
+    flex-basis: 100%;
+  }
+  .gr .auto-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gr .connect-keys,
+  .gr .connect-recipes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gr .fold > summary {
+    min-height: 44px;
+  }
+  .gr .section-head {
+    flex-wrap: wrap;
+  }
+}

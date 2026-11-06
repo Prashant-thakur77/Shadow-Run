@@ -1,2 +1,3 @@
 # The runner may read firewall counters, and nothing else, as root.
 sbx ALL=(root) NOPASSWD: /usr/sbin/iptables -L SBX-EGRESS -v -n -x
+sbx ALL=(root) NOPASSWD: /usr/sbin/ip6tables -L SBX-EGRESS -v -n -x

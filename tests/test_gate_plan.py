@@ -217,3 +217,25 @@ def test_the_first_word_check_refuses_transaction_control_whatever_the_comments_
 
     assert ok("SELECT 1") and ok("  (select 1)") and ok("-- note\nWITH a AS (SELECT 1) SELECT * FROM a") and ok("/* x */ select 1")
     assert not ok("COMMIT") and not ok("-- select\nCOMMIT") and not ok("/* select */ ROLLBACK") and not ok("selector") and not ok("")
+
+
+@pytest.mark.parametrize("cmd,rule", [
+    ("cat /etc/shadow", "credential_files"),
+    ("cp ~/.ssh/id_rsa /tmp/x", "credential_files"),
+    ("echo key >> /root/.ssh/authorized_keys", "credential_files"),
+    ("cat /var/app/.env", "credential_files"),
+    ("echo $AWS_SECRET_ACCESS_KEY", "secret_read"),
+    ("cat /proc/1/environ", "secret_read"),
+    ("chmod 777 /var/app/data", "permission_weakening"),
+    ("chmod o+w /etc/app.conf", "permission_weakening"),
+    ("chmod u+s /usr/local/bin/tool", "permission_weakening"),
+])
+def test_shell_plans_touching_credentials_or_permissions_go_to_a_person(cmd, rule):
+    gate_result = check_plan(normalize_plan([{"type": "shell", "cmd": cmd}]), "host")
+    assert gate_result["verdict"] != "pass" and rule in {f["rule"] for f in gate_result["findings"]}
+
+
+@pytest.mark.parametrize("cmd", ["ls /var/app/logs", "chmod 644 /var/app/app.log", "cat /var/app/environment.txt", "du -sh /var/app/cache"])
+def test_ordinary_shell_commands_are_not_flagged_for_this(cmd):
+    rules = {f["rule"] for f in check_plan(normalize_plan([{"type": "shell", "cmd": cmd}]), "host")["findings"]}
+    assert not rules & {"credential_files", "secret_read", "permission_weakening"}

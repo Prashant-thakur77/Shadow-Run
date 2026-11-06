@@ -263,3 +263,15 @@ def test_the_fork_bomb_only_counts_if_it_ran_until_killed(ended, wall_s, proof):
     from checker.redteam import killed_at_the_cap
 
     assert killed_at_the_cap(ended, wall_s, 20) is proof
+
+
+async def test_the_golden_check_compares_a_new_clone_by_table(tmp_path):
+    from control.service import Service
+
+    class R:
+        async def inspect(self, snapshot_id, sample_rows=3):
+            return {"tables": [{"name": "users", "row_count": 5}, {"name": "orders", "row_count": 7}]}
+
+    s = Service.__new__(Service)
+    s.runner = R()
+    assert await s._golden_rows("snap") == {"users": 5, "orders": 7}

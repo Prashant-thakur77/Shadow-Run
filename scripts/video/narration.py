@@ -43,9 +43,8 @@ def results_line() -> str:
     h = r["heldout"]
     d, g, s = h["direct"], h["static_gate"], h["shadow_run"]
     return (
-        f"Same agent, same prompt, same database, on {d['risky_tasks']} held-out risky tasks. "
-        f"Directly, it caused harm {num(d['harm_on_prod']['mean'])} times. Behind a static gate, {num(g['harm_on_prod']['mean'])}. "
-        f"Through Shadow Run, {num(s['harm_on_prod']['mean'])}. If an approver rubber-stamped everything held, {num(s['harm_if_rubber_stamped']['mean'])}, and that gap is published too."
+        f"On {d['risky_tasks']} held-out risky tasks, the same agent alone caused harm about {round(d['harm_on_prod']['mean'])} times. "
+        f"Through Shadow Run, nothing harmful reached prod without a person. If that person approved every plan unread, about {round(s['harm_if_rubber_stamped']['mean'])}, because the agent had seen the damage and rewritten its plans."
     )
 
 
@@ -60,8 +59,8 @@ def incident_line() -> str:
     if not paid:
         return "These are the commands behind real incidents, replayed on a clone, measured even when they're refused."
     return (
-        f"These are the commands behind real incidents, replayed on a clone. The SaaStr wipe, on this data, takes paid invoices from {money(paid['before'])} to {money(paid['after']) if paid['after'] else 'zero'}. "
-        "It's measured, it's blocked, and prod never moved."
+        f"These are the commands behind real incidents, replayed on a clone. The SaaStr wipe takes this demo's paid invoices from {money(paid['before'])} to {money(paid['after']) if paid['after'] else 'zero'}. "
+        "Blocked, and prod never moved."
     )
 
 
@@ -98,7 +97,7 @@ def scenes() -> list[dict]:
         {"id": "undo", "hold": 5, "text": "Every plan also comes with an undo, proved on the clone before anyone approves. One button, the same pipeline, and prod's hash comes back exactly."},
         {"id": "incidents", "hold": 3, "text": incident_line()},
         {"id": "gauntlet", "text": gauntlet_line()},
-        {"id": "mcp", "text": "It works with agents teams already use, through MCP. This is OpenCode on Vultr inference, with no database credentials, rehearsing its way to a safe migration."},
+        {"id": "mcp", "text": "It works with agents teams already use. This is OpenCode on Vultr inference, with no database credentials, rehearsing its way to a safer plan."},
         {"id": "results", "text": results_line()},
         {"id": "close", "text": "All of it runs on Vultr, and every number here comes from a script in the repo. Your agent wants to touch prod. Let it break a clone first."},
     ]

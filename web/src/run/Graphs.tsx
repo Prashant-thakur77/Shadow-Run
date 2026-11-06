@@ -14,14 +14,15 @@ import {
   type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/base.css';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { CascadeEdge, CascadeNode, GateFinding, PlanStep } from '../api/types';
 import { num } from '../lib/format';
 
 // Graphs draw at 1:1 so the type stays readable. When one is wider than its column it scrolls inside
 // its own container, which is what a phone needs. There is no pan or zoom to fight with page scrolling.
 
-function Frame({ width, height, nodes, edges, label, nodeTypes, edgeTypes, center }: {
+function Frame({ width, height, nodes, edges, label, nodeTypes, edgeTypes, center, onNodeHover, flood = false }: {
   width: number;
   height: number;
   nodes: Node[];
@@ -31,9 +32,28 @@ function Frame({ width, height, nodes, edges, label, nodeTypes, edgeTypes, cente
   edgeTypes?: EdgeTypes;
   /** Start scrolled to the middle, where the root of a tree sits, when the graph is wider than its column. */
   center?: boolean;
+  onNodeHover?: (id: string | null) => void;
+  /** Light the nodes level by level, once, the first time the graph is scrolled into view. */
+  flood?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [overflows, setOverflows] = useState(false);
+  const [flooded, setFlooded] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !flood) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setFlooded(true);
+        observer.disconnect();
+      },
+      { threshold: 0.2 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [flood]);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -47,7 +67,7 @@ function Frame({ width, height, nodes, edges, label, nodeTypes, edgeTypes, cente
   }, [width, center]);
 
   return (
-    <div className="flow-frame">
+    <div className={`flow-frame${flood ? ' can-flood' : ''}${flooded ? ' is-flooded' : ''}`}>
       <div className="flow-scroll" ref={ref} role="img" aria-label={label} tabIndex={0}>
         <div className="flow-canvas" style={{ width, height }}>
           <ReactFlow
@@ -70,6 +90,8 @@ function Frame({ width, height, nodes, edges, label, nodeTypes, edgeTypes, cente
             zoomOnDoubleClick={false}
             preventScrolling={false}
             proOptions={{ hideAttribution: true }}
+            onNodeMouseEnter={onNodeHover ? (_e, node) => onNodeHover(node.id) : undefined}
+            onNodeMouseLeave={onNodeHover ? () => onNodeHover(null) : undefined}
           />
         </div>
       </div>
@@ -90,16 +112,18 @@ const PAD = 12;
 
 interface TableData extends Record<string, unknown> {
   node: CascadeNode;
+  depth: number;
+  lit: 'on' | 'off' | null;
 }
 
 function TableNode({ data }: NodeProps<Node<TableData>>) {
-  const { node } = data;
+  const { node, depth, lit } = data;
   const deleted = node.deleted ?? 0;
   const updated = node.updated ?? 0;
   const direct = (node.direct ?? 0) > 0;
   const kind = deleted > 0 ? 'is-deleted' : updated > 0 ? 'is-updated' : 'is-none';
   return (
-    <div className={`tnode ${kind}${direct ? ' is-direct' : ''}`}>
+    <div className={`tnode ${kind}${direct ? ' is-direct' : ''}${lit ? ` is-lit-${lit}` : ''}`} style={{ '--depth': depth } as CSSProperties}>
       <Handle type="target" position={Position.Top} style={hidden} isConnectable={false} />
       <div className="tnode-name mono">{node.table}</div>
       {deleted > 0 && (
@@ -119,7 +143,7 @@ function TableNode({ data }: NodeProps<Node<TableData>>) {
   );
 }
 
-function FkEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd }: EdgeProps<Edge<{ onDelete?: string; nudge?: number }>>) {
+function FkEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd }: EdgeProps<Edge<{ onDelete?: string; nudge?: number; lit?: 'on' | 'off' | null }>>) {
   const [path] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 3 });
   const onDelete = data?.onDelete ?? '';
   const dashed = onDelete !== 'CASCADE';
@@ -128,7 +152,7 @@ function FkEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosi
   const y = targetY - 20;
   return (
     <>
-      <BaseEdge path={path} markerEnd={markerEnd} style={{ stroke: 'var(--line-2)', strokeWidth: 1.5, strokeDasharray: dashed ? '5 4' : undefined }} />
+      <BaseEdge path={path} markerEnd={markerEnd} style={{ stroke: data?.lit === 'on' ? 'var(--ink)' : 'var(--line-2)', strokeWidth: data?.lit === 'on' ? 2 : 1.5, strokeDasharray: dashed ? '5 4' : undefined, opacity: data?.lit === 'off' ? 0.35 : 1 }} />
       <EdgeLabelRenderer>
         <div className={`flow-edge-label${dashed ? ' is-dashed' : ''}`} style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}>
           {onDelete}
@@ -193,7 +217,7 @@ function layoutCascade(tables: CascadeNode[], fks: CascadeEdge[]) {
     id: n,
     type: 'table',
     position: { x: (x.get(n) ?? 0) - minX + PAD, y: (layer.get(n) ?? 0) * (NODE_H + GAP_Y) + PAD },
-    data: { node: byName.get(n) as CascadeNode },
+    data: { node: byName.get(n) as CascadeNode, depth: layer.get(n) ?? 0, lit: null },
     width: NODE_W,
     height: NODE_H,
     draggable: false,
@@ -220,16 +244,49 @@ function layoutCascade(tables: CascadeNode[], fks: CascadeEdge[]) {
 const cascadeNodeTypes = { table: TableNode } as unknown as NodeTypes;
 const cascadeEdgeTypes = { fk: FkEdge } as unknown as EdgeTypes;
 
-export function CascadeGraph({ nodes, edges }: { nodes: CascadeNode[]; edges: CascadeEdge[] }) {
+/** A table and everything upstream of it: the route the deletion took to get there. */
+function pathTo(table: string, fks: CascadeEdge[]): Set<string> {
+  const seen = new Set([table]);
+  let frontier = [table];
+  while (frontier.length) {
+    const next: string[] = [];
+    for (const e of fks) {
+      if (frontier.includes(e.to) && !seen.has(e.from)) {
+        seen.add(e.from);
+        next.push(e.from);
+      }
+    }
+    frontier = next;
+  }
+  return seen;
+}
+
+export function CascadeGraph({ nodes, edges, onHover }: { nodes: CascadeNode[]; edges: CascadeEdge[]; onHover?: (tables: string[] | null) => void }) {
   const layout = useMemo(() => layoutCascade(nodes, edges), [nodes, edges]);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const lit = useMemo(() => {
+    if (!hovered) return layout;
+    const path = pathTo(hovered, edges);
+    return {
+      ...layout,
+      nodes: layout.nodes.map((n) => ({ ...n, data: { ...n.data, lit: path.has(n.id) ? ('on' as const) : ('off' as const) } })),
+      edges: layout.edges.map((e) => ({ ...e, data: { ...e.data, lit: path.has(e.source) && path.has(e.target) ? ('on' as const) : ('off' as const) } })),
+    };
+  }, [hovered, layout, edges]);
+  const hover = (id: string | null) => {
+    setHovered(id);
+    onHover?.(id ? [...pathTo(id, edges)] : null);
+  };
   return (
     <Frame
       width={layout.width}
       height={layout.height}
-      nodes={layout.nodes}
-      edges={layout.edges}
+      nodes={lit.nodes}
+      edges={lit.edges}
       nodeTypes={cascadeNodeTypes}
       edgeTypes={cascadeEdgeTypes}
+      onNodeHover={hover}
+      flood
       center
       label={`Cascade graph of ${layout.nodes.length} tables. The per-table list below has the same numbers.`}
     />

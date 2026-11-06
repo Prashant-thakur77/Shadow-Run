@@ -256,7 +256,11 @@ if (want('host')) {
   await ctx.close();
 }
 
+// The record's sections are folded on any run that isn't rejected.
+const openRecord = (page) => page.evaluate(() => document.querySelectorAll('.record-section').forEach((d) => (d.open = true)));
+
 async function learnOn(page) {
+  await openRecord(page);
   await page.getByRole('button', { name: 'Turn this into a guardrail' }).click();
   await page.waitForTimeout(800);
   await shot(page, 'learn-busy-d');

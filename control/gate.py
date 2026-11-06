@@ -87,6 +87,13 @@ def check_guardrail(sql: str) -> str | None:
     return None
 
 
+# Credentials, access files and permission changes in a shell plan. The idea comes from Cerberus's safety gate,
+# which looks for the same things in a patch. A plan that really needs these can still go to a person.
+CREDENTIAL_PATHS = re.compile(r"/etc/shadow\b|/etc/sudoers\b|\bid_(rsa|ed25519|ecdsa|dsa)\b|/\.ssh(/|\b)|\bauthorized_keys\b|/\.aws/credentials\b|/\.kube/config\b|(?:^|[\s/'\"=])\.env(?:\.[\w-]+)?(?:$|[\s'\"])", re.M)
+SECRET_VARIABLE = re.compile(r"\$\{?[A-Za-z_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY)[A-Za-z_]*\}?|\bprintenv\b|/proc/[^\s/]+/environ\b", re.I)
+WEAK_PERMISSIONS = re.compile(r"\bchmod\b[^|;&\n]*\s(?:[0-7]?777|[0-7]?666|a\+\w*w|o\+\w*w|[ugoa]*\+\w*s)\b")
+
+
 def _finding(step: int, stmt: str, rule: str, severity: str, reason: str) -> dict:
     return {"step": step, "statement": stmt[:300], "rule": rule, "severity": severity, "reason": reason}
 
@@ -293,6 +300,13 @@ def check_shell_step(step: int, cmd: str) -> tuple[list[dict], str]:
     if re.search(r"(^|[^<>&0-9])>\s*/", cmd):
         kind = max(kind, IRREVERSIBLE, key=RANK.get)
         findings.append(_finding(step, cmd, "redirect_overwrite", "review", "a redirect overwrites a file"))
+    if CREDENTIAL_PATHS.search(cmd):
+        findings.append(_finding(step, cmd, "credential_files", "high", "this touches credentials or access files, so a person has to look at it"))
+    if SECRET_VARIABLE.search(cmd):
+        findings.append(_finding(step, cmd, "secret_read", "high", "this reads a secret from the environment, so a person has to look at it"))
+    if WEAK_PERMISSIONS.search(cmd):
+        kind = max(kind, REVERSIBLE, key=RANK.get)
+        findings.append(_finding(step, cmd, "permission_weakening", "high", "this makes files world-writable or setuid"))
     if re.search(r"/dev/(tcp|udp)/", cmd):
         findings.append(_finding(step, cmd, "raw_socket", "high", "bash network redirection reaches outside the host, which cannot be rehearsed"))
     if re.search(r"\|\s*(sudo\s+)?(ba|z|da)?sh\b", cmd):

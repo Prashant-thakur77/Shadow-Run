@@ -98,7 +98,7 @@ def _attack(schema_text: str, guardrails: list[dict], earlier: list[str], budget
 
 def _candidate(name: str, sql: str, why: str, origin: dict) -> dict:
     gid = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:48] or "learned"
-    return {"id": f"{gid}_{uuid.uuid4().hex[:4]}", "name": name[:120], "sql": sql.strip().rstrip(";"), "why": why[:300], "origin": origin}
+    return {"id": f"{gid}_{uuid.uuid4().hex[:4]}", "name": name[:120], "sql": sql.strip().rstrip(";"), "why": why if len(why) <= 300 else why[:300].rsplit(" ", 1)[0] + "...", "origin": origin}
 
 
 PROOF_MAX_MS = 5000

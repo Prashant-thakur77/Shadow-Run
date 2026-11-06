@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from microsandbox import Image, Network, Sandbox, Snapshot
+from microsandbox import Image, Network, RootDisk, Sandbox, Snapshot
 from microsandbox.errors import MicrosandboxError, SandboxNotFoundError
 
 log = logging.getLogger("shadowrun.runner")
@@ -31,6 +31,9 @@ log = logging.getLogger("shadowrun.runner")
 IMAGE = os.environ.get("SHADOWRUN_IMAGE", "sr-target:0.1")
 CPUS = int(os.environ.get("SHADOWRUN_VM_CPUS", "2"))
 MEMORY_MIB = int(os.environ.get("SHADOWRUN_VM_MEMORY_MIB", "2048"))
+# Sparse, so it costs only what's used. The runtime's 4 GB default made a big restore run out of room partway through.
+DISK_MIB = int(os.environ.get("SHADOWRUN_VM_DISK_MIB", "32768"))
+GOLDEN_BUILD_S = int(os.environ.get("SHADOWRUN_GOLDEN_BUILD_S", "1500"))
 MAX_DURATION_S = int(os.environ.get("SHADOWRUN_VM_MAX_S", "120"))
 MAX_PARALLEL = int(os.environ.get("SHADOWRUN_VM_PARALLEL", "4"))
 JANITOR_MAX_AGE_S = 600
@@ -127,7 +130,7 @@ class Engine:
         except (MicrosandboxError, FileNotFoundError):
             return False
 
-    async def ensure_golden(self, snapshot_id: str, dump_path: str | Path, extensions: list[str] | None = None) -> dict:
+    async def ensure_golden(self, snapshot_id: str, dump_path: str | Path, extensions: list[str] | None = None, expected: dict | None = None) -> dict:
         """Boot one VM, restore the dump into it, install capture, capture its disk, destroy it."""
         _check_id(snapshot_id)
         lock = self._golden_locks.setdefault(snapshot_id, asyncio.Lock())
@@ -138,16 +141,16 @@ class Engine:
             name = await self._golden_group(snapshot_id)
             sb = await Sandbox.create(
                 name,
-                image=self.image,
+                image=Image.oci(self.image, root_disk=RootDisk.managed(DISK_MIB)),
                 cpus=CPUS,
                 memory=MEMORY_MIB,
                 network=Network.none(),
                 replace=True,
-                max_duration=600,
+                max_duration=GOLDEN_BUILD_S,
             )
             try:
                 await sb.fs.copy_from_host(str(dump_path), "/tmp/prod.dump")
-                prep = await _driver(sb, {"op": "prepare", "dump_path": "/tmp/prod.dump", "extensions": extensions or []}, 540)
+                prep = await _driver(sb, {"op": "prepare", "dump_path": "/tmp/prod.dump", "extensions": extensions or [], "expected": expected}, GOLDEN_BUILD_S - 60)
                 if not prep.get("ok"):
                     raise SandboxFailure(f"restore failed: {prep.get('error')}")
                 seal = await _driver(sb, {"op": "seal", "dump_path": "/tmp/prod.dump"}, 60)

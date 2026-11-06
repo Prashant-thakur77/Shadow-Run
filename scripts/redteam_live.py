@@ -34,7 +34,7 @@ def main() -> int:
     doc["url"] = url
     (ROOT / "bench" / "redteam.json").write_text(json.dumps(doc, indent=2) + "\n")
     wall_two_held = (doc.get("wall_two") or {}).get("contained") is True
-    return 0 if doc.get("contained") == doc.get("total") and doc.get("prod_unchanged") and wall_two_held else 1
+    return 0 if doc.get("contained") == doc.get("total") and doc.get("prod_unchanged") and doc.get("golden_unchanged") and wall_two_held else 1
 
 
 if __name__ == "__main__":

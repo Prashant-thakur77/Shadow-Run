@@ -8,6 +8,9 @@ infra/.ssh/
 *.key
 var/
 
+# reference repos, read for patterns only
+refs/
+
 # internal working notes
 docs/PLAN.md
 PROGRESS.md

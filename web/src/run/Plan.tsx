@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { Attempt, GateFinding } from '../api/types';
+import { isNum, ms as fmtMs } from '../lib/format';
 import { Hash, Notice, Sql, Tag } from '../ui/bits';
 import type { Tone } from '../lib/status';
 import { PlanGraph } from './lazy';
@@ -39,6 +40,25 @@ function Findings({ items }: { items: GateFinding[] }) {
   );
 }
 
+/** The real gate result and the measured time for one step, read from what the runner reported. */
+function StepPill({ attempt, n, findings }: { attempt: Attempt; n: number; findings: GateFinding[] }) {
+  const result = attempt.rehearsal?.result?.steps?.find((s) => s.step === n);
+  const stmts = result?.statements ?? [];
+  const measured = isNum(result?.ms) ? result.ms : stmts.some((s) => isNum(s.ms)) ? stmts.reduce((sum, s) => sum + (s.ms ?? 0), 0) : null;
+  const failed = result ? result.ok === false || (typeof result.exit_code === 'number' && result.exit_code !== 0) || stmts.some((s) => s.ok === false) : false;
+  const gate = findings.some((f) => f.severity === 'block') ? 'block' : findings.length ? 'review' : 'pass';
+  const tone = failed || gate === 'block' ? 'bad' : gate === 'review' ? 'caution' : 'neutral';
+  return (
+    <span className={`step-pill is-${tone}`}>
+      <span>{failed ? 'failed' : `gate ${gate}`}</span>
+      <span className="step-pill-sep" aria-hidden="true">
+        |
+      </span>
+      <span>{measured !== null ? fmtMs(measured) : result ? 'no time' : 'not run'}</span>
+    </span>
+  );
+}
+
 export function PlanSection({ attempt }: { attempt: Attempt }) {
   const steps = attempt.plan?.steps ?? [];
   const gate = attempt.gate;
@@ -70,7 +90,7 @@ export function PlanSection({ attempt }: { attempt: Attempt }) {
           {attempt.error}
         </Notice>
       )}
-      {steps.length > 0 && <PlanGraph steps={steps} risks={risks} findings={findings} />}
+      {steps.length > 1 && <PlanGraph steps={steps} risks={risks} findings={findings} />}
       <ol className="steps">
         {steps.map((s, i) => {
           const n = i + 1;
@@ -80,6 +100,7 @@ export function PlanSection({ attempt }: { attempt: Attempt }) {
               <div className="step-head">
                 <span className="mono step-n">Step {n}</span>
                 {risk ? <Tag tone={risk.tone}>{risk.label}</Tag> : <Tag tone="neutral">Risk unknown</Tag>}
+                <StepPill attempt={attempt} n={n} findings={findings.filter((f) => f.step === n)} />
               </div>
               <Sql text={s.cmd} plain={s.type === 'shell'} />
               {s.why && <p className="step-why">{s.why}</p>}

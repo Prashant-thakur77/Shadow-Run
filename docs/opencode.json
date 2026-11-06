@@ -18,7 +18,7 @@
   "mcp": {
     "shadowrun": {
       "type": "remote",
-      "url": "https://45-76-245-71.sslip.io/mcp",
+      "url": "https://144-202-92-64.sslip.io/mcp",
       "enabled": true,
       "headers": { "Authorization": "Bearer {env:SHADOWRUN_TOKEN}" }
     }

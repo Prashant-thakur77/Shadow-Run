@@ -6,6 +6,7 @@ import type { Tone } from '../lib/status';
 import { currentTarget } from '../lib/target';
 import { useAsync } from '../lib/useAsync';
 import { Hash, Mark } from '../ui/bits';
+import { Stamp } from '../ui/Stamp';
 
 const MEASURED_FROM = 'Measured from the control plane, outside the sandbox.';
 
@@ -28,6 +29,11 @@ export async function measureProdBeforeApply(run: Run): Promise<void> {
   }
 }
 
+/** Prod's hash just before an apply, from the server if it kept one, otherwise from this page. */
+export function beforeApplyHash(run: Run): string | null {
+  return usable(run.prod_before_apply) ?? measuredBeforeApply.get(run.id) ?? null;
+}
+
 interface HashStep {
   label: string;
   hash: string;
@@ -36,12 +42,17 @@ interface HashStep {
   caption?: string;
 }
 
-function HashPanel({ tone, word, steps, children }: { tone: Tone; word: string; steps: HashStep[]; children?: ReactNode }) {
+function HashPanel({ tone, word, steps, children, stamp }: { tone: Tone; word: string; steps: HashStep[]; children?: ReactNode; stamp?: string }) {
   return (
     <section className={`prodproof tone-${tone}`} aria-label="Prod's hash">
       <div className="prodproof-word">
         <Mark tone={tone} size={30} />
         <h2>{word}</h2>
+        {stamp && (
+          <Stamp tone={tone} land>
+            {stamp}
+          </Stamp>
+        )}
       </div>
       <ol className="prodproof-steps" style={{ '--steps': steps.length } as CSSProperties}>
         {steps.map((s) => (
@@ -98,6 +109,7 @@ export function hashMovedSinceRehearsal(run: Run): boolean {
 }
 
 const stopWord: Record<string, string> = { drift_detected: 'After the refusal', rolled_back: 'After the rollback' };
+const stampWord: Record<string, string> = { drift_detected: 'Refused', rolled_back: 'Stopped' };
 
 /** A rolled back or refused apply: what it left on prod, and why the hash may still differ from the rehearsal's. */
 export function StoppedProof({ run }: { run: Run }) {
@@ -126,6 +138,7 @@ export function StoppedProof({ run }: { run: Run }) {
   if (before === after) {
     return (
       <HashPanel
+        stamp={stampWord[run.status]}
         tone="good"
         word="This apply left prod's hash unchanged"
         steps={[
@@ -141,6 +154,7 @@ export function StoppedProof({ run }: { run: Run }) {
   if (!moved) {
     return (
       <HashPanel
+        stamp={stampWord[run.status]}
         tone="good"
         word="Prod's hash is unchanged"
         steps={[
@@ -154,6 +168,7 @@ export function StoppedProof({ run }: { run: Run }) {
   }
   return (
     <HashPanel
+      stamp={stampWord[run.status]}
       tone="neutral"
       word="Prod's hash moved, but not because of this plan"
       steps={[

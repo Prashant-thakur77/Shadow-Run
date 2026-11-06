@@ -1,130 +1,35 @@
-import { useState, type FormEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../api/client';
 import type { PublicInfo } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
-import { num, whenAny } from '../lib/format';
-import { Link } from '../lib/router';
+import { LandingContext } from '../landing/context';
+import { Hero } from '../landing/Hero';
+import '../landing/landing.css';
+import { matches, PHONE, REDUCED } from '../lib/media';
+import { navigate } from '../lib/router';
 import { useTheme } from '../lib/theme';
 import { useAsync } from '../lib/useAsync';
-import { Fold, Loading } from '../ui/bits';
+import { PrimaryButton } from '../ui/Halftone';
 
-const ACCOUNTS = [
-  { username: 'judge', role: 'Maker', what: 'Requests changes.' },
-  { username: 'reviewer', role: 'Checker', what: 'Approves changes.' },
-];
+// The hero ships with the main chunk. The chapters arrive after first paint.
+const Chapters = lazy(() => import('../landing/chapters/Chapters'));
 
-function PasswordSignIn() {
-  const { signIn } = useAuth();
-  const [passwords, setPasswords] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = async (username: string) => {
-    const password = passwords[username];
-    if (!password) {
-      setError(`Type the password for ${username} first.`);
-      return;
-    }
-    const other = ACCOUNTS.find((a) => a.username !== username)!;
-    const otherPassword = passwords[other.username];
-    setBusy(username);
-    setError(null);
-    try {
-      await signIn(username, password, otherPassword ? { username: other.username, password: otherPassword } : null);
-    } catch (e) {
-      setError(errorText(e));
-      setBusy(null);
-    }
-  };
-
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    const first = ACCOUNTS.find((a) => passwords[a.username]);
-    void submit(first?.username ?? 'judge');
-  };
-
-  return (
-    <form className="signin-form" onSubmit={onSubmit}>
-      <p className="signin-why">There are two accounts because the person who requests a change can't approve it.</p>
-      <div className="account-list">
-        {ACCOUNTS.map((a) => (
-          <div className="account" key={a.username}>
-            <div className="account-who">
-              <span className="account-name mono">{a.username}</span>
-              <span className="account-role">
-                {a.role}. {a.what}
-              </span>
-            </div>
-            <label className="account-pass">
-              <span className="sr-only">Password for {a.username}</span>
-              <input
-                className="input mono"
-                type="password"
-                placeholder="Password"
-                autoComplete="off"
-                value={passwords[a.username] ?? ''}
-                onChange={(e) => setPasswords((p) => ({ ...p, [a.username]: e.target.value }))}
-              />
-            </label>
-            <button type="button" className="btn" disabled={!!busy} onClick={() => void submit(a.username)}>
-              {busy === a.username ? 'Signing in' : `Sign in as ${a.username}`}
-            </button>
-          </div>
-        ))}
-      </div>
-      {/* Lets Enter submit from either field. */}
-      <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true">
-        Sign in
-      </button>
-      {error && (
-        <p className="error-line" role="alert">
-          {error}
-        </p>
-      )}
-      <p className="muted signin-note">On the public demo, use Continue as guest. Passwords are for deployments that set them. This tab keeps a session token for each account, never the password, and forgets them when it closes.</p>
-    </form>
-  );
-}
-
-/** Every number here comes from the benchmark's own file. Before it has run, nothing is shown. */
-function Headline({ data, loading }: { data: PublicInfo | null; loading: boolean }) {
-  if (loading && !data) return <Loading>Reading the measurements</Loading>;
-  const h = data?.headline;
-  if (!h) {
-    return (
-      <section className="land-notyet" aria-label="Benchmark headline">
-        <div className="land-notyet-word">Not measured yet</div>
-        <p>The benchmark has not finished on this build, so there is no number to show here. Nothing is estimated.</p>
-      </section>
-    );
-  }
-  const cells: { label: string; value?: number; strong?: boolean }[] = [
-    { label: 'Agent directly', value: h.direct },
-    { label: 'Static gate', value: h.static_gate },
-    { label: 'Shadow Run', value: h.shadow_run, strong: true },
-    { label: 'Shadow Run, if a person rubber-stamps everything it holds', value: h.rubber_stamp },
-  ];
-  return (
-    <section className="land-headline" aria-label="Benchmark headline">
-      <h2 className="land-headline-title">
-        Harmful outcomes on prod, of <span className="mono">{num(h.risky_tasks)}</span> risky tasks held out from tuning
-      </h2>
-      <dl className="land-numbers">
-        {cells.map((c) => {
-          const tone = c.value === 0 ? 'good' : 'bad';
-          return (
-            <div className={`land-number is-${tone}${c.strong ? ' is-strong' : ''}`} key={c.label}>
-              <dd className="mono land-number-value">{num(c.value)}</dd>
-              <dt>{c.label}</dt>
-            </div>
-          );
-        })}
-      </dl>
-      <p className="muted land-headline-foot">
-        Mean of <span className="mono">{num(h.runs_per_task)}</span> runs per task. Measured <span className="mono">{whenAny(h.measured_at)}</span>. <Link href="/results">All results</Link>
-      </p>
-    </section>
-  );
+/** Smooth wheel on this route only, and never for touch or reduced motion. */
+function useSmoothWheel() {
+  useEffect(() => {
+    if (matches(REDUCED) || matches(PHONE) || matches('(pointer: coarse)')) return;
+    let stopped = false;
+    let destroy: (() => void) | undefined;
+    void import('lenis').then(({ default: Lenis }) => {
+      if (stopped) return;
+      const lenis = new Lenis({ lerp: 0.1, autoRaf: true, anchors: { offset: 20 } });
+      destroy = () => lenis.destroy();
+    });
+    return () => {
+      stopped = true;
+      destroy?.();
+    };
+  }, []);
 }
 
 export function SignInPage() {
@@ -133,84 +38,87 @@ export function SignInPage() {
   const info = useAsync<PublicInfo>(() => api.publicInfo());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showChapters, setShowChapters] = useState(false);
+  const [ctaOffscreen, setCtaOffscreen] = useState(false);
+  const ctaRef = useRef<HTMLButtonElement>(null);
   const guestOff = info.data?.open_demo === false;
 
-  const enter = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await enterAsGuest();
-    } catch (e) {
-      setError(errorText(e));
-      setBusy(false);
-    }
-  };
+  useSmoothWheel();
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setShowChapters(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  // Exactly one guest button is exposed at any moment: the hero's while it's on screen, otherwise the nav's. Hidden
+  // still has layout, so the observer keeps working, and the video scripts' one click can't match two buttons.
+  // Measured before the first paint too. On a phone the hero's starts below the fold, and a script that picked it up in
+  // the frame before the observer fired would wait on a button that had just been hidden.
+  useLayoutEffect(() => {
+    const el = ctaRef.current;
+    if (!el) return;
+    const box = el.getBoundingClientRect();
+    setCtaOffscreen(box.bottom <= 0 || box.top >= window.innerHeight);
+    const observer = new IntersectionObserver(([entry]) => setCtaOffscreen(!entry.isIntersecting));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [guestOff]);
+
+  const enter = useCallback(
+    async (to?: string) => {
+      setBusy(true);
+      setError(null);
+      // The page behind the landing renders as soon as there's a user, so it has to be in place first.
+      if (to) navigate(to);
+      try {
+        await enterAsGuest();
+      } catch (e) {
+        if (to) navigate('/', { replace: true });
+        setError(errorText(e));
+        setBusy(false);
+      }
+    },
+    [enterAsGuest],
+  );
+
+  const value = useMemo(() => ({ info: info.data, loading: info.loading, guestOff, busy, error, enter }), [info.data, info.loading, guestOff, busy, error, enter]);
 
   return (
-    <div className="landing">
-      <div className="landing-inner">
-        <div className="signin-brand">
-          <span className="wordmark">
-            <span className="wordmark-mark" aria-hidden="true" />
-            <span>Shadow Run</span>
-          </span>
-          <button type="button" className="textbtn" onClick={toggleTheme}>
-            {theme === 'dark' ? 'Light' : 'Dark'}
-          </button>
-        </div>
-
-        <h1 className="landing-claim">Your agent wants to touch prod. Shadow Run lets it break a clone first.</h1>
-
-        <div className="landing-cta">
-          {!guestOff && (
-            <button type="button" className="btn btn-primary btn-guest" disabled={busy} onClick={enter}>
-              {busy ? 'Entering' : 'Continue as guest'}
+    <LandingContext.Provider value={value}>
+      <div className="land">
+        <header className="land-nav">
+          <a className="brand" href="#top" aria-label="Shadow Run, top of the page">
+            <span className="wordmark">
+              <span className="wordmark-mark" aria-hidden="true" />
+              <span>Shadow Run</span>
+            </span>
+          </a>
+          <nav className="land-nav-links" aria-label="On this page">
+            <a href="#happened">It has happened</a>
+            <a href="#blueprint">The blueprint</a>
+            <a href="#run">The run</a>
+            <a href="#break">Try to break it</a>
+            <a href="#results">Results</a>
+          </nav>
+          <div className="land-nav-right">
+            <button type="button" className="textbtn" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
+              {theme === 'dark' ? 'Light' : 'Dark'}
             </button>
-          )}
-          <p className="landing-cta-note">
-            {guestOff
-              ? 'This deployment has no open demo. Sign in with a password below.'
-              : 'No password. You get both people, the one who requests a change and the one who approves it, so you can run the whole flow in this tab. In a real deployment those are two different people.'}
-          </p>
-        </div>
-        {error && (
-          <p className="error-line" role="alert">
-            {error}
-          </p>
+            {!guestOff && (
+              <PrimaryButton type="button" className="land-nav-cta" disabled={busy} onClick={() => void enter()} style={{ visibility: ctaOffscreen ? 'visible' : 'hidden' }}>
+                {busy ? 'Entering' : 'Continue as guest'}
+              </PrimaryButton>
+            )}
+          </div>
+        </header>
+        <span id="top" />
+        <Hero ctaRef={ctaRef} ctaOffscreen={ctaOffscreen} />
+        {showChapters && (
+          <Suspense fallback={null}>
+            <Chapters />
+          </Suspense>
         )}
-
-        <Headline data={info.data} loading={info.loading} />
-
-        <ul className="landing-links">
-          {info.data?.video_url && (
-            <li>
-              <a href={info.data.video_url} target="_blank" rel="noreferrer">
-                Watch the video
-              </a>
-            </li>
-          )}
-          {info.data?.repo && (
-            <li>
-              <a href={info.data.repo} target="_blank" rel="noreferrer">
-                The code
-              </a>
-            </li>
-          )}
-          <li>
-            <Link href="/incidents">Real incidents, replayed</Link>
-          </li>
-          <li>
-            <Link href="/receipts">Receipts</Link>
-          </li>
-          <li>
-            <Link href="/results">Results</Link>
-          </li>
-        </ul>
-
-        <Fold summary="Sign in with a password" open={guestOff}>
-          <PasswordSignIn />
-        </Fold>
       </div>
-    </div>
+    </LandingContext.Provider>
   );
 }

@@ -285,7 +285,18 @@ export interface UndoInfo {
   too_large_to_store?: boolean;
 }
 
+export interface SecondOpinion {
+  model?: string;
+  verdict?: 'does_it' | 'partly' | 'does_not';
+  left_out?: string;
+  added?: string;
+  numbers_verified?: boolean;
+  unverified_numbers?: string[];
+  error?: string;
+}
+
 export interface Attempt {
+  second_opinion?: SecondOpinion | null;
   reproduced?: Reproduced;
   undo?: UndoInfo | null;
   n: number;
@@ -406,7 +417,7 @@ export interface Run {
   report_hash?: string | null;
   guardrails?: Guardrail[];
   data_flags?: DataFlag[];
-  snapshot?: { snapshot_id?: string; lsn?: string; digest?: string; cached?: boolean };
+  snapshot?: { snapshot_id?: string; lsn?: string; digest?: string; cached?: boolean; tables?: Record<string, { rows?: number; hash?: string }>; files?: number };
   approval?: Approval | null;
   rejection?: { by?: string; reason?: string; at?: number } | null;
   apply?: ApplyOutcome | null;
@@ -524,6 +535,7 @@ export interface RedTeamRun {
   prod_during?: string;
   prod_after?: string;
   prod_unchanged?: boolean;
+  golden_unchanged?: boolean;
   contained?: number;
   total?: number;
   wall_two?: WallTwo;
@@ -655,6 +667,7 @@ export interface PublicInfo {
     runs_per_task?: number;
     measured_at?: string | number;
   } | null;
+  hero?: PublicHero | null;
   video_url?: string | null;
   repo?: string | null;
 }
@@ -676,9 +689,60 @@ export interface Receipt {
   value?: unknown;
   values?: unknown;
   must?: unknown;
+  /** Negative controls: what the server actually said, such as "403 maker-checker: ...". */
+  got?: string;
   detail?: unknown;
   at?: string | number;
   source?: string;
   rerun?: string;
   commit?: string;
+}
+
+/** One real rehearsal of a real incident, whitelisted field by field in control/hero.py so it can reach a page with no login. */
+export interface PublicHero {
+  run_id: string;
+  measured_at?: number | null;
+  incident: { who?: string | null; when?: string | null; source?: string | null };
+  command: string[];
+  plan_hash?: string | null;
+  /** Offsets in seconds from the first event of the run. */
+  timeline: { type: string; t: number }[];
+  phases: {
+    clone_boot_ms?: number | null;
+    first_exec_ms?: number | null;
+    probe_ms?: number | null;
+    execute_ms?: number | null;
+    secret_scan_ms?: number | null;
+    destroy_ms?: number | null;
+    total_ms?: number | null;
+    /** Host targets only: a Linux host boots systemd and loads its state before the plan runs. */
+    systemd_boot_ms?: number | null;
+    load_state_ms?: number | null;
+  };
+  tables: {
+    table: string;
+    rows_before?: number | null;
+    rows_after?: number | null;
+    deleted?: number | null;
+    updated?: number | null;
+    inserted?: number | null;
+    cascade?: number | null;
+    pct_of_table?: number | null;
+  }[];
+  snapshot_rows: Record<string, number | null>;
+  edges: { from: string; to: string; on_delete?: string | null; rows?: number | null }[];
+  totals: {
+    rows_changed?: number | null;
+    rows_deleted?: number | null;
+    rows_via_cascade?: number | null;
+    tables_touched?: number | null;
+  };
+  metrics: { id?: string | null; name?: string | null; unit?: string | null; before?: number | null; after?: number | null }[];
+  guardrails: { passed: number; total: number };
+  probes: { label?: string | null; result?: string | null }[];
+  secret_scan: { scanned?: number | null; hits?: number | null };
+  teardown: { sandbox_listed?: boolean | null; rootfs_exists?: boolean | null; leftover_processes?: number | null };
+  prod: { before?: string | null; after?: string | null; unchanged?: boolean | null; measured_from?: string | null };
+  /** Facts to sit beside the metrics, where the plan moved something other than money. Not sent by the API. */
+  extras?: { name: string; text: string }[];
 }

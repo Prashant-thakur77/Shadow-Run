@@ -148,23 +148,28 @@ def host_hash_targets() -> dict[str, Path]:
 
 
 def firewall_counters() -> dict[str, Any]:
-    """Packets refused by the second wall (host iptables, uid sbx). Needs infra/sbx-egress.sh applied."""
-    binary = shutil.which("iptables") or "/usr/sbin/iptables"
-    if not Path(binary).exists():
-        return {"available": False, "reason": "iptables not installed"}
-    cmd = [binary, "-L", "SBX-EGRESS", "-v", "-n", "-x"]
-    if os.geteuid() != 0:
-        cmd = ["sudo", "-n", *cmd]  # infra/sudoers-sbx allows exactly this read-only command
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode != 0:
+    """Packets refused by the second wall (host iptables, uid sbx), IPv4 and IPv6. Needs infra/sbx-egress.sh applied."""
+    rejected, rules, by_rule, seen = 0, 0, [], False
+    for name in ("iptables", "ip6tables"):
+        binary = shutil.which(name) or f"/usr/sbin/{name}"
+        if not Path(binary).exists():
+            continue
+        cmd = [binary, "-L", "SBX-EGRESS", "-v", "-n", "-x"]
+        if os.geteuid() != 0:
+            cmd = ["sudo", "-n", *cmd]  # infra/sudoers-sbx allows exactly this read-only command
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode != 0:
+            continue
+        seen = True
+        for line in r.stdout.splitlines():
+            if re.search(r"\bREJECT\b", line):
+                parts = line.split()
+                rules += 1
+                rejected += int(parts[0])
+                destination = parts[8] if name == "iptables" and len(parts) > 8 else parts[7] if len(parts) > 7 else "?"
+                by_rule.append({"packets": int(parts[0]), "destination": destination, "family": "ipv4" if name == "iptables" else "ipv6"})
+    if not seen:
         return {"available": False, "reason": "wall not installed here, or no permission to read it"}
-    rejected, rules, by_rule = 0, 0, []
-    for line in r.stdout.splitlines():
-        if re.search(r"\bREJECT\b", line):
-            parts = line.split()
-            rules += 1
-            rejected += int(parts[0])
-            by_rule.append({"packets": int(parts[0]), "destination": parts[8] if len(parts) > 8 else "?"})
     return {"available": True, "rules": rules, "rejected_packets": rejected, "by_rule": by_rule, "uid": _sbx_uid()}
 
 

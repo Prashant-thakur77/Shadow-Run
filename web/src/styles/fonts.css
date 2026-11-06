@@ -1,0 +1,36 @@
+/* Self-hosted through the build, so nothing here needs a network beyond the site's own origin.
+   Geist, Geist Mono and Doto come straight from their packages, pinned to exact versions in package.json.
+   The display face is cut from @fontsource-variable/archivo@5.3.0's Latin file with fonttools:
+   instanced at wdth=72, wght=700, then subset to everything but lowercase, because display type is caps only.
+   All four are under the SIL Open Font License. */
+@font-face {
+  font-family: 'Archivo Display';
+  src: url('../fonts/archivo-72-700-caps.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist';
+  src: url('@fontsource-variable/geist/files/geist-latin-wght-normal.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Doto';
+  src: url('@fontsource/doto/files/doto-latin-800-normal.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+}

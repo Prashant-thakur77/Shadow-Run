@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from provision import ENV_PATH, ROOT, SSH_KEY, load_env, load_state, set_env  # noqa: E402
 
 SSH = ["ssh", "-i", str(SSH_KEY), "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=20", "-o", "BatchMode=yes"]
-EXCLUDES = [".git", ".venv", "/var", ".env", ".env.*", "PROGRESS.md", "SCORECARD.md", "node_modules", "__pycache__", "docs/PLAN.md", "infra/STATE.json", "infra/.ssh", ".superpowers", ".claude", "web/src", "web/node_modules", "web/fixtures", "web/.shots", "*.pyc", ".pytest_cache", "PROGRESS.md", "SCORECARD.md"]
+EXCLUDES = [".git", ".venv", "/var", "/refs", ".env", ".env.*", "PROGRESS.md", "SCORECARD.md", "node_modules", "__pycache__", "docs/PLAN.md", "infra/STATE.json", "infra/.ssh", ".superpowers", ".claude", "web/src", "web/node_modules", "web/fixtures", "web/.shots", "*.pyc", ".pytest_cache", "PROGRESS.md", "SCORECARD.md"]
 CONTROL_ENV_KEYS = [
     "VULTR_INFERENCE_BASE", "VULTR_INFERENCE_KEY", "SHADOWRUN_MODEL", "SHADOWRUN_GUARDRAIL_MODEL", "SHADOWRUN_EXPLAINER_MODEL",
     "SHADOWRUN_S3_ENDPOINT", "SHADOWRUN_S3_ACCESS_KEY", "SHADOWRUN_S3_SECRET_KEY", "SHADOWRUN_S3_BUCKET",
@@ -110,10 +110,11 @@ def deploy_control(state: dict) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("what", nargs="*", default=["vx1", "control"], choices=["vx1", "control"])
+    ap.add_argument("what", nargs="*", choices=["vx1", "control", []], help="default: both")
     ap.add_argument("--quick", action="store_true", help="sync code and restart services; skip the full bootstrap")
     ap.add_argument("--web", action="store_true", help="with --quick, rebuild the web UI first")
     args = ap.parse_args()
+    args.what = args.what or ["vx1", "control"]
     load_env()
     ensure_secrets()
     state = load_state()
