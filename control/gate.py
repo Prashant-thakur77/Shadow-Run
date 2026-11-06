@@ -53,6 +53,24 @@ BLOCK_FUNCTIONS = {
     "pg_rotate_logfile", "set_config", "pg_advisory_lock", "query_to_xml", "pg_sleep",
 }
 SIDE_EFFECT_FUNCTIONS = {"http_get", "http_post", "http", "pg_notify", "net.http_post", "send_email", "sendmail"}
+# A sequence leaves no row behind and doesn't roll back.
+SEQUENCE_FUNCTIONS = {"setval", "nextval"}
+# A plan has no reason to ask where it's running, and one that does can act differently on prod than on the clone.
+ENVIRONMENT_FUNCTIONS = {
+    "inet_server_addr", "inet_server_port", "inet_client_addr", "inet_client_port", "pg_backend_pid", "current_setting",
+    "version", "pg_postmaster_start_time", "pg_conf_load_time", "current_database", "txid_current", "pg_current_xact_id",
+    "pg_is_in_recovery", "pg_my_temp_schema",
+}
+ENVIRONMENT_WORDS = re.compile(r"\b(current_user|session_user|current_role|system_user|current_catalog)\b", re.I)
+# What a plan may call with no person looking. Anything else, including the team's own functions, goes to a person,
+# because a function can do things no row log sees. sqlglot gives standard SQL functions their own types, so this lists the rest.
+NO_PERSON_FUNCTIONS = {
+    "now", "clock_timestamp", "statement_timestamp", "transaction_timestamp", "to_char", "to_date", "to_timestamp", "to_number", "age",
+    "date_part", "date_trunc", "make_date", "make_interval", "btrim", "ltrim", "rtrim", "lpad", "rpad", "initcap", "split_part", "strpos",
+    "regexp_replace", "translate", "quote_literal", "md5", "abs", "ceil", "ceiling", "floor", "round", "trunc", "sign", "mod", "greatest", "least",
+    "coalesce", "nullif", "concat", "concat_ws", "format", "length", "char_length", "lower", "upper", "replace", "substr", "substring", "left", "right",
+    "count", "sum", "avg", "min", "max", "bool_and", "bool_or", "string_agg", "array_agg", "jsonb_build_object", "json_build_object", "jsonb_set",
+}
 
 
 # A guardrail reads as a rule to a person, and runs on prod inside the apply transaction, so it must only read.
@@ -132,6 +150,18 @@ def code_only(stmt: str) -> str:
     return out
 
 
+def functions_not_listed(stmt: str) -> list[str]:
+    """Functions in this statement that may not run with no person looking. A statement the parser can't read counts as one."""
+    try:
+        tree = sqlglot.parse_one(stmt, dialect="postgres")
+    except Exception:
+        return ["(a statement the parser can't read)"]
+    if isinstance(tree, exp.Command):
+        return ["(a command the parser can't see inside)"]
+    names = {func.name.lower() for func in tree.find_all(exp.Anonymous)}
+    return sorted(n for n in names if n not in NO_PERSON_FUNCTIONS)
+
+
 def check_sql_statement(step: int, stmt: str) -> tuple[list[dict], str]:
     findings: list[dict] = []
     code = code_only(stmt)
@@ -154,6 +184,13 @@ def check_sql_statement(step: int, stmt: str) -> tuple[list[dict], str]:
             findings.append(_finding(step, stmt, "dangerous_function", "block", f"{name}() reaches outside the rehearsed data or holds the session"))
         elif name in SIDE_EFFECT_FUNCTIONS:
             findings.append(_finding(step, stmt, "side_effect", "review", f"{name}() has an effect outside the database that cannot be rehearsed"))
+        elif name in SEQUENCE_FUNCTIONS:
+            findings.append(_finding(step, stmt, "sequence_write", "high", f"{name}() moves a sequence, which leaves no row behind and doesn't roll back"))
+        elif name in ENVIRONMENT_FUNCTIONS:
+            findings.append(_finding(step, stmt, "asks_where_it_runs", "high", f"{name}() lets a plan act differently on prod than on the clone"))
+    word = ENVIRONMENT_WORDS.search(code)
+    if word:
+        findings.append(_finding(step, stmt, "asks_where_it_runs", "high", f"{word.group(1).lower()} lets a plan act differently on prod than on the clone"))
 
     if re.match(r"^\s*(create\s+(or\s+replace\s+)?(constraint\s+)?(function|procedure|trigger|rule|event\s+trigger)\b|do\b|call\b)", code, re.I):
         findings.append(_finding(step, stmt, "executable_code", "high", "this adds or runs code the parser cannot follow, so it always goes to a person"))
@@ -238,37 +275,70 @@ def _shell_word(raw: str) -> str:
         return raw
 
 
-def shell_commands(cmd: str) -> list[list[str]]:
-    """Every simple command in a shell string as its words, including those in loops, `if`, functions and $(...).
-
-    shfmt parses as strictly as bash and only parses. Text it can't read raises, and the caller blocks it.
-    """
+def _shell_tree(cmd: str) -> tuple[bytes, dict]:
+    """Parses as strictly as bash and only parses. Text shfmt can't read raises, and the caller blocks it."""
     src = cmd.encode("utf-8", "surrogateescape")
     parsed = subprocess.run([_shfmt(), "--to-json", "-ln", "bash"], input=src, capture_output=True, timeout=10)
     if parsed.returncode != 0:
         raise ValueError(parsed.stderr.decode("utf-8", "replace").strip() or "shfmt could not read this")
-    tree = json.loads(parsed.stdout)
+    return src, json.loads(parsed.stdout)
+
+
+def _shell_nodes(node: Any) -> Any:
+    if isinstance(node, list):
+        for child in node:
+            yield from _shell_nodes(child)
+    elif isinstance(node, dict):
+        yield node
+        for child in node.values():
+            yield from _shell_nodes(child)
+
+
+def _node_text(src: bytes, node: dict) -> str:
+    return src[node["Pos"]["Offset"] : node["End"]["Offset"]].decode("utf-8", "replace")
+
+
+def shell_commands(cmd: str) -> list[list[str]]:
+    """Every simple command in a shell string as its words, including those in loops, `if`, functions and $(...)."""
+    src, tree = _shell_tree(cmd)
     if not tree.get("Stmts"):
         raise ValueError("there is no command here")
     out: list[list[str]] = []
-
-    def text(node: dict) -> str:
-        return src[node["Pos"]["Offset"] : node["End"]["Offset"]].decode("utf-8", "replace")
-
-    def visit(node: Any) -> None:
-        if isinstance(node, list):
-            for child in node:
-                visit(child)
-        elif isinstance(node, dict):
-            if node.get("Type") == "CallExpr" and node.get("Args"):
-                out.append([_shell_word(text(a)) for a in node["Args"]])
-            elif node.get("Type") == "DeclClause":
-                out.append([node["Variant"]["Value"], *(text(a) for a in node.get("Args") or [])])
-            for child in node.values():
-                visit(child)
-
-    visit(tree)
+    for node in _shell_nodes(tree):
+        if node.get("Type") == "CallExpr" and node.get("Args"):
+            out.append([_shell_word(_node_text(src, a)) for a in node["Args"]])
+        elif node.get("Type") == "DeclClause":
+            out.append([node["Variant"]["Value"], *(_node_text(src, a) for a in node.get("Args") or [])])
     return out
+
+
+def no_person_shell_facts(cmd: str) -> dict:
+    """What decides whether a shell step may run with no person: which programs it runs and which paths it names."""
+    try:
+        src, tree = _shell_tree(cmd)
+    except (ValueError, OSError, subprocess.SubprocessError) as e:
+        return {"commands": [], "words": [], "problems": [f"it can't be read: {str(e)[:80]}"]}
+    commands: list[str] = []
+    words: list[str] = []
+    problems: list[str] = []
+    for node in _shell_nodes(tree):
+        kind = node.get("Type")
+        if kind == "CallExpr":
+            args = [_shell_word(_node_text(src, a)) for a in node.get("Args") or []]
+            if args:
+                commands.append(args[0])
+                words.extend(args[1:])
+            if node.get("Assigns"):
+                problems.append("it sets a variable")
+        elif kind == "DeclClause":
+            commands.append(node["Variant"]["Value"])
+        elif kind == "FuncDecl":
+            problems.append("it defines a function")
+        # Redirect targets count as paths too. 2>&1 names a descriptor, which has no slash, so it passes.
+        for redirect in node.get("Redirs") or []:
+            if isinstance(redirect.get("Word"), dict):
+                words.append(_shell_word(_node_text(src, redirect["Word"])))
+    return {"commands": commands, "words": words, "problems": problems}
 
 
 def run_shellcheck(cmd: str) -> list[dict]:
@@ -360,6 +430,7 @@ def check_shell_step(step: int, cmd: str) -> tuple[list[dict], str]:
 def check_plan(steps: list[dict], target_kind: str = "postgres") -> dict[str, Any]:
     findings: list[dict] = []
     step_kinds: list[dict] = []
+    no_person: dict[str, list[str]] = {"functions": [], "commands": [], "words": [], "problems": []}
     for idx, step in enumerate(steps, start=1):
         kind = READ
         wanted = "sql" if target_kind == "postgres" else "shell"
@@ -372,10 +443,14 @@ def check_plan(steps: list[dict], target_kind: str = "postgres") -> dict[str, An
                 f, k = check_sql_statement(idx, stmt)
                 findings += f
                 kind = max(kind, k, key=RANK.get)
+                no_person["functions"] += functions_not_listed(stmt)
         else:
             f, k = check_shell_step(idx, step["cmd"])
             findings += f
             kind = max(kind, k, key=RANK.get)
+            facts = no_person_shell_facts(step["cmd"])
+            for key in ("commands", "words", "problems"):
+                no_person[key] += facts[key]
         step_kinds.append({"step": idx, "risk": kind})
     severities = {f["severity"] for f in findings}
     verdict = "block" if "block" in severities else "review" if severities & {"high", "review"} else "pass"
@@ -385,4 +460,5 @@ def check_plan(steps: list[dict], target_kind: str = "postgres") -> dict[str, An
         "findings": findings,
         "steps": step_kinds,
         "highest_risk": max((s["risk"] for s in step_kinds), key=RANK.get, default=READ),
+        "no_person": no_person,
     }

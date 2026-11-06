@@ -31,3 +31,6 @@ web/dist/
 # agent workspaces
 .superpowers/
 .claude/
+
+# The film is built separately, and heavy.
+/video/

@@ -441,3 +441,36 @@ async def test_the_clone_has_room_for_a_large_restore(golden):
     eng, sid = golden
     rec = await eng.rehearse(rid(), sid, [{"statements": ["SELECT 1"]}], [], attack_shell="df -m / | tail -1 | awk '{print $2}'")
     assert int((rec.get("attack") or {}).get("output_tail", "0").strip().split()[-1]) > 16000, rec.get("attack")
+
+
+async def test_a_sequence_moved_with_no_new_row_is_measured(golden):
+    eng, sid = golden
+    rec = await eng.rehearse(rid(), sid, [{"statements": ["SELECT setval('invoices_id_seq', 1)"]}], [])
+    moved = rec["result"]["sequences_moved"]
+    assert [m["after"] for m in moved if m["name"].endswith("invoices_id_seq")] == [1]
+    assert next(m for m in moved if m["name"].endswith("invoices_id_seq"))["owner"].endswith("invoices")
+    report = build_report(rec["result"])
+    assert [m["name"] for m in report["sequences_unexplained"]] == [moved[0]["name"]]
+
+
+async def test_an_ordinary_read_moves_no_sequence(golden):
+    eng, sid = golden
+    rec = await eng.rehearse(rid(), sid, [{"statements": ["SELECT count(*) FROM invoices"]}], [])
+    assert rec["result"]["sequences_moved"] == []
+
+
+async def test_host_writes_outside_the_hashed_folders_are_seen_even_when_backdated():
+    eng = Engine()
+    hid = f"t{rid()}"
+    await eng.ensure_prodhost(hid)
+    try:
+        quiet = await eng.rehearse_host(rid(), hid, [{"cmd": "true"}], [])
+        assert quiet["result"]["files"]["outside_measured"] == [], "a plan that does nothing must read as nothing"
+        rec = await eng.rehearse_host(rid(), hid, [{"cmd": "echo y > /usr/local/sbin/x; touch -d 2001-01-01 /usr/local/sbin/x"}], [])
+        files = rec["result"]["files"]
+        assert files["outside_measured"][0] == "/usr/local/sbin/x"
+        assert files["counts"]["outside_measured"] == len(files["outside_measured"])
+        assert files["counts"]["created"] == 0, "the hashed folders don't cover this, which is the point"
+    finally:
+        await eng.remove_prodhost(hid)
+

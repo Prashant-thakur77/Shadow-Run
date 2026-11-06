@@ -69,6 +69,42 @@ def schema_state(cur) -> list[list[str]]:
     return [list(r) for r in cur.fetchall()]
 
 
+def sequence_state(cur) -> dict:
+    """A sequence leaves no row behind and doesn't roll back, so a plan can move one with no row changed at all."""
+    cur.execute(
+        """SELECT format('%I.%I', s.schemaname, s.sequencename), s.last_value,
+                  (SELECT d.refobjid::regclass::text FROM pg_depend d
+                   WHERE d.classid = 'pg_class'::regclass AND d.objid = format('%I.%I', s.schemaname, s.sequencename)::regclass
+                     AND d.refclassid = 'pg_class'::regclass AND d.deptype IN ('a', 'i') LIMIT 1)
+           FROM pg_sequences s WHERE s.schemaname <> 'shadow'"""
+    )
+    return {name: {"value": value, "owner": owner} for name, value, owner in cur.fetchall()}
+
+
+def moved_sequences(before: dict, after: dict) -> list[dict]:
+    return [
+        {"name": name, "owner": after[name]["owner"], "before": before[name]["value"], "after": after[name]["value"]}
+        for name in sorted(set(before) & set(after))
+        if before[name]["value"] != after[name]["value"]
+    ]
+
+
+# Other sessions move sequences on a live database, forward and by little. These can't be that.
+SEQUENCE_JUMP_LIMIT = 1_000_000
+
+
+def unexpected_sequence_moves(moved: list[dict], rehearsed: list[dict]) -> list[dict]:
+    """Moves on prod the rehearsal didn't show: a sequence going backwards, or jumping further than other traffic could."""
+    known = {m["name"] for m in rehearsed}
+    bad = []
+    for m in moved:
+        if m["name"] in known or m["before"] is None:
+            continue
+        if m["after"] is None or m["after"] < m["before"] or m["after"] - m["before"] > SEQUENCE_JUMP_LIMIT:
+            bad.append(m)
+    return bad
+
+
 def table_counts(cur) -> dict[str, int]:
     cur.execute(TABLES_SQL)
     names = [r[0] for r in cur.fetchall()]

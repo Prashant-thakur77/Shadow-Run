@@ -97,8 +97,12 @@ def block_headline() -> str:
             ["Neither", f"{neither(done(d), d['harm_on_prod']['mean']):g}", f"{neither(done(g), g['harm_on_prod']['mean']):g}", f"{neither(unread_done, unread_harm):g}"],
         ],
     )
+    direct_harm = d["harm_on_prod"]["mean"]
+    gain = f"{round(100 * (unread_done - done(d)) / done(d))}% more" if done(d) and unread_done > done(d) else None
+    drop = f"{round(100 * (direct_harm - unread_harm) / direct_harm)}% less" if direct_harm and unread_harm < direct_harm else None
+    lead = f"**Through Shadow Run the same agent finishes {gain} of its risky work safely and does {drop} harm, even if nobody reads a report.** " if gain and drop else ""
     return (
-        f"**The same agent on {n} risky tasks held out from tuning finished the job safely {times(done(d))} running directly, and {times(unread_done)} through Shadow Run, even with a person approving every plan unread. Harm fell from {d['harm_on_prod']['mean']:g} to {unread_harm:g}.**\n\n"
+        lead + f"**On {n} risky tasks held out from tuning: finished safely {times(done(d))} running directly, {times(unread_done)} through Shadow Run with every plan approved unread. Harm fell from {direct_harm:g} to {unread_harm:g}.**\n\n"
         + board + "\n\n"
         f"That gain is what rehearsing adds: the agent saw what its plan would really do and rewrote it, in {rewrote} of {len(held_out)} held-out runs. The static gate's {g['harm_on_prod']['mean']:g} against {d['harm_on_prod']['mean']:g} is noise at this sample size. "
         f"With a person who reads the report, nothing harmful reached prod without one, a harm count of {s['harm_on_prod']['mean']:g}, but that zero is mostly the hold: {s['risky_held']['mean']:g} of {n} risky plans waited, and anything that holds every plan would score zero too. "

@@ -532,3 +532,64 @@ def test_a_new_row_explains_its_own_sequence_and_nothing_else_does():
     assert any("orders_id_seq moved from 7 to 1" in s["text"] for s in report["sentences"])
     assert build_report({**base, "changes": changes})["sequences_unexplained"] is None
 
+
+
+def _with_sequence(kw, value=900000):
+    with psycopg.connect(**kw) as c:
+        c.execute("CREATE SEQUENCE IF NOT EXISTS invoice_ids")
+        c.execute("SELECT setval('invoice_ids', %s)", (value,))
+        c.commit()
+
+
+def _sequence(kw) -> int:
+    return rows(kw, "SELECT last_value FROM invoice_ids")
+
+
+@pytest.mark.parametrize("call", ["setval('invoice_ids', 1)", "setval('invoice_ids', 1, false)", "setval('invoice_ids', 999999999999)"])
+def test_a_sequence_moved_only_on_prod_rolls_back_and_is_put_back(db, call):
+    """The rehearsal can't see it, for example behind inet_server_addr(). ROLLBACK doesn't undo a sequence, so apply has to."""
+    kw, conn = db
+    _with_sequence(kw)
+    rehearsal = rehearse_on_copy(kw, STEPS, [])
+    steps = [{"statements": ["DELETE FROM parents WHERE id = 1", f"SELECT {call}"]}]
+    out = apply_plan(conn, steps, [], {**rehearsal, "sequences_moved": []}, snapshot_tables(conn))
+    assert out["outcome"] == "rolled_back"
+    assert "invoice_ids" in out["reason"]
+    assert [m["name"] for m in out["sequences_restored"]] == ["public.invoice_ids"]
+    assert _sequence(kw) == 900000, "nothing was applied has to be true of the sequence too"
+    assert rows(kw, "SELECT count(*) FROM parents") == 10
+
+
+def test_a_failed_plan_also_puts_a_moved_sequence_back(db):
+    kw, conn = db
+    _with_sequence(kw)
+    rehearsal = rehearse_on_copy(kw, STEPS, [])
+    steps = [{"statements": ["SELECT setval('invoice_ids', 1)", "SELECT 1/0"]}]
+    out = apply_plan(conn, steps, [], rehearsal, snapshot_tables(conn))
+    assert out["outcome"] == "rolled_back"
+    assert _sequence(kw) == 900000
+
+
+def test_a_sequence_move_the_rehearsal_showed_and_a_person_approved_goes_through(db):
+    kw, conn = db
+    _with_sequence(kw)
+    rehearsal = rehearse_on_copy(kw, STEPS, [])
+    steps = [{"statements": ["DELETE FROM parents WHERE id = 1", "SELECT setval('invoice_ids', 1)"]}]
+    moved = [{"name": "public.invoice_ids", "owner": None, "before": 900000, "after": 1}]
+    assert apply_plan(conn, steps, [], {**rehearsal, "sequences_moved": moved}, snapshot_tables(conn))["outcome"] == "committed"
+    assert _sequence(kw) == 1
+
+
+def test_a_sequence_other_traffic_moved_forward_is_left_alone(db):
+    kw, conn = db
+    _with_sequence(kw)
+    rehearsal = rehearse_on_copy(kw, STEPS, [])
+    steps = [{"statements": ["DELETE FROM parents WHERE id = 1", "SELECT setval('invoice_ids', 900050)"]}]
+    assert apply_plan(conn, steps, [], rehearsal, snapshot_tables(conn))["outcome"] == "committed"
+    assert _sequence(kw) == 900050
+
+
+def test_a_plan_calling_an_unlisted_function_needs_a_person():
+    report = {"totals": {"rows_changed": 1}, "tables": [], "schema_diff": []}
+    gate = {"verdict": "pass", "no_person": {"functions": ["team_function"]}}
+    assert "team_function" in " ".join(check_budget(report, gate, [])["reasons"])

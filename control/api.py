@@ -25,6 +25,7 @@ from control.approvals import ApprovalError, challenge
 from control.gate import check_plan
 from control.mcp_server import McpAuth
 from control.mcp_server import mount as mount_mcp
+from control.limits import MAX_BODY_BYTES, plan_too_big
 from control.plan import PlanError, normalize_plan, plan_hash
 from control.runner_client import RunnerError
 from control.hardening import Hardening
@@ -126,14 +127,22 @@ client_ip: ContextVar[str] = ContextVar("client_ip", default="unknown")
 @app.middleware("http")
 async def remember_client(request: Request, call_next: Any) -> Any:
     # Every guest shares one identity, so limits go by address, or one visitor could use up everyone's.
-    # Caddy replaces X-Forwarded-For with the real peer, and the app only listens behind it.
-    forwarded = request.headers.get("x-forwarded-for", "")
-    client_ip.set(forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown"))
+    # Caddy replaces X-Forwarded-For with the real peer, uvicorn trusts that only from loopback, and this is the result.
+    client_ip.set(request.client.host if request.client else "unknown")
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+        return JSONResponse({"detail": f"a request can be at most {MAX_BODY_BYTES:,} bytes"}, status_code=413)
     response = await call_next(request)
     # Built assets have a content hash in their names, so a new build can never be served stale.
     if request.url.path.startswith("/assets/") and response.status_code == 200:
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
+
+
+def refuse_oversized(steps: Any) -> None:
+    problem = plan_too_big(steps)
+    if problem:
+        raise HTTPException(413, problem)
 
 
 def limit(user: str, action: str, per_hour: int) -> None:
@@ -320,6 +329,8 @@ async def inspect(target_id: str, user: str = Depends(auth.current_user)) -> dic
 
 @app.post("/api/check")
 def static_check(body: CheckBody, user: str = Depends(auth.current_user)) -> dict:
+    refuse_oversized(body.steps)
+    limit(user, "plan checks", 600)
     t = svc().store.get_target(body.target_id)
     if not t:
         raise HTTPException(404, "no such target")
@@ -335,6 +346,7 @@ async def create_run(body: RunBody, user: str = Depends(auth.current_user)) -> d
     s = svc()
     if not body.task and not body.steps:
         raise HTTPException(422, "send a task or steps")
+    refuse_oversized(body.steps)
     # A public demo must not be able to burn the inference budget or saturate the VX1.
     if body.task:
         limit(user, "agent runs", settings.RUNS_PER_HOUR)
@@ -512,6 +524,7 @@ async def replay_incident(incident_id: str, user: str = Depends(auth.current_use
     if incident is None:
         raise HTTPException(404, "no such incident")
     limit(user, "incident replays", 60)
+    require_inference_budget()
     run = svc().replay_incident(incident, user)
     return {"id": run["id"], "status": run["status"]}
 
@@ -554,6 +567,11 @@ def receipts() -> dict:
     if sc:
         for row in sc["rows"]:
             items.append({"group": "Scale", "claim": f"Rehearsal on a {row['db_mb']} MB database", "value": f"{row['rehearsal_total_s']} s" if row.get("rehearsal_total_s") else "timed out", "at": sc["at"], "source": "bench/scale.json", "rerun": sc["rerun"]})
+    rv = load("reviewer.json")
+    if rv:
+        for kind, label in (("harmful", "harmful"), ("good", "good")):
+            for key, how in (("plan_only", "reading the plan alone"), ("with_report", "with the measured report")):
+                items.append({"group": "Reviewer test", "claim": f"A model standing in for the reviewer, {how}: {label} plans approved", "value": f"{rv[key][kind]['approved']} of {rv[key][kind]['total']}", "at": rv["at"], "source": "bench/reviewer.json", "rerun": rv["rerun"]})
     so = load("soak.json")
     if so:
         items.append({"group": "Soak", "claim": f"{so['rehearsals']} rehearsals, every one contained with teardown confirmed", "value": "yes" if so["all_contained"] and so["all_teardown_ok"] else "NO", "at": so["at"], "source": "bench/soak.json", "rerun": so["rerun"]})
@@ -711,7 +729,11 @@ async def redteam_attacks(user: str = Depends(auth.current_user)) -> list[dict]:
 def results() -> dict:
     """Benchmark results, exactly as written by bench/run.py. Public, like the README table."""
     if RESULTS.exists():
-        return json.loads(RESULTS.read_text())
+        doc = json.loads(RESULTS.read_text())
+        reviewer = RESULTS.parent / "reviewer.json"
+        if reviewer.exists():
+            doc["reviewer"] = {k: v for k, v in json.loads(reviewer.read_text()).items() if k != "rows"}
+        return doc
     return {"status": "not measured yet"}
 
 
@@ -725,7 +747,11 @@ def audit(after: int = 0, limit: int = 200, user: str = Depends(auth.current_use
 async def health() -> dict[str, Any]:
     out: dict[str, Any] = {"ok": True, "s3": evidence.s3_enabled(), "inference_base_is_vultr": llm.is_vultr_base(settings.INFERENCE_BASE), "planner_model": settings.PLANNER_MODEL}
     try:
-        out["runner"] = await svc().runner.health()
+        runner = await svc().runner.health()
+        # Public, so it says what's working and leaves out the kernel and image a visitor would fingerprint.
+        host = runner.get("host") or {}
+        out["runner"] = {**runner, "host": {k: host.get(k) for k in ("hostname", "kvm_device", "kvm_rw")}}
+        out["runner"].pop("image_digest", None)
     except Exception as e:
         out["ok"] = False
         out["runner_error"] = type(e).__name__

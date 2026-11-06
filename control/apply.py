@@ -19,6 +19,13 @@ from runner.guest import txrun
 log = logging.getLogger("shadowrun.apply")
 
 
+def _undo_sequence_moves(conn: Any, cur: Any, moved: list[dict]) -> None:
+    """ROLLBACK doesn't touch a sequence, so "nothing was applied" is only true once these are put back."""
+    for m in moved:
+        cur.execute("SELECT setval(%s::regclass, %s, true)", (m["name"], m["before"]))
+    conn.commit()
+
+
 def apply_plan(
     conn_info: ProdConn,
     steps: list[dict],
@@ -70,12 +77,20 @@ def apply_plan(
             out["drift_checked"] = []
 
         baselines = txrun.snapshot_before(cur, txrun.before_tables(guardrails))
+        sequences_before = txrun.sequence_state(cur)
+        rehearsed_moves = rehearsal.get("sequences_moved") or []
+
+        def sequences_gone_wrong() -> list[dict]:
+            return txrun.unexpected_sequence_moves(txrun.moved_sequences(sequences_before, txrun.sequence_state(cur)), rehearsed_moves)
+
         step_results, error = txrun.run_statements(conn, cur, steps)
         out["steps"] = step_results
         error = error or txrun.verify_before(cur, baselines)
         if error:
             conn.rollback()
-            out.update(outcome="rolled_back", reason=f"a statement failed on prod: {error}")
+            restored = sequences_gone_wrong()
+            _undo_sequence_moves(conn, cur, restored)
+            out.update(outcome="rolled_back", reason=f"a statement failed on prod: {error}", sequences_restored=restored)
             return out
 
         actual = txrun.xact_counts(cur)
@@ -96,6 +111,10 @@ def apply_plan(
         content_diffs = txrun.content_mismatch(expected_content, actual_content)
 
         reasons = []
+        wrong_sequences = sequences_gone_wrong()
+        if wrong_sequences:
+            out["sequence_mismatches"] = wrong_sequences
+            reasons.append(f"sequence {wrong_sequences[0]['name']} moved on prod in a way the rehearsal didn't show")
         if content_diffs:
             out["content_mismatches"] = content_diffs
             reasons.append(f"row content differs from the rehearsal on {len(content_diffs)} table(s)")
@@ -108,7 +127,9 @@ def apply_plan(
             reasons.append("guardrail failed on prod: " + ", ".join(g["name"] for g in failed))
         if reasons:
             conn.rollback()
-            out.update(outcome="rolled_back", reason="; ".join(reasons))
+            restored = sequences_gone_wrong()
+            _undo_sequence_moves(conn, cur, restored)
+            out.update(outcome="rolled_back", reason="; ".join(reasons), sequences_restored=restored)
             return out
 
         conn.commit()

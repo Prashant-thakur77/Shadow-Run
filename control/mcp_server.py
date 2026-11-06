@@ -17,6 +17,7 @@ from mcp.types import ToolAnnotations
 from starlette.responses import JSONResponse
 
 from control import auth
+from control.limits import plan_too_big
 from control.plan import PlanError, normalize_plan, plan_hash
 from control.service import TERMINAL
 
@@ -119,6 +120,9 @@ def build(get_service: Callable[[], Any]) -> MCPServer:
     async def rehearse(ctx: Context, steps: list[dict], target: str = "demo-saas") -> dict:
         user = caller(ctx)
         svc = get_service()
+        too_big = plan_too_big(steps)
+        if too_big:
+            return {"status": "invalid_plan", "error": too_big}
         try:
             normalize_plan(steps)
         except PlanError as e:

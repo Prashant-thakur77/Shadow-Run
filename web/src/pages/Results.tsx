@@ -314,6 +314,53 @@ function GapAndPrice({ held, n, measured }: { held: Block; n: number; measured: 
   );
 }
 
+interface ReviewerCounts {
+  harmful?: { total?: number; approved?: number };
+  good?: { total?: number; approved?: number };
+}
+
+interface ReviewerDoc {
+  plans_scored?: number;
+  model?: string;
+  at?: string;
+  plan_only?: ReviewerCounts;
+  with_report?: ReviewerCounts;
+}
+
+function ReviewerSide({ title, counts, source }: { title: string; counts?: ReviewerCounts; source: string }) {
+  return (
+    <div className="ev-split-side">
+      <Label>{title}</Label>
+      <p className="ev-split-big">
+        <Measured value={counts?.harmful?.approved} className={`t-num-xl is-${toneOf(counts?.harmful?.approved)}`} source={source} empty="–" />
+        <span className="ev-split-of">
+          of <span className="mono">{num(counts?.harmful?.total)}</span> harmful plans approved
+        </span>
+      </p>
+      <p className="ev-split-big">
+        <Measured value={counts?.good?.approved} className="t-num-xl" source={source} empty="–" />
+        <span className="ev-split-of">
+          of <span className="mono">{num(counts?.good?.total)}</span> good plans approved
+        </span>
+      </p>
+    </div>
+  );
+}
+
+/** The product's real deliverable is a better decision by the person it holds for. A model stands in for that person here. */
+function ReviewerTest({ doc, n, measured }: { doc: ReviewerDoc; n: number; measured: number | null }) {
+  const source = 'bench/reviewer.json';
+  return (
+    <section className="ev-split" aria-label="Does the report help the person?">
+      <ReviewerSide title="Reading the request, schema and plan" counts={doc.plan_only} source={source} />
+      <ReviewerSide title="With the measured report added" counts={doc.with_report} source={source} />
+      <p className="t-caption ev-split-caption">
+        {sourceLine({ n, measured, extra: `${source} · a model stands in for the reviewer, not a user study · ${num(doc.plans_scored)} distinct plans the benchmark held, each decided twice · blind oracles decide which were harmful` })}
+      </p>
+    </section>
+  );
+}
+
 /** How many tasks a row counts, read from the benchmark's own label. Follow-on rows inherit it, and any other row gets no bar. */
 function denominators(rows: unknown[][]): (number | null)[] {
   let last: number | null = null;
@@ -579,10 +626,11 @@ export function ResultsPage() {
           {!reason && heldout?.direct && <Verdict held={heldout} n={2} measured={measuredAt} runs={runs} />}
           {!reason && heldout?.direct && <HarmChart block={heldout} n={3} measured={measuredAt} />}
           {!reason && heldout?.shadow_run && <GapAndPrice held={heldout} n={4} measured={measuredAt} />}
+          {!reason && results.data?.reviewer ? <ReviewerTest doc={results.data.reviewer as ReviewerDoc} n={5} measured={measuredAt} /> : null}
           {!reason && external?.direct && isNum(external.direct.risky_tasks) && external.direct.risky_tasks > 0 && (
             <>
-              <ExternalOutcomes block={external} n={5} measured={measuredAt} runs={runs} />
-              <HarmChart block={external} n={6} measured={measuredAt} />
+              <ExternalOutcomes block={external} n={6} measured={measuredAt} runs={runs} />
+              <HarmChart block={external} n={7} measured={measuredAt} />
             </>
           )}
           {hasTable && table ? (

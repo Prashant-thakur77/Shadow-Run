@@ -49,6 +49,24 @@ def outside_paths(report: dict, paths: list[str]) -> list[str]:
     return [f"{len(outside)} file(s) changed outside the auto-apply paths, such as {outside[0]}"] if outside else []
 
 
+# A plan with no person looking runs as root on a host, in the same guest as the code measuring it, so it could replace
+# what measures it. So it's limited to plain commands, and every path it names has to be inside the auto-apply paths.
+NO_PERSON_COMMANDS = {"echo", "printf", "cat", "touch", "mkdir", "cp", "mv", "tee", "gzip", "gunzip", "date", "ls", "true", "test", "[", "wc", "head", "tail", "grep", "sort", "uniq", "du", "df"}
+
+
+def no_person_shell_reasons(no_person: dict, paths: list[str]) -> list[str]:
+    reasons = [f"this needs a person because {p}" for p in sorted(set(no_person.get("problems") or []))]
+    unlisted = sorted({c for c in no_person.get("commands") or [] if c not in NO_PERSON_COMMANDS})
+    if unlisted:
+        reasons.append(f"{unlisted[0]} isn't one of the plain commands that may run with no person")
+    for word in no_person.get("words") or []:
+        if any(ch in word for ch in "$`{}~") or ".." in word:
+            reasons.append(f"a path in this plan can't be read for certain: {word[:60]}")
+        elif "/" in word and word.startswith(("/", ">")) and word != "/dev/null" and not any(word.startswith(prefix) for prefix in paths):
+            reasons.append(f"it names a path outside the auto-apply paths: {word[:60]}")
+    return reasons
+
+
 def check_host_budget(report: dict, gate: dict, guardrails: list[dict], budget: dict | None = None) -> dict:
     b = {**DEFAULT_HOST_BUDGET, **(budget or {})}
     reasons: list[str] = []
@@ -75,6 +93,8 @@ def check_host_budget(report: dict, gate: dict, guardrails: list[dict], budget: 
         reasons.append(f"{totals['ports_closed']} port(s) stopped listening")
     if b.get("auto_apply_paths") is not None:
         reasons.extend(outside_paths(report, b["auto_apply_paths"]))
+        if gate.get("no_person"):
+            reasons.extend(no_person_shell_reasons(gate["no_person"], b["auto_apply_paths"]))
     if gate.get("verdict") != "pass":
         reasons.append(f"static gate verdict is {gate.get('verdict')}")
     if any(not g.get("passed") for g in guardrails):
@@ -125,6 +145,9 @@ def check_budget(report: dict, gate: dict, guardrails: list[dict], budget: dict 
         reasons.append("the plan changes the schema")
     if b.get("auto_apply_scope") is not None:
         reasons.extend(outside_scope(report, b["auto_apply_scope"]))
+    functions = sorted(set((gate.get("no_person") or {}).get("functions") or []))
+    if functions:
+        reasons.append(f"it calls {functions[0]}, which isn't one of the functions that may run with no person")
     moved = [m["name"] for m in report.get("metrics", []) if m.get("before") != m.get("after")]
     if moved:
         reasons.append("a business number moved: " + ", ".join(moved[:3]))

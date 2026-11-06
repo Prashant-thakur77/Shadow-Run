@@ -46,6 +46,9 @@ UNIT
 cat > /etc/caddy/Caddyfile <<CADDY
 $HOST {
     encode gzip
+    request_body {
+        max_size 1MB
+    }
     reverse_proxy 127.0.0.1:8100
 }
 CADDY
