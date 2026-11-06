@@ -137,7 +137,7 @@ def block_results() -> str:
             f" Each of the {kept['rehearsals']:,} rehearsals needs a complete containment record from the host, with probes, kernel check and teardown proof. "
             f"{kept['incomplete']} came back without one and were refused, not counted."
         )
-    note += f" Later commits only add results and docs: `git diff {r['git_commit']} HEAD -- control runner checker bench/run.py bench/oracle.py` is empty."
+    note += f" The code that measures hasn't changed since: `git diff {r['git_commit']} HEAD -- control/agent.py control/budget.py control/gate.py control/plan.py control/apply.py control/snapshot.py runner checker/blast.py bench/run.py bench/oracle.py bench/tasks` is empty."
     return table(t["columns"], rows) + "\n\n" + note
 
 
@@ -322,7 +322,44 @@ def block_gauntlet() -> str:
     return text + f" Model `{g['model']}`, ${g['cost_usd']} of inference, full transcripts in `bench/gauntlet.json`. Re-run: `{g['rerun']}`." + where(g)
 
 
+def block_market() -> str:
+    p = ROOT / "docs" / "market.json"
+    if not p.exists():
+        return ""
+    m = json.loads(p.read_text())
+    a, g, d, pg, derived, price = m["agents_market"], m["guardian_share"], m["developers_using_agents"], m["postgres_companies"], m["derived"], m["price"]
+    r = load("results.json") or {}
+    cost = ((r.get("all_risky_and_safe") or {}).get("shadow_run") or {}).get("cost_per_task_usd")
+    lines = [
+        f"**Who is exposed.** {d['weekly_pct']}% of professional developers use coding agents at work at least weekly and {d['daily_pct']}% daily ([{d['source']}]({d['url']}), {d['respondents']} respondents). [{pg['count']:,} companies use PostgreSQL]({pg['url']}), by {pg['source']}'s 2026 count. {pg['caveat']}",
+        "",
+        f"**Market.** [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']}. [{a['source']}]({a['url']}) sizes AI agents at ${a['usd_b_2025']} billion in 2025 and ${a['usd_b_2033']} billion by 2033. Combining the two, which is our arithmetic and not theirs, gives ${derived['tam_usd_b_on_2025_market'][0]} to {derived['tam_usd_b_on_2025_market'][1]} billion on today's market and ${derived['tam_usd_b_on_2033_forecast'][0]} to {derived['tam_usd_b_on_2033_forecast'][1]} billion on the 2033 forecast. The market this version can serve: those companies, one protected database each, at the ${price['usd_per_database_month']} a month we plan to charge, is ${derived['sam_usd_b_per_year']} billion a year. That price is a plan, not tested with a customer.",
+        "",
+        "**Revenue.** " + " ".join(m["revenue"]) + (f" A rehearsed task costs about ${cost} of inference at today's benchmark." if cost else ""),
+        "",
+        "| Who else | What they do well | What's missing for this job |",
+        "| --- | --- | --- |",
+    ]
+    for c in m["competition"]:
+        lines.append(f"| {c['who']} | {c['strength']} | {c['gap']} |")
+    lines += ["", f"**Where we're weak:** {m['us']['weakness']} **What's different:** {m['us']['usp']}"]
+    return "\n".join(lines)
+
+
+def block_reviewer() -> str:
+    d = load("reviewer.json")
+    if not d:
+        return ""
+    a, b = d["plan_only"], d["with_report"]
+    return (
+        f"**Does the report help the person?** A model stood in for the reviewer on {d['plans_scored']} distinct plans the benchmark held, deciding each one twice. Reading the request, schema and plan, as in a pull request, it approved {a['harmful']['approved']} of {a['harmful']['total']} harmful plans and {a['good']['approved']} of {a['good']['total']} good ones. "
+        f"With the measured report added, it approved {b['harmful']['approved']} of {b['harmful']['total']} harmful and {b['good']['approved']} of {b['good']['total']} good. This is a model, not a user study, and the oracles were blind to it. Model `{d['model']}`, ${d['cost_usd']} of inference. Re-run: `{d['rerun']}`."
+    )
+
+
 BLOCKS = {
+    "market": block_market,
+    "reviewer": block_reviewer,
     "incidents": block_incidents, "video": block_video, "wider": block_wider, "gate": block_gate, "clone_check": block_clone_check, "second_opinion": block_second_opinion, "gauntlet": block_gauntlet, "models": block_models,
     "live": block_live, "headline": block_headline, "results": block_results, "groups": block_groups, "redteam": block_redteam,
     "controls": block_controls, "scale": block_scale, "soak": block_soak, "cost": block_budget,

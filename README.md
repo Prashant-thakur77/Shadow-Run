@@ -41,7 +41,7 @@ pip install -e . && export SHADOWRUN_URL=https://... SHADOWRUN_TOKEN=...
 shadowrun rehearse plan.sql --target demo-saas   # exit 0 applied, 2 needs a person, 3 blocked, 4 rolled back
 ```
 
-As a GitHub Action, `uses: Prashant-thakur77/Shadow-Run@main` rehearses a migration in a pull request and posts what it really does as a comment. It never applies anything, since nobody has reviewed the pull request yet. Here's [the comment it writes for a bad migration](docs/evidence/pr-comment.md), and the [workflow](.github/workflows/shadowrun.yml).
+As a GitHub Action, `uses: Prashant-thakur77/Shadow-Run@main` rehearses a migration in a pull request and posts what it really does as a comment. It never applies anything, since nobody has reviewed the pull request yet. Here's [a real pull request](https://github.com/Prashant-thakur77/Shadow-Run/pull/1) where the Action ran on GitHub and posted what a bad migration really does, and the [workflow](.github/workflows/shadowrun.yml), which runs on the public demo with no stored secret.
 
 </details>
 
@@ -101,6 +101,9 @@ Mean of 3 runs per task, range in brackets. Model `qwen3.8-27b` on Vultr Serverl
 <!-- results:end -->
 
 The suite is 40 tasks of ours plus 20 adapted from [SABER](https://github.com/sssr-lab/saber), so the result isn't only on our own planted data. Oracles decide harm by checking outcomes. They were written by a separate agent that was barred from reading the guardrails and the gate, and each one is tested with a known-bad and a known-good plan (`python -m bench.validate`). We tuned on 10 tasks and report the other 30 and the SABER set separately. One disclosure: after a preview run's totals showed small harmful plans auto-applying under budget, we added the rule that irreversible writes always need a person. We read only the totals for that, not which held-out tasks were involved, but the held-out set isn't perfectly clean of that one decision. SABER's guardrails were drafted by the model and left unedited.
+
+<!-- reviewer:start -->
+<!-- reviewer:end -->
 
 <details><summary>More from the benchmark: the gate alone, the second model, a wider auto-apply list, other models, cost, each kind of task</summary>
 
@@ -199,7 +202,26 @@ Nothing has to be trusted on day one:
 2. **MCP for the agent.** It gives up its database URL and gets rehearse and apply instead. Every change waits for a person.
 3. **A short auto-apply list**, once the team has seen enough reports. It names the columns they're happy to change without a person.
 
-Cost grows with database size and not with seats, so it would be priced per protected database. The size limit today is in [Limits](#limits).
+The size limit today is in [Limits](#limits).
+
+## Market and competition
+
+<!-- market:start -->
+**Who is exposed.** 90% of professional developers use coding agents at work at least weekly and 68% daily ([JetBrains Developer Ecosystem Survey 2026](https://blog.jetbrains.com/research/2026/08/ai-coding-agent-adoption-2026/), over 15,000 respondents). [131,339 companies use PostgreSQL](https://technographics.6sense.com/relational-databases/postgresql-market-share), by 6sense's 2026 count. Vendor counts run from about 19,000 to about 173,000, depending on how each defines a user.
+
+**Market.** [Gartner, June 2025](https://www.gartner.com/en/newsroom/press-releases/2025-06-11-gartner-predicts-that-guardian-agents-will-capture-10-15-percent-of-the-agentic-ai-market-by-2030) expects guardian agents, the category this sits in, to take 10 to 15% of the agentic AI market by 2030. [Grand View Research](https://www.grandviewresearch.com/industry-analysis/ai-agents-market-report) sizes AI agents at $7.6 billion in 2025 and $182.9 billion by 2033. Combining the two, which is our arithmetic and not theirs, gives $0.76 to 1.14 billion on today's market and $18.3 to 27.4 billion on the 2033 forecast. The market this version can serve: those companies, one protected database each, at the $500 a month we plan to charge, is $0.79 billion a year. That price is a plan, not tested with a customer.
+
+**Revenue.** A monthly subscription per protected database, since cost grows with database size and not with seats. A self-hosted licence for regulated teams, who run the control plane and sandboxes on their own Vultr account. A rehearsed task costs about $0.00328 of inference at today's benchmark.
+
+| Who else | What they do well | What's missing for this job |
+| --- | --- | --- |
+| Migration linting and review: Atlas, Bytebase | Mature, fast, fits CI, and covers many databases. Bytebase lints every change against 100+ rules and routes it for approval. | Their docs describe linting and policy, not measuring a plan's real effect on a full copy of your data. |
+| Thin clones and branches: DBLab, Neon | Far faster copies than our full restore. DBLab says about 10 seconds for 1 TiB. | A copy, not a decision: their docs describe no frozen guardrails or approval bound to a measured result. DBLab needs ZFS or LVM, and Neon's branches are on Neon. |
+| Agent safety tools: safe-migrations-mcp, DryRun | Simple to start with. | safe-migrations-mcp simulates on prod in a rolled-back transaction, which still takes locks. DryRun uses sampled rows and only gives advice. |
+| A senior engineer reading the SQL | Knows what the business means, which no check encodes. | Has to guess what a statement cascades into, and doesn't scale with agents. |
+
+**Where we're weak:** Full restores get slow on large databases, it covers Postgres and Linux hosts only, and it has no customers yet. **What's different:** An approval bound to the measured result of the exact plan, with an apply that rolls back if prod differs. None of the docs above describe that.
+<!-- market:end -->
 
 <details><summary>Point it at your own database</summary>
 

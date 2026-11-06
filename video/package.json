@@ -1,0 +1,1 @@
+{ "name": "shadowrun-film-capture", "private": true, "type": "module", "devDependencies": { "playwright": "^1.65.0" } }

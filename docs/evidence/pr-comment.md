@@ -1,6 +1,6 @@
 # What the GitHub Action posts on a pull request
 
-The text this bad migration produced on the live build, with the command the Action runs: `shadowrun rehearse plan.sql --rehearse-only --markdown`. Prod's hash was the same before and after. The workflow itself has not yet run on GitHub.
+The text this bad migration produced on the live build, with the command the Action runs: `shadowrun rehearse plan.sql --rehearse-only --markdown`. Prod's hash was the same before and after. The workflow has also run on GitHub for real: see [this pull request](https://github.com/Prashant-thakur77/Shadow-Run/pull/1).
 
 ```sql
 DELETE FROM users WHERE last_login_at < now() - interval '1 year';

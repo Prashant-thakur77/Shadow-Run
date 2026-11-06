@@ -60,6 +60,14 @@ def main() -> int:
         )
         + "Every LLM call goes to Vultr Serverless Inference, on VX1, Cloud Compute, Managed PostgreSQL, Object Storage and a VPC. It ships as a web app, an MCP server, a CLI and a GitHub Action."
     )
+    mk = json.loads((ROOT / "docs" / "market.json").read_text())
+    market = (
+        f"Who pays: whoever owns the database at a team using coding agents. {mk['developers_using_agents']['weekly_pct']}% of professional developers now use them weekly ({mk['developers_using_agents']['source']}). "
+        f"It starts free, as a pull request Action that can't touch prod, and then a subscription per protected database, with a self-hosted licence for regulated teams. "
+        f"Gartner expects guardian agents to take {mk['guardian_share']['low_pct']} to {mk['guardian_share']['high_pct']}% of the agentic AI market by {mk['guardian_share']['by_year']}. "
+        f"Linters like Atlas and Bytebase read the statement, and thin clones like DBLab and Neon give a copy. {mk['us']['usp']} "
+        f"Where it's weak: {mk['us']['weakness'][0].lower()}{mk['us']['weakness'][1:]}"
+    )
     gt = load("gauntlet.json") or {}
     attack = ""
     if gt.get("baseline_summary"):
@@ -99,6 +107,8 @@ Every plan that passes also comes with an undo, written from the row log and pro
 {attack}
 
 It ships as an MCP server, shown with OpenCode on Vultr inference, plus a web app, a CLI and a GitHub Action that posts what a migration really does on the pull request. Every LLM call goes to Vultr Serverless Inference, and the model never grades itself: it proposes plans and explains results, while Postgres measures and frozen checks decide.
+
+{market}
 
 Built on Vultr: VX1 for the microVMs, Cloud Compute for the control plane, Serverless Inference, Managed PostgreSQL, Object Storage and a VPC, all created from zero by one script and removed by another.
 

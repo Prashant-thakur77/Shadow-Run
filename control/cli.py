@@ -38,6 +38,13 @@ def wait(c: httpx.Client, run_id: str) -> dict:
         time.sleep(1)
 
 
+def metric_value(metric: dict, value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    prefix = "$" if metric.get("unit") in ("usd", "dollars", "$") else ""
+    return f"{prefix}{value:,.0f}"
+
+
 def summary(run: dict) -> None:
     final = run.get("final") or {}
     print(f"run       {run['id']}")
@@ -71,7 +78,7 @@ def markdown(run: dict) -> str:
         lines += ["| Measured by Postgres |", "| --- |"] + [f"| {s['text']} |" for s in sentences[:12]] + [""]
     moved = [m for m in report.get("metrics", []) if m.get("before") != m.get("after")]
     if moved:
-        lines += ["| Business metric | Before | After |", "| --- | ---: | ---: |"] + [f"| {m['name']} | {m['before']} | {m['after']} |" for m in moved] + [""]
+        lines += ["| Business metric | Before | After |", "| --- | ---: | ---: |"] + [f"| {m['name']} | {metric_value(m, m['before'])} | {metric_value(m, m['after'])} |" for m in moved] + [""]
     failed = [g for g in final.get("guardrails", []) if not g.get("passed")]
     guardrails = final.get("guardrails", [])
     if guardrails:

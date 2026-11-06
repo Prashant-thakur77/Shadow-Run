@@ -18,7 +18,7 @@ def run(**kw):
 def test_the_comment_says_what_was_measured():
     text = markdown(run())
     assert "Blocked" in text and "2804 invoices deleted via cascade" in text
-    assert "Paid invoices on record | 100.0 | 40.0" in text
+    assert "Paid invoices on record | 100 | 40" in text
     assert "Live users" not in text, "only metrics that moved"
     assert "1 of 2 passed" in text and "Failed: No paid invoice is lost" in text
     assert "`drop`" in text and "proved on the clone" in text
