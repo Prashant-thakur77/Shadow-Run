@@ -1,0 +1,95 @@
+/* Graphite and paper, with one signal yellow. Red and green mean measured outcomes and nothing else.
+   good and bad are colour-blind safe against each other (checked with a CVD simulation),
+   and every use also carries a shape and a word. */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #121513;
+  --bg-1: #191d1a;
+  --bg-2: #222723;
+  --bg-inset: #0c0e0d;
+  --line: #2c322d;
+  --line-2: #4a524c;
+  --ink: #eeece4;
+  --ink-2: #bcbdb3;
+  --ink-3: #91948a;
+  --invert-bg: #eeece4;
+  --invert-ink: #121513;
+  --invert-hover: #ffffff;
+  --mark-cut: #121513;
+
+  --good: #34d3a4;
+  --good-bg: #10261f;
+  --good-line: #1e5c49;
+  --bad: #ff6650;
+  --bad-bg: #2b1512;
+  --bad-line: #7a2e23;
+  --caution: #eec84e;
+  --caution-text: #eec84e;
+  --caution-bg: #27220f;
+  --caution-line: #6c5b1c;
+
+  --shadow-dialog: 0 18px 60px rgb(0 0 0 / 0.6);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f6f4ec;
+  --bg-1: #fdfcf7;
+  --bg-2: #eceade;
+  --bg-inset: #efede2;
+  --line: #d8d5c6;
+  --line-2: #a9a696;
+  --ink: #161916;
+  --ink-2: #41453e;
+  --ink-3: #62655c;
+  --invert-bg: #161916;
+  --invert-ink: #f6f4ec;
+  --invert-hover: #000000;
+  --mark-cut: #fdfcf7;
+
+  --good: #007a5c;
+  --good-bg: #dff0e8;
+  --good-line: #8fcab6;
+  --bad: #c8350a;
+  --bad-bg: #fae4da;
+  --bad-line: #e8a990;
+  --caution: #c79a00;
+  --caution-text: #6f5400;
+  --caution-bg: #f7edc6;
+  --caution-line: #d4bd6a;
+
+  --shadow-dialog: 0 18px 60px rgb(40 40 20 / 0.25);
+}
+
+:root {
+  --font-sans: 'Schibsted Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --fs-xs: 12px;
+  --fs-s: 13.5px;
+  --fs-m: 15px;
+  --fs-l: 18px;
+  --fs-xl: 24px;
+  --fs-2xl: 34px;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 72px;
+
+  --radius: 2px;
+  --gutter: 28px;
+  --page-max: 1320px;
+}
+
+@media (max-width: 720px) {
+  :root {
+    --gutter: 16px;
+    --fs-2xl: 28px;
+  }
+}

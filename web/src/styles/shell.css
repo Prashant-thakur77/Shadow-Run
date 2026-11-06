@@ -1,0 +1,387 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+}
+
+.boot {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+/* Top bar */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.topbar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-5);
+  max-width: none;
+  min-height: 52px;
+  padding: 0 var(--gutter);
+}
+.brand {
+  flex: none;
+  text-decoration: none;
+}
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+/* Two offset squares: the solid original and its outlined clone. */
+.wordmark-mark {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.wordmark-mark::before,
+.wordmark-mark::after {
+  content: '';
+  position: absolute;
+  width: 11px;
+  height: 11px;
+}
+.wordmark-mark::after {
+  right: 0;
+  bottom: 0;
+  border: 1.5px solid var(--ink-3);
+}
+.wordmark-mark::before {
+  left: 0;
+  top: 0;
+  background: var(--ink);
+  z-index: 1;
+}
+
+.nav {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s-1);
+  align-self: stretch;
+  min-width: 0;
+}
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.nav-link:hover {
+  color: var(--ink);
+}
+.nav-link.is-active {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  margin-left: auto;
+  flex: none;
+}
+
+.prod {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: var(--fs-s);
+  white-space: nowrap;
+}
+.prod-label {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.prod-hash {
+  font-size: var(--fs-s);
+  font-weight: 500;
+}
+.prod.is-changed {
+  border-color: var(--caution-line);
+  background: var(--caution-bg);
+}
+.prod-changed {
+  color: var(--caution-text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.identity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.identity-label {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+/* Bottom status bar */
+.statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-4);
+  min-height: 36px;
+  margin-top: var(--s-7);
+  padding: var(--s-2) var(--gutter);
+  border-top: 1px solid var(--line);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
+.statusbar-title {
+  color: var(--ink-3);
+  font-family: var(--font-sans);
+  font-weight: 600;
+}
+.statusbar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Page frame */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--s-6) var(--gutter) 0;
+  min-width: 0;
+}
+.page-title {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.page-lead {
+  max-width: 68ch;
+  color: var(--ink-2);
+  font-size: var(--fs-l);
+  line-height: 1.4;
+}
+
+/* Section */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line-2);
+  min-width: 0;
+}
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-3);
+}
+.section-index {
+  color: var(--ink-3);
+  font-size: var(--fs-s);
+}
+.section-title {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+.section-aside {
+  margin-left: auto;
+  font-size: var(--fs-s);
+  min-width: 0;
+}
+.section-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.subhead {
+  margin-bottom: var(--s-2);
+  font-size: var(--fs-m);
+  font-weight: 600;
+}
+
+/* Sign in */
+.signin {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: var(--s-5) var(--gutter);
+}
+.signin-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  width: min(760px, 100%);
+}
+.signin-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.signin-claim {
+  font-size: clamp(30px, 5vw, 46px);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+.signin-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line-2);
+}
+.signin-title {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}
+.signin-why {
+  font-size: var(--fs-l);
+  color: var(--ink-2);
+}
+.account-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--s-2);
+  border-top: 1px solid var(--line);
+}
+.account {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 170px;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+.account-who {
+  display: flex;
+  flex-direction: column;
+}
+.account-name {
+  font-size: var(--fs-l);
+  font-weight: 600;
+}
+.account-role {
+  color: var(--ink-3);
+  font-size: var(--fs-s);
+}
+.signin-note {
+  font-size: var(--fs-s);
+}
+.signin-public {
+  font-size: var(--fs-s);
+}
+
+@media (max-width: 1180px) {
+  .identity-label {
+    display: none;
+  }
+  .topbar-row {
+    gap: var(--s-3);
+  }
+  .topbar-right {
+    gap: var(--s-3);
+  }
+  .nav-link {
+    padding: 0 7px;
+  }
+}
+
+@media (max-width: 960px) {
+  .topbar-row {
+    flex-wrap: wrap;
+    row-gap: 0;
+    padding-top: var(--s-2);
+  }
+  .nav {
+    order: 3;
+    width: calc(100% + var(--gutter) * 2);
+    max-width: 100vw;
+    margin: var(--s-2) calc(var(--gutter) * -1) 0;
+    padding: 0 calc(var(--gutter) - 7px);
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-top: 1px solid var(--line);
+    min-height: 38px;
+  }
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  html {
+    scroll-padding-top: 110px;
+  }
+  .topbar {
+    position: static;
+  }
+  .wordmark > span:last-child {
+    font-size: 15px;
+  }
+  .topbar-right {
+    gap: var(--s-2);
+  }
+  .account {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-2);
+  }
+  .section-aside {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* Phone header. First row: wordmark and prod, which stays visible at every size.
+   Second row: who you are, theme, sign out. Third row: navigation. */
+@media (max-width: 620px) {
+  .topbar-row {
+    gap: var(--s-2) var(--s-3);
+  }
+  .brand {
+    flex: 1 1 auto;
+  }
+  .topbar-right {
+    display: contents;
+  }
+  .identity {
+    margin-right: auto;
+  }
+}

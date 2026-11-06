@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img" aria-label="Shadow Run architecture">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#3a4250"/></marker>
+    <style>
+      .t{font-size:17px;font-weight:650;fill:#111827}.s{font-size:14px;fill:#374151}.m{font-size:13px;fill:#4b5563;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+      .l{font-size:13px;fill:#3a4250}.h{font-size:13px;font-weight:650;letter-spacing:.06em;fill:#4b5563}
+      .b{fill:#fff;stroke:#3a4250;stroke-width:1.5}.c{fill:#eef2ff;stroke:#3730a3;stroke-width:2}.x{fill:#ecfdf5;stroke:#047857;stroke-width:2}.p{fill:#fef2f2;stroke:#b91c1c;stroke-width:2}
+      .g{fill:#f9fafb;stroke:#9ca3af;stroke-width:1.5;stroke-dasharray:6 5}
+      .e{stroke:#3a4250;stroke-width:1.6;fill:none;marker-end:url(#a)}
+    </style>
+  </defs>
+  <rect width="1200" height="660" fill="#ffffff"/>
+
+  <text x="40" y="40" class="h">WAYS IN</text>
+  <rect class="b" x="40" y="56" width="210" height="76" rx="6"/><text x="56" y="86" class="t">Web app</text><text x="56" y="110" class="s">tasks, reports, approve</text>
+  <rect class="b" x="40" y="150" width="210" height="76" rx="6"/><text x="56" y="180" class="t">MCP agent</text><text x="56" y="204" class="s">OpenCode on Vultr inference</text>
+  <rect class="b" x="40" y="244" width="210" height="76" rx="6"/><text x="56" y="274" class="t">CLI and CI</text><text x="56" y="298" class="m">shadowrun rehearse</text>
+
+  <rect class="c" x="320" y="56" width="340" height="264" rx="8"/>
+  <text x="340" y="88" class="t">Control plane (Vultr VM)</text>
+  <text x="340" y="112" class="s">The only holder of the prod credential</text>
+  <text x="340" y="146" class="s">Plan frozen and hashed</text>
+  <text x="340" y="170" class="s">Static gate: sqlglot, ShellCheck</text>
+  <text x="340" y="194" class="s">Agent loop: failures fed back, then retried</text>
+  <text x="340" y="218" class="s">Budget, approval bound to the hashes</text>
+  <text x="340" y="242" class="s">Drift check under lock</text>
+  <text x="340" y="266" class="s">Apply in one transaction, rollback on mismatch</text>
+  <text x="340" y="290" class="s">Signed evidence, hash-chained audit log</text>
+
+  <path class="e" d="M250 94H320"/><path class="e" d="M250 188H320"/><path class="e" d="M250 282H320"/>
+
+  <rect class="g" x="730" y="36" width="430" height="344" rx="10"/>
+  <text x="750" y="64" class="h">VX1 HOST, NO SECRETS</text>
+  <rect class="x" x="750" y="80" width="390" height="150" rx="6"/>
+  <text x="768" y="110" class="t">Rehearsal microVM, one per attempt</text>
+  <text x="768" y="136" class="s">Own kernel, no network device, no credentials</text>
+  <text x="768" y="160" class="s">Fresh clone of prod, plan runs as unprivileged role</text>
+  <text x="768" y="184" class="s">Triggers record every row, cascades traced</text>
+  <text x="768" y="208" class="s">2 vCPU, 2 GB, 120 s, destroyed after every run</text>
+  <rect class="b" x="750" y="250" width="390" height="112" rx="6"/>
+  <text x="768" y="280" class="t">Runner and host-side checker</text>
+  <text x="768" y="306" class="s">Teardown proof, canary and file hashes</text>
+  <text x="768" y="330" class="s">Second wall: iptables chain for the sandbox uid</text>
+  <text x="768" y="352" class="s">Reachable only from the control VM, over the VPC</text>
+  <path class="e" d="M945 250V230"/>
+  <path class="e" d="M660 170H730"/><text x="672" y="160" class="l">plan</text>
+  <path class="e" d="M730 250H660"/><text x="672" y="240" class="l">report</text>
+
+  <rect class="b" x="320" y="430" width="240" height="120" rx="6"/>
+  <text x="338" y="462" class="t">Serverless Inference</text>
+  <text x="338" y="488" class="s">Every LLM call. Proposes,</text><text x="338" y="510" class="s">explains, never decides.</text>
+  <text x="338" y="534" class="m">api.vultrinference.com</text>
+  <path class="e" d="M440 320V430"/><path class="e" d="M470 430V320"/>
+
+  <rect class="p" x="590" y="430" width="270" height="120" rx="6"/>
+  <text x="608" y="462" class="t">Managed Postgres (prod)</text>
+  <text x="608" y="488" class="s">Snapshot out. Approved apply in.</text>
+  <text x="608" y="510" class="s">Role owns one database, not superuser.</text>
+  <path class="e" d="M600 320 690 430"/><text x="660" y="372" class="l">snapshot, apply</text>
+
+  <rect class="b" x="890" y="430" width="270" height="120" rx="6"/>
+  <text x="908" y="462" class="t">Object Storage</text>
+  <text x="908" y="488" class="s">Evidence bundles</text><text x="908" y="510" class="s">Pre-apply backups</text>
+  <path class="e" d="M650 320 960 430"/>
+
+  <text x="40" y="610" class="s">All parts sit on one Vultr VPC Network. The microVM gets a clone and a plan, never a credential.</text>
+</svg>

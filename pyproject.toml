@@ -1,0 +1,49 @@
+[project]
+name = "shadowrun"
+version = "0.1.0"
+description = "Pre-flight check for AI agents: rehearse every risky action on a disposable clone in a microVM before it can touch production."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "httpx>=0.27",
+  "psycopg[binary]>=3.2",
+  "sqlglot>=30.29",
+  "shellcheck-py>=0.10",
+  "bashlex>=0.18",
+  "openai>=1.50",
+  "boto3>=1.34",
+  "mcp>=2.3",
+  "pyyaml>=6.0",
+  "microsandbox==0.7.13",
+  "pydantic>=2.7",
+]
+
+[project.scripts]
+shadowrun = "control.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["control*", "runner*", "checker*", "bench*", "demo*"]
+
+[tool.setuptools.package-data]
+"runner.guest" = ["*.sql"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
+testpaths = ["tests"]
+markers = [
+  "kvm: boots real microVMs (needs /dev/kvm and msb)",
+  "prod: needs the local demo prod Postgres (scripts/dev/up.sh)",
+]
+
+[tool.ruff]
+line-length = 110

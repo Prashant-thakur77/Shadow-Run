@@ -1,0 +1,128 @@
+{
+  "at": "2026-11-05T21:13:22Z",
+  "url": "https://45-76-245-71.sslip.io",
+  "passed": 18,
+  "total": 18,
+  "controls": [
+    {
+      "control": "Requester approves their own run",
+      "must": "403",
+      "ok": true,
+      "got": "403 maker-checker: the requester of a run cannot approve it"
+    },
+    {
+      "control": "Approval with a changed plan hash",
+      "must": "409",
+      "ok": true,
+      "got": "409 plan_hash does not match the rehearsed run: approve exactly what you reviewed"
+    },
+    {
+      "control": "Approval with a changed blast-radius report",
+      "must": "409",
+      "ok": true,
+      "got": "409 report_hash does not match the rehearsed run: approve exactly what you reviewed"
+    },
+    {
+      "control": "Approval with edited guardrails",
+      "must": "409",
+      "ok": true,
+      "got": "409 guardrails_hash does not match the rehearsed run: approve exactly what you reviewed"
+    },
+    {
+      "control": "Apply with no approval",
+      "must": "409",
+      "ok": true,
+      "got": "409 this run is awaiting_approval; an approval can be used once"
+    },
+    {
+      "control": "Correct approval by a different person",
+      "must": "200",
+      "ok": true,
+      "got": "200 status=approved"
+    },
+    {
+      "control": "Replay the same approval",
+      "must": "409",
+      "ok": true,
+      "got": "409 this run is approved; an approval is one-use"
+    },
+    {
+      "control": "Apply the approved plan",
+      "must": "committed, counts equal rehearsal",
+      "ok": true,
+      "got": "status=applied counts={'sessions': {'ins': 0, 'upd': 0, 'del': 2120}}"
+    },
+    {
+      "control": "Prod really changed after apply",
+      "must": "digest differs",
+      "ok": true,
+      "got": "92f8af482ae8 -> 40f0585788b9"
+    },
+    {
+      "control": "Evidence bundle written to Object Storage",
+      "must": "stored",
+      "ok": true,
+      "got": {
+        "store": "vultr-object-storage",
+        "key": "runs/r5f4039d153ac41/evidence.json",
+        "bytes": 12851
+      }
+    },
+    {
+      "control": "Pre-apply backup written to Object Storage",
+      "must": "stored",
+      "ok": true,
+      "got": {
+        "store": "vultr-object-storage",
+        "key": "backups/r5f4039d153ac41/pre-apply.dump",
+        "bytes": 1243086
+      }
+    },
+    {
+      "control": "Apply the same run a second time",
+      "must": "409",
+      "ok": true,
+      "got": "409 this run is applied; an approval can be used once"
+    },
+    {
+      "control": "Prod changed after rehearsal; drift check on",
+      "must": "drift_detected, nothing applied",
+      "ok": true,
+      "got": "status=drift_detected drifted=['users'] prod unchanged=True"
+    },
+    {
+      "control": "Prod changed after rehearsal; drift check off",
+      "must": "rolled_back on count mismatch, nothing applied",
+      "ok": true,
+      "got": "status=rolled_back reason=row counts differ from the rehearsal on 1 table(s) mismatches=[{'table': 'users', 'rehearsal': {'ins': 0, 'upd': 616, 'del': 0}, 'actual': {'ins': 0, 'upd': 617, 'del': 0}}] prod unchanged=True"
+    },
+    {
+      "control": "Cascade trap via the API: guardrail stops it",
+      "must": "blocked",
+      "ok": true,
+      "got": "status=blocked failed=['No paid invoice is lost', 'Total paid revenue is unchanged', 'No payment loses its invoice', 'Every active account keeps a live billing contact']"
+    },
+    {
+      "control": "Approve a blocked plan anyway",
+      "must": "409",
+      "ok": true,
+      "got": "409 this run is blocked; an approval is one-use"
+    },
+    {
+      "control": "Plan tries to end its own transaction",
+      "must": "blocked by gate",
+      "ok": true,
+      "got": "status=blocked verdict=blocked_by_gate"
+    },
+    {
+      "control": "Audit log hash chain verifies",
+      "must": "ok",
+      "ok": true,
+      "got": {
+        "ok": true,
+        "events": 80,
+        "head": "5b83e926ed4cd2b0d5526e8b382adf8e4087b55cc5b5fed69c2176c9e01a0407"
+      }
+    }
+  ]
+}

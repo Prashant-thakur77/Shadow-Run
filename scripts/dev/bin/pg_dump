@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Dev only: pg_dump from the Postgres image, because this machine has no client tools installed.
+# On the control VM the real postgresql-client-16 package is on PATH and this shim is not used.
+exec docker run --rm -i --network host -e PGPASSWORD -e PGHOST -e PGPORT -e PGUSER -e PGDATABASE -e PGSSLMODE postgres:16-bookworm pg_dump "$@"

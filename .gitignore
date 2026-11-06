@@ -1,0 +1,28 @@
+# secrets and local state
+.env
+.env.*
+!.env.example
+infra/STATE.json
+infra/.ssh/
+*.pem
+*.key
+var/
+
+# internal planning docs (competitive strategy; repo is public)
+docs/PLAN.md
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# node
+node_modules/
+web/dist/
+
+# agent workspaces
+.superpowers/
+.claude/
