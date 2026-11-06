@@ -22,6 +22,7 @@ function statusLine(run: Run): string | null {
     case 'error':
       return run.error ?? 'The run failed and gave no detail.';
     case 'awaiting_approval':
+      if (run.race) return 'The rehearsal passed. This run is part of a race, which only rehearses, so it stays here.';
       if (run.rehearse_only && run.final?.budget?.within) return "The rehearsal passed. This run was asked to rehearse only, so nothing reaches prod until someone approves it.";
       return run.can?.approve
         ? "The rehearsal passed. It can't apply alone, so your approval is needed."

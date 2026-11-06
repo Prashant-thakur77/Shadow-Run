@@ -1,6 +1,9 @@
 # A longer auto-apply list than the demo's, closer to what a team might accept after a few weeks of reading reports.
-# Deletes, cascades and anything over the row budget still wait for a person. Measured in bench/results.wider_list.json.
+# On a table listed whole, a delete can run alone if its undo is proved on the clone. Cascades, truncates and drops still wait.
+# New columns and indexes can run alone, with the same proof. Measured in bench/results.wider_list.json.
 feature_flags: [enabled, note]
 products: [name, active]
 job_logs: "*"
 job_logs_archive: "*"
+sessions: "*"
+"@additive_schema": true

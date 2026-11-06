@@ -285,6 +285,7 @@ async def run_loop(
     attempts: list[dict] | None = None,
     measure_blocked: bool = False,
     on_undo: Callable[[int, list[str]], None] | None = None,
+    single_plan: bool = False,
 ) -> dict:
     """Returns the final attempt plus every earlier one. `fixed_steps` skips the planner (MCP, CLI, API)."""
     kind = target["kind"]
@@ -295,7 +296,8 @@ async def run_loop(
     nudged = False
     # Up to max_attempts plans measured against guardrails. A typo or a gate refusal is not a measured
     # failure, so those do not use one up, but the hard cap keeps the loop and its cost bounded.
-    tries = 1 if fixed_steps is not None else settings.MAX_ATTEMPTS_HARD_CAP
+    # `single_plan` keeps the model's first plan, with no feedback and no second try.
+    tries = 1 if fixed_steps is not None or single_plan else settings.MAX_ATTEMPTS_HARD_CAP
     gh = guardrails_hash(guardrails)
     measured_failures = 0
 
@@ -380,7 +382,7 @@ async def run_loop(
             (again.get("result") or {}).pop("undo_statements", None)
             attempt["reproduced"] = compare_runs(rec, again)
             on_event("reproduced", {"attempt": n, "ok": attempt["reproduced"]["ok"]})
-        attempt["budget"] = check_budget(report, gate, attempt["guardrails"], target.get("budget"))
+        attempt["budget"] = check_budget(report, gate, attempt["guardrails"], target.get("budget"), attempt.get("undo"))
         if attempt.get("reproduced") and not attempt["reproduced"]["ok"]:
             attempt["budget"]["within"] = False
             attempt["budget"]["reasons"].append("a second clone did not reproduce this result, so it is likely to roll back at apply")

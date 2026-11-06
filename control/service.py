@@ -27,6 +27,7 @@ DEMO_TARGET_ID = "demo-saas"
 DEMO_HOST_ID = "demo-host"
 ROOT = Path(__file__).resolve().parent.parent
 TERMINAL = {"blocked", "applied", "rolled_back", "rejected", "drift_detected", "error", "no_change"}
+RACE_ONLY_REHEARSES = "this run is part of a race, which only rehearses, so it can't be approved or applied. Start the task from New task to take it further."
 
 
 def demo_target() -> dict:
@@ -249,12 +250,15 @@ class Service:
                     log.warning("suspect scan failed: %s", e)
 
             run["attempts"] = []
-            result = await run_loop(
+            single_plan = bool(run.get("single_plan"))
+            plan_loop = run_loop(
                 task=run["task"], fixed_steps=run.get("submitted_steps"), target=target, guardrails=run["guardrails"],
                 run_id=run["id"], snapshot_id=snap["snapshot_id"], runner=self.runner, inspection=inspection, on_event=on_event,
-                attempts=run["attempts"], measure_blocked=bool(run.get("measure_blocked")),
+                attempts=run["attempts"], measure_blocked=bool(run.get("measure_blocked")), single_plan=single_plan, explain_plan=not single_plan,
                 on_undo=lambda n, statements: self.store.kv_set(f"undo:{run['id']}:{n}", statements),
             )
+            # The loop calls the model without yielding. In a thread of its own, runs plan at once and every page keeps getting answers.
+            result = await asyncio.to_thread(asyncio.run, plan_loop)
             final = result["final"]
             run["final_attempt"] = final["n"]
             await self._second_opinion(run, final)
@@ -271,7 +275,7 @@ class Service:
 
     async def _second_opinion(self, run: dict, final: dict) -> None:
         """Only where a model wrote the plan from a request and it passed. A failed call leaves the decision to the rest."""
-        if not run.get("task") or run.get("submitted_steps") or final.get("verdict") != "passed":
+        if not run.get("task") or run.get("submitted_steps") or final.get("verdict") != "passed" or run.get("single_plan"):
             return
         try:
             final["second_opinion"] = await asyncio.to_thread(second_opinion, run["task"], final)
@@ -294,6 +298,14 @@ class Service:
 
     async def _conclude(self, run: dict, target: dict, final: dict) -> None:
         verdict = final.get("verdict")
+        if run.get("single_plan"):
+            # The agent's first plan is only ever measured. Even one that passed every check stays refused.
+            run["status"] = "blocked"
+            run["blocked_reason"] = "This is the agent's first plan, measured on a clone to show what it would do. It can't be approved or applied."
+            run["plan_hash"] = final.get("plan_hash")
+            self.event(run, "run_blocked", {"reason": "first_plan_only", "verdict": verdict})
+            self.store.save_run(run)
+            return
         if verdict != "passed":
             run["status"] = "blocked"
             run["blocked_reason"] = {
@@ -356,6 +368,8 @@ class Service:
         run = self.store.get_run(run_id)
         if run is None:
             raise ApprovalError(404, "run not found")
+        if run.get("race"):
+            raise ApprovalError(409, RACE_ONLY_REHEARSES)
         approval = approvals.grant(run, approver, presented)
         swapped = self.store.set_status_if(run_id, "awaiting_approval", "approved")
         if swapped is None:
@@ -380,6 +394,8 @@ class Service:
     # ---------------------------------------------------------------- apply
 
     async def apply(self, run_id: str, actor: str, drift_check: bool = True) -> dict:
+        if (self.store.get_run(run_id) or {}).get("race"):
+            raise ApprovalError(409, RACE_ONLY_REHEARSES)
         run = self.store.set_status_if(run_id, "approved", "applying")
         if run is None:
             current = self.store.get_run(run_id)
@@ -482,11 +498,39 @@ class Service:
         self.start(run)
         return run
 
+    def start_race(self, task: str, requester: str) -> dict:
+        """One task, two runs on one snapshot: the agent's first plan, measured and refused, and the normal pipeline.
+        Both are rehearse-only, and approve and apply refuse them, so neither lane can reach prod."""
+        race_id = f"race{uuid.uuid4().hex[:12]}"
+        alone = self.new_run(DEMO_TARGET_ID, requester, task, None, "race")
+        through = self.new_run(DEMO_TARGET_ID, requester, task, None, "race")
+        alone.update(rehearse_only=True, race={"id": race_id, "lane": "alone"}, measure_blocked=True, single_plan=True)
+        through.update(rehearse_only=True, race={"id": race_id, "lane": "through"})
+        self.store.save_run(alone)
+        self.store.save_run(through)
+        race = {"id": race_id, "created_at": time.time(), "requester": requester, "task": task, "target_id": DEMO_TARGET_ID, "alone": alone["id"], "through": through["id"]}
+        self.store.kv_set(f"race:{race_id}", race)
+        starter = asyncio.create_task(self._start_lanes(alone, through))
+        self._tasks.add(starter)
+        starter.add_done_callback(self._tasks.discard)
+        return race
+
+    async def _start_lanes(self, *lanes: dict) -> None:
+        # Take the snapshot first, so two lanes on a cold cache don't each dump prod. They both find this one.
+        try:
+            await self.ensure_snapshot(self.store.get_target(DEMO_TARGET_ID))
+        except Exception:
+            log.exception("race snapshot failed")  # Each lane meets the same failure and says so itself.
+        for run in lanes:
+            self.start(run)
+
     def rehearse_again(self, run_id: str, requester: str) -> dict:
         """Prod drifted: same plan, new snapshot, new rehearsal. Nothing carries over from the old one."""
         old = self.store.get_run(run_id)
         if old is None:
             raise KeyError(run_id)
+        if old.get("race"):
+            raise ValueError(RACE_ONLY_REHEARSES)
         final = next((a for a in old["attempts"] if a["n"] == old.get("final_attempt")), None)
         if final is None or "plan" not in final:
             raise ValueError("that run has no plan to rehearse again")

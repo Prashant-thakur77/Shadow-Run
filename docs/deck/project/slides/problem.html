@@ -1,0 +1,23 @@
+<section id="problem" data-transition="fade" style="background:#101213;color:#EFECE6;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<h2 style="font-size:72px;font-weight:700;line-height:1.1;letter-spacing:-1px">One command, and production is gone</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px">
+<div style="display:flex;flex-direction:column;gap:16px;background:#1A1D1F;padding:40px;border:1px solid #2E3235;border-radius:8px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#9A9A93">PocketOS, Apr 2026</p>
+<p style="font-size:72px;font-weight:700;line-height:1.05;color:#F08A7A">9 seconds</p>
+<p style="font-size:30px;line-height:1.35">Founder’s account: an agent found a token in an unrelated file and deleted the production volume and its backups.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px;background:#1A1D1F;padding:40px;border:1px solid #2E3235;border-radius:8px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#9A9A93">DataTalks.Club, Feb 2026</p>
+<p style="font-size:72px;font-weight:700;line-height:1.05;color:#F08A7A">A full day</p>
+<p style="font-size:30px;line-height:1.35">The agent ran <span style="color:#7FD1B9">terraform destroy</span> from a stale state file. VPC, database and snapshots went with it.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px;background:#1A1D1F;padding:40px;border:1px solid #2E3235;border-radius:8px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#9A9A93">SaaStr, Jul 2025</p>
+<p style="font-size:72px;font-weight:700;line-height:1.05;color:#F08A7A">Code freeze</p>
+<p style="font-size:30px;line-height:1.35">A Replit agent deleted live records during a freeze, then said a rollback wouldn’t work. The data was recovered by hand.</p>
+</div>
+</div>
+<p style="font-size:36px;line-height:1.35">In both 2026 cases, keeping dev and prod apart didn’t help: the agent reached a credential that touched prod, and the damage hid in side effects nobody listed.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#9A9A93">Salt Security, Oct 2026: 49.8% confirmed or suspected unauthorized agent activity. 17.5% can automatically stop an agent.</p>
+<aside>Lead with the outcome, not the sandbox. These are documented incidents, linked in the README. Sources: PC Gamer on PocketOS, Alexey Grigorev's own post-mortem, Fortune on SaaStr, Campus Technology on the Salt Security report.</aside>
+</section>

@@ -9,6 +9,7 @@ import { FooterSection } from '../run/Footer';
 import { GuardrailsSection } from '../run/Guardrails';
 import { handedOffRun } from '../run/handoff';
 import { IncidentBanner } from '../run/IncidentBanner';
+import { RaceBanner } from '../run/RaceBanner';
 import { LearnSection } from '../run/Learn';
 import { showsComparison, WithWithout } from '../run/WithWithout';
 import { RunHeader, TaskBlock } from '../run/Header';
@@ -133,7 +134,8 @@ export function RunPage({ id }: { id: string }) {
   const attempt = useMemo(() => (run ? selectedAttempt(run, picked) : null), [run, picked]);
   const steps = useMemo(() => (run ? storySteps(run, inProgress) : []), [run, inProgress]);
   const [breakResults, setBreakResults] = useState<Record<string, BreakResult[]>>({});
-  const showBreakIt = run?.status === 'awaiting_approval' || run?.status === 'approved' || Object.keys(breakResults).length > 0;
+  // A race's runs refuse every approval, so the controls on this panel would say nothing useful.
+  const showBreakIt = !run?.race && (run?.status === 'awaiting_approval' || run?.status === 'approved' || Object.keys(breakResults).length > 0);
 
   // The prod indicator follows the target this run is about.
   useEffect(() => {
@@ -308,7 +310,7 @@ export function RunPage({ id }: { id: string }) {
     }
   }
   // Learning needs a plan of SQL statements, so a Linux host has nothing to offer here.
-  if (['rejected', 'applied', 'awaiting_approval'].includes(run.status) && run.final?.report?.kind !== 'host' && run.final?.plan) {
+  if (['rejected', 'applied', 'awaiting_approval'].includes(run.status) && run.final?.report?.kind !== 'host' && run.final?.plan && !run.race) {
     items.push({
       id: 'learn',
       title: 'Turn this into a guardrail',
@@ -354,6 +356,7 @@ export function RunPage({ id }: { id: string }) {
             <RunRooms run={run} attempt={attempt} picked={picked} />
           </div>
           {run.incident && <IncidentBanner incident={run.incident} />}
+          {run.race && <RaceBanner race={run.race} />}
           <UndoRoundTrip run={run} />
           <StoppedProof run={run} />
         </Boundary>

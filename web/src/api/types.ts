@@ -391,7 +391,20 @@ export interface IncidentRef {
   adapted?: string;
 }
 
+/** One task, both ways at once. Each lane is an ordinary run, so the page polls those. */
+export interface Race {
+  id: string;
+  created_at?: number;
+  requester?: string;
+  task: string;
+  target_id?: string;
+  alone: string;
+  through: string;
+}
+
 export interface Run {
+  /** Set on a race's two lanes. They only rehearse, and the server refuses to approve or apply them. */
+  race?: { id: string; lane: 'alone' | 'through' } | null;
   prod_before_apply?: string | null;
   rehearse_only?: boolean;
   undo_of?: string;

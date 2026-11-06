@@ -45,6 +45,11 @@ export function Close() {
                 </a>
               </li>
             )}
+            {!guestOff && (
+              <li>
+                <Link href="/race">The race: one task, the agent alone against Shadow Run</Link>
+              </li>
+            )}
             <li>
               <Link href="/incidents">Real incidents, replayed</Link>
             </li>

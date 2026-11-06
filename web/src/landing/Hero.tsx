@@ -1,5 +1,6 @@
 import { useCallback, useState, type RefObject } from 'react';
 import { STACKED, useMedia, useReducedMotion } from '../lib/media';
+import { Link } from '../lib/router';
 import { sourceLine } from '../ui/Figure';
 import { PrimaryButton } from '../ui/Halftone';
 import { ReplayControls, TwoRooms, TwoRoomsEmpty, useRehearsal } from '../ui/TwoRooms';
@@ -37,6 +38,11 @@ export function Hero({ ctaRef, ctaOffscreen }: { ctaRef: RefObject<HTMLButtonEle
             <PrimaryButton type="button" className="btn-large" ref={ctaRef} disabled={busy} onClick={() => void enter()} onFocus={preloadHome} onMouseOver={preloadHome} style={{ visibility: ctaOffscreen ? 'hidden' : 'visible' }}>
               {busy ? 'Entering' : 'Continue as guest'}
             </PrimaryButton>
+          )}
+          {!guestOff && (
+            <Link href="/race" className="btn btn-large hero-race">
+              Race the agent
+            </Link>
           )}
           <p className="hero-note">
             {guestOff ? (

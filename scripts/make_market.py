@@ -15,6 +15,7 @@ AGENTS_2033_B = 182.9
 GUARDIAN_LOW, GUARDIAN_HIGH = 10, 15
 POSTGRES_COMPANIES = 131339
 PRICE_PER_DB_MONTH = 500
+FIRST_TARGET_PCT = 1
 
 
 def main() -> None:
@@ -56,7 +57,9 @@ def main() -> None:
             "tam_usd_b_on_2033_forecast": [round(AGENTS_2033_B * GUARDIAN_LOW / 100, 1), round(AGENTS_2033_B * GUARDIAN_HIGH / 100, 1)],
             "tam_how": "Gartner's guardian-agent share applied to Grand View's market size. Two firms' numbers, combined by us.",
             "sam_usd_b_per_year": round(POSTGRES_COMPANIES * PRICE_PER_DB_MONTH * 12 / 1e9, 2),
-            "sam_how": "Companies using PostgreSQL, one protected database each, at our planned price.",
+            "sam_how": "A ceiling: every company using PostgreSQL, one protected database each, at our planned price. Not all of them let agents near prod.",
+            "first_target_pct": FIRST_TARGET_PCT,
+            "first_target_usd_m_per_year": round(POSTGRES_COMPANIES * FIRST_TARGET_PCT / 100 * PRICE_PER_DB_MONTH * 12 / 1e6, 1),
         },
         "revenue": [
             "A monthly subscription per protected database, since cost grows with database size and not with seats.",
@@ -66,6 +69,11 @@ def main() -> None:
             "The pull request Action, rehearse only and free: every migration gets a comment saying what it really does.",
             "MCP for the agent: it gives up its database URL, and every change waits for a person.",
             "A short auto-apply list, once the team has seen enough reports.",
+        ],
+        "next": [
+            "Thin clones, so a rehearsal stays fast past a few gigabytes, and masking personal data in the clone.",
+            "An auto-apply list that grows: suggest additions from what a team keeps approving, and test each against the attacker first.",
+            "First customers: the free Action on real teams' migrations, then paid protected databases.",
         ],
         "competition": [
             {

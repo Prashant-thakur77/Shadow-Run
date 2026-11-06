@@ -1,0 +1,22 @@
+<section id="how" data-transition="fade" style="background:#F4F2EC;color:#16191B;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:44px">
+<h2 style="font-size:72px;font-weight:700;line-height:1.1;letter-spacing:-1px">The agent never gets the credential</h2>
+<div style="display:grid;grid-template-columns:72px 1fr 72px 1fr;gap:26px 24px;align-items:start">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:44px;font-weight:600;color:#0B7A5E">1</p>
+<p style="font-size:32px;line-height:1.3"><b>Freeze.</b> SHA-256 of the exact steps, with the guardrails hashed alongside.</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:44px;font-weight:600;color:#0B7A5E">2</p>
+<p style="font-size:32px;line-height:1.3"><b>Read.</b> A static gate parses it. What it can’t read counts as unsafe.</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:44px;font-weight:600;color:#0B7A5E">3</p>
+<p style="font-size:32px;line-height:1.3"><b>Rehearse.</b> A full clone in a fresh microVM, with no network device and no secrets.</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:44px;font-weight:600;color:#0B7A5E">4</p>
+<p style="font-size:32px;line-height:1.3"><b>Measure.</b> Postgres reports rows per table, and traces each cascade to its step. No model involved.</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:44px;font-weight:600;color:#0B7A5E">5</p>
+<p style="font-size:32px;line-height:1.3"><b>Check.</b> Frozen guardrails the agent can’t edit. A failure goes back to the agent.</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:44px;font-weight:600;color:#0B7A5E">6</p>
+<p style="font-size:32px;line-height:1.3"><b>Approve.</b> A second clone agrees and an undo is proved. Then a different person approves those exact hashes.</p>
+</div>
+<div style="background:#16191B;color:#EFECE6;padding:36px 44px;border-radius:8px;display:flex;align-items:center;gap:32px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:44px;font-weight:600;color:#7FD1B9">7</p>
+<p style="font-size:36px;line-height:1.3"><b>Apply.</b> The same plan runs on prod in one transaction. If counts, row content, schema or guardrails differ from the rehearsal, it rolls back.</p>
+</div>
+<aside>The model proposes and explains. Postgres measures. Frozen checks decide. The agent reaches this through MCP, the web app or the CLI, with no database URL or SSH key.</aside>
+</section>

@@ -1,0 +1,15 @@
+<section id="results" data-transition="fade" style="background:#F4F2EC;color:#16191B;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<h2 style="font-size:72px;font-weight:700;line-height:1.1;letter-spacing:-1px">Same agent, same prompt, same database</h2>
+<table style="font-size:30px;color:#16191B">
+<tr><th style="width:46%;text-align:left">Metric</th><th style="width:18%;text-align:right">Agent directly</th><th style="width:18%;text-align:right">Static gate</th><th style="width:18%;text-align:right">Shadow Run</th></tr>
+<tr><td>Did the job, no harm, held-out risky tasks (Shadow Run: approved unread)</td><td style="text-align:right">[n]</td><td style="text-align:right">[n]</td><td style="text-align:right">[n]</td></tr>
+<tr><td>Harm on prod, same runs</td><td style="text-align:right">[n]</td><td style="text-align:right">[n]</td><td style="text-align:right">[n]</td></tr>
+<tr><td>Harm on prod with no person, held-out risky tasks</td><td style="text-align:right">[n]</td><td style="text-align:right">[n]</td><td style="text-align:right">[n]</td></tr>
+<tr><td>Harm on prod with no person, SABER-derived tasks</td><td style="text-align:right">[n]</td><td style="text-align:right">[n]</td><td style="text-align:right">[n]</td></tr>
+<tr><td>Safe tasks wrongly blocked</td><td style="text-align:right">0</td><td style="text-align:right">[n]</td><td style="text-align:right">[n]</td></tr>
+<tr><td>Rehearsal time, median</td><td style="text-align:right">n/a</td><td style="text-align:right">n/a</td><td style="text-align:right">[n] s</td></tr>
+<tr><td>Inference cost per task</td><td style="text-align:right">$[n]</td><td style="text-align:right">$[n]</td><td style="text-align:right">$[n]</td></tr>
+</table>
+<p style="font-size:30px;line-height:1.35">The agent finishes more of the work because it saw what its plan would really do and rewrote it. The zero comes from the hold: nearly every risky plan waits for a person. Oracles were written separately, and every number comes from a script in the repo.</p>
+<aside>Lead with the first row: the job gets done more often, and with less harm, even if the reviewer reads nothing. Say plainly that the zero is the hold, and that safe work waits for a person too. That is the price.</aside>
+</section>

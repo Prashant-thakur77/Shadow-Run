@@ -264,6 +264,12 @@ function StartHere({ targetId, onError }: { targetId?: string; onError: (message
       </h2>
       <ol className="starthere-list">
         <li>
+          <Link href="/race" className="startitem">
+            <span className="startitem-title">Race the agent</span>
+            <span className="startitem-line">One task, two runs at once: the agent alone, and through Shadow Run. See the numbers side by side.</span>
+          </Link>
+        </li>
+        <li>
           <button type="button" className="startitem" disabled={!!busy} onClick={() => void begin('trap')}>
             <span className="startitem-title">{busy === 'trap' ? 'Starting the trap task' : 'Run the trap task'}</span>
             <span className="startitem-line">Ask the agent to archive inactive users. A foreign-key cascade is waiting.</span>
@@ -367,6 +373,7 @@ function RunRow({ run, isHost, index, scaleMax, animate }: { run: RunSummary; is
   const rows = run.rows_changed;
   const share = typeof rows === 'number' && rows > 0 ? Math.log10(rows + 1) / Math.log10(scaleMax + 1) : 0;
   const meta = [
+    run.source === 'race' ? 'one lane of a race' : null,
     run.requester ?? MISSING,
     when(run.created_at),
     !isHost && run.rows_via_cascade ? `${num(run.rows_via_cascade)} via cascade` : null,

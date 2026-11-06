@@ -91,6 +91,8 @@ Start body, optional: `{rounds: 1-10, policy: "named_scope" | "row_budget_only"}
 
 **Auto-apply list.** `target.budget.auto_apply_scope` is `{table: "*" | [columns]}` for Postgres and `target.budget.auto_apply_paths` is a list of path prefixes for hosts. A change outside it needs a person, however small. Reports add `changed_columns: {table: {column: updates}}`.
 
+**Race.** `POST /api/race {task}` starts two rehearse-only runs on one snapshot: the agent's first plan with no feedback, and the normal pipeline. Returns `{id, alone, through}`, which are run IDs to poll. `GET /api/race/{id}` reads one back, with no login. Neither lane can be approved or applied. Counts as two agent runs for limits.
+
 **Incident replay.** `GET /api/incidents` (no login): `[{id, when, who, source, happened, target, command, adapted}]`. `POST /api/incidents/{id}/replay` returns `201 {id, status}`, a run with `incident` set. Such a run is measured even when the gate refuses it, so a blocked run can have `final.report`.
 
 **Receipts.** `GET /api/receipts` (no login): `{items: [{group, claim, value? , values?, must?, detail?, at, source, rerun, commit?}], note}`. Every measured claim and the command that reproduces it.

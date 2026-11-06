@@ -1,0 +1,5 @@
+<section id="architecture" data-transition="fade" style="background:#F4F2EC;color:#16191B;font-family:'IBM Plex Sans', Arial, sans-serif;padding:64px 128px 64px;display:flex;flex-direction:column;gap:24px">
+<h2 style="font-size:60px;font-weight:700;line-height:1.1;letter-spacing:-1px">Only the control plane can reach prod</h2>
+<img src="/_blob/b7786d689981db415feb044c94bafbdb" alt="Architecture: the web app, MCP agents and CLI reach a control plane VM, which holds the only production credential. It sends plans to a VX1 host, where a fresh microVM with no network and no credentials runs each one. The control plane calls Vultr Serverless Inference, snapshots and applies to Managed Postgres, and writes evidence to Object Storage." style="width:1664px;height:860px;object-fit:contain;background:#FFFFFF;border-radius:8px">
+<aside>Two VMs on one VPC Network, plus Managed Postgres, Object Storage and Serverless Inference. The microVM gets a clone and a plan, never a credential.</aside>
+</section>

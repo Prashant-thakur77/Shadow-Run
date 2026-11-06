@@ -4,8 +4,9 @@ import type { Run } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { pollDelay } from '../lib/status';
 
-/** Polls about once a second while a run moves, more slowly while it waits on a person, and stops once it is finished. */
-export function useRun(id: string) {
+/** Polls about once a second while a run moves, more slowly while it waits on a person, and stops once it is finished.
+ *  `settled` can end that earlier, for a page that has nothing more to learn from a run in some status. */
+export function useRun(id: string, settled?: (status: string) => boolean) {
   const { version } = useAuth();
   const [run, setRunState] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +24,7 @@ export function useRun(id: string) {
         if (stopped) return;
         setRunState(next);
         setError(null);
-        delay = pollDelay(next.status, fast.current);
+        delay = settled?.(next.status) ? null : pollDelay(next.status, fast.current);
       } catch (e) {
         if (stopped) return;
         if (e instanceof ApiError && e.status === 404) {

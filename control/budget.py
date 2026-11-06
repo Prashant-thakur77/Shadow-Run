@@ -9,7 +9,24 @@ DEFAULT_BUDGET = {"max_rows_changed": 100, "max_table_pct": 10.0, "max_cascade_r
 DEFAULT_HOST_BUDGET = {"max_files_deleted": 20, "max_files_changed": 5, "max_services_stopped": 0, "auto_apply_paths": []}
 
 
+# An entry in an auto-apply list, beside the table names: the owner accepts new columns and indexes with no person.
+ADDITIVE_SCHEMA = "@additive_schema"
 IRREVERSIBLE_REASON = "the plan contains an irreversible write (DELETE, DROP, TRUNCATE, rm), which always needs a person"
+
+
+def _additive(diff: dict, scope: dict) -> bool:
+    """A new column or index, on a list whose owner accepts those. Adding is what an undo can really take back."""
+    return bool(scope.get(ADDITIVE_SCHEMA)) and diff.get("change") == "added" and diff.get("kind") in ("column", "index")
+
+
+def delete_is_accepted(report: dict, scope: dict | None, undo: dict | None) -> bool:
+    """A delete can run with no person only where the owner listed the whole table and an undo has been proved on the clone."""
+    totals = report.get("totals", {})
+    if not scope or not undo or undo.get("verified") is not True:
+        return False
+    if totals.get("tables_dropped") or totals.get("tables_truncated") or totals.get("rows_via_cascade"):
+        return False
+    return all(scope.get(t["table"]) == "*" for t in report.get("tables", []) if t.get("deleted"))
 
 
 def outside_scope(report: dict, scope: dict) -> list[str]:
@@ -33,6 +50,8 @@ def outside_scope(report: dict, scope: dict) -> list[str]:
                 reasons.append(f"{name}.{outside[0]} is not on the auto-apply list")
     for d in report.get("schema_diff", []):
         table = d["name"].split(".")[0]
+        if _additive(d, scope):
+            continue
         if scope.get(table) != "*":
             reasons.append(f"schema change on {table} is not on the auto-apply list")
     return reasons
@@ -102,7 +121,7 @@ def check_host_budget(report: dict, gate: dict, guardrails: list[dict], budget: 
     return {"within": not reasons, "reasons": reasons, "limits": b}
 
 
-def check_budget(report: dict, gate: dict, guardrails: list[dict], budget: dict | None = None) -> dict:
+def check_budget(report: dict, gate: dict, guardrails: list[dict], budget: dict | None = None, undo: dict | None = None) -> dict:
     """Returns within=True only when every limit holds. Evidence that is absent counts as over budget."""
     if report.get("kind") == "host":
         return check_host_budget(report, gate, guardrails, budget)
@@ -112,7 +131,8 @@ def check_budget(report: dict, gate: dict, guardrails: list[dict], budget: dict 
     if not totals:
         reasons.append("no measurements from the rehearsal")
     # Measured as well as classified: a function body or a CTE can hide a DELETE from the gate, not from this.
-    if gate.get("highest_risk") == "irreversible_write" or totals.get("rows_deleted", 0) > 0:
+    scope = b.get("auto_apply_scope")
+    if (gate.get("highest_risk") == "irreversible_write" or totals.get("rows_deleted", 0) > 0) and not delete_is_accepted(report, scope, undo):
         reasons.append(IRREVERSIBLE_REASON)
     if report.get("unlogged_changes"):
         reasons.append("rows changed with no row-level record, so the numbers here do not cover this change")
@@ -123,14 +143,17 @@ def check_budget(report: dict, gate: dict, guardrails: list[dict], budget: dict 
     executable = [d["name"] for d in report.get("schema_diff", []) if d.get("kind") in ("trigger", "function", "rule") and d.get("change") != "removed"]
     if executable:
         reasons.append("the plan adds code that keeps running on prod: " + ", ".join(executable[:3]))
-    if totals.get("rows_changed", 0) > b["max_rows_changed"]:
-        reasons.append(f"{totals['rows_changed']} rows changed; budget is {b['max_rows_changed']}")
+    # A row limit is for what might go wrong in tables nobody chose. On a table listed whole, the owner has already said yes.
+    whole = {t for t, cols in (scope or {}).items() if cols == "*"}
+    counted = totals.get("rows_changed", 0) - sum(t.get("inserted", 0) + t.get("updated", 0) + t.get("deleted", 0) for t in report.get("tables", []) if t["table"] in whole)
+    if counted > b["max_rows_changed"]:
+        reasons.append(f"{counted} rows changed; budget is {b['max_rows_changed']}")
     if totals.get("rows_via_cascade", 0) > b["max_cascade_rows"]:
         reasons.append(f"{totals['rows_via_cascade']} rows changed by cascade; budget is {b['max_cascade_rows']}")
     for t in report.get("tables", []):
         pct = t.get("pct_of_table")
         # Very small tables would trip a percentage on a single row, so the row budget covers those.
-        if pct is not None and pct > b["max_table_pct"] and (t.get("rows_before") or 0) > b["max_rows_changed"]:
+        if t["table"] not in whole and pct is not None and pct > b["max_table_pct"] and (t.get("rows_before") or 0) > b["max_rows_changed"]:
             reasons.append(f"{pct}% of {t['table']} touched; budget is {b['max_table_pct']}%")
     if totals.get("tables_dropped") and not b["allow_drop"]:
         reasons.append(f"{totals['tables_dropped']} table(s) dropped")
@@ -141,7 +164,8 @@ def check_budget(report: dict, gate: dict, guardrails: list[dict], budget: dict 
     removed = [d for d in report.get("schema_diff", []) if d["change"] == "removed"]
     if removed:
         reasons.append(f"{len(removed)} schema object(s) removed")
-    if not b["allow_ddl"] and report.get("ddl"):
+    additive_only = bool(scope) and bool(report.get("schema_diff")) and all(_additive(d, scope) for d in report["schema_diff"]) and (undo or {}).get("verified") is True
+    if not b["allow_ddl"] and report.get("ddl") and not additive_only:
         reasons.append("the plan changes the schema")
     if b.get("auto_apply_scope") is not None:
         reasons.extend(outside_scope(report, b["auto_apply_scope"]))

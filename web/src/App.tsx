@@ -14,6 +14,7 @@ import { Boundary, Loading, Mark } from './ui/bits';
 // doesn't download the authenticated pages.
 const load = {
   home: () => import('./pages/Home'),
+  race: () => import('./pages/Race'),
   run: () => import('./pages/RunPage'),
   redteam: () => import('./pages/RedTeam'),
   target: () => import('./pages/Target'),
@@ -23,6 +24,7 @@ const load = {
   audit: () => import('./pages/Audit'),
 };
 const HomePage = lazy(() => load.home().then((m) => ({ default: m.HomePage })));
+const RacePage = lazy(() => load.race().then((m) => ({ default: m.RacePage })));
 const RunPage = lazy(() => load.run().then((m) => ({ default: m.RunPage })));
 const RedTeamPage = lazy(() => load.redteam().then((m) => ({ default: m.RedTeamPage })));
 const TargetPage = lazy(() => load.target().then((m) => ({ default: m.TargetPage })));
@@ -52,7 +54,8 @@ export function App() {
   );
 }
 
-const PUBLIC_PATHS = ['/results', '/incidents', '/receipts'];
+// The race signs a guest in itself, so a link to it goes straight to the race.
+const PUBLIC_PATHS = ['/results', '/incidents', '/receipts', '/race'];
 
 function Shell() {
   const { user, ready } = useAuth();
@@ -62,8 +65,8 @@ function Shell() {
 
   useEffect(() => {
     const base = 'Shadow Run';
-    document.title = runMatch ? `Run ${decodeURIComponent(runMatch[1])} · ${base}` : base;
-  }, [runMatch?.[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+    document.title = runMatch ? `Run ${decodeURIComponent(runMatch[1])} · ${base}` : path === '/race' ? `The race · ${base}` : base;
+  }, [runMatch?.[1], path]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!ready) {
     return (
@@ -78,6 +81,7 @@ function Shell() {
 
   let page = <NotFound />;
   if (path === '/') page = <HomePage />;
+  else if (path === '/race') page = <RacePage />;
   else if (runMatch) page = <RunPage key={runMatch[1]} id={decodeURIComponent(runMatch[1])} />;
   else if (path === '/redteam') page = <RedTeamPage />;
   else if (path === '/guardrails') page = <TargetPage />;
@@ -132,6 +136,7 @@ function NotFound() {
 
 const NAV = [
   { href: '/', label: 'New task' },
+  { href: '/race', label: 'Race' },
   { href: '/redteam', label: 'Red team' },
   { href: '/guardrails', label: 'Guardrails' },
   { href: '/incidents', label: 'Incidents' },
@@ -233,7 +238,7 @@ function BottomBar() {
   const isActive = useIsActive();
   const { unseeded } = useProd();
   const sheet = useRef<HTMLDialogElement>(null);
-  const items = user ? NAV.filter((n) => ['/', '/redteam', '/incidents', '/receipts'].includes(n.href)) : [{ href: '/', label: 'Enter' }, ...NAV.filter((n) => ['/incidents', '/receipts', '/results'].includes(n.href))];
+  const items = user ? NAV.filter((n) => ['/', '/race', '/redteam', '/incidents'].includes(n.href)) : [{ href: '/', label: 'Enter' }, ...NAV.filter((n) => ['/race', '/incidents', '/receipts', '/results'].includes(n.href))];
   const rest = user ? NAV.filter((n) => !items.some((i) => i.href === n.href)) : [];
 
   useEffect(() => {

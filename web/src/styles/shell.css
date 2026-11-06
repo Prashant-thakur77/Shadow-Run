@@ -431,7 +431,7 @@
   }
 }
 
-@media (max-width: 1040px) {
+@media (max-width: 1090px) {
   .topbar-row {
     flex-wrap: wrap;
     height: auto;
@@ -453,8 +453,8 @@
   }
 }
 
-/* The chip's seed line needs room this single row doesn't have, so the nav takes its own row, as it does below 1040. */
-@media (min-width: 1041px) and (max-width: 1140px) {
+/* The chip's seed line needs room this single row doesn't have, so the nav takes its own row, as it does below 1090. */
+@media (min-width: 1091px) and (max-width: 1190px) {
   .topbar-row:has(.prod.has-seed-line) {
     flex-wrap: wrap;
     height: auto;

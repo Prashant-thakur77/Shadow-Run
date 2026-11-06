@@ -42,7 +42,9 @@
   ],
   "tam_how": "Gartner's guardian-agent share applied to Grand View's market size. Two firms' numbers, combined by us.",
   "sam_usd_b_per_year": 0.79,
-  "sam_how": "Companies using PostgreSQL, one protected database each, at our planned price."
+  "sam_how": "A ceiling: every company using PostgreSQL, one protected database each, at our planned price. Not all of them let agents near prod.",
+  "first_target_pct": 1,
+  "first_target_usd_m_per_year": 7.9
  },
  "revenue": [
   "A monthly subscription per protected database, since cost grows with database size and not with seats.",
@@ -52,6 +54,11 @@
   "The pull request Action, rehearse only and free: every migration gets a comment saying what it really does.",
   "MCP for the agent: it gives up its database URL, and every change waits for a person.",
   "A short auto-apply list, once the team has seen enough reports."
+ ],
+ "next": [
+  "Thin clones, so a rehearsal stays fast past a few gigabytes, and masking personal data in the clone.",
+  "An auto-apply list that grows: suggest additions from what a team keeps approving, and test each against the attacker first.",
+  "First customers: the free Action on real teams' migrations, then paid protected databases."
  ],
  "competition": [
   {

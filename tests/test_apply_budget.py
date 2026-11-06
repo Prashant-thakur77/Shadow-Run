@@ -593,3 +593,71 @@ def test_a_plan_calling_an_unlisted_function_needs_a_person():
     report = {"totals": {"rows_changed": 1}, "tables": [], "schema_diff": []}
     gate = {"verdict": "pass", "no_person": {"functions": ["team_function"]}}
     assert "team_function" in " ".join(check_budget(report, gate, [])["reasons"])
+
+
+WIDE = {"auto_apply_scope": {"sessions": "*", "products": ["name"], "@additive_schema": True}, "allow_ddl": False}
+PROVED = {"possible": True, "verified": True}
+
+
+def _table_report(name, **counts):
+    row = {"table": name, "inserted": 0, "updated": 0, "deleted": 0, "rows_before": 3000, "pct_of_table": 40.0, **counts}
+    changed = sum(counts.values())
+    return {"totals": {"rows_changed": changed, "rows_deleted": counts.get("deleted", 0)}, "tables": [row], "schema_diff": [], "changed_columns": {}}
+
+
+PASS = {"verdict": "pass", "highest_risk": "irreversible_write"}
+
+
+def test_a_delete_on_a_table_listed_whole_runs_alone_if_its_undo_is_proved():
+    verdict = check_budget(_table_report("sessions", deleted=1302), PASS, [], WIDE, PROVED)
+    assert verdict["within"] is True, verdict["reasons"]
+
+
+@pytest.mark.parametrize("report,undo", [
+    (_table_report("sessions", deleted=1302), None),  # no undo
+    (_table_report("sessions", deleted=1302), {"possible": True, "verified": False}),
+    (_table_report("users", deleted=1), PROVED),  # not on the list
+    (_table_report("products", deleted=1), PROVED),  # listed by column, not whole
+])
+def test_a_delete_otherwise_needs_a_person(report, undo):
+    assert check_budget(report, PASS, [], WIDE, undo)["within"] is False
+
+
+@pytest.mark.parametrize("extra", [{"rows_via_cascade": 3}, {"tables_truncated": 1}, {"tables_dropped": 1}])
+def test_a_cascade_truncate_or_drop_never_runs_alone_even_on_a_listed_table(extra):
+    report = _table_report("sessions", deleted=5)
+    report["totals"].update(extra)
+    assert check_budget(report, PASS, [], WIDE, PROVED)["within"] is False
+
+
+def test_the_row_limit_still_counts_tables_not_listed_whole():
+    report = _table_report("products", updated=500)
+    report["changed_columns"] = {"products": {"name": 500}}
+    assert any("500 rows" in r for r in check_budget(report, {"verdict": "pass"}, [], WIDE, PROVED)["reasons"])
+
+
+def _schema_report(*diff):
+    return {"totals": {"ddl_commands": 1}, "tables": [], "schema_diff": list(diff), "ddl": [{"step": 1, "tag": "ALTER TABLE"}], "changed_columns": {}}
+
+
+def test_a_new_column_or_index_runs_alone_where_the_owner_accepts_those():
+    report = _schema_report({"kind": "column", "name": "accounts.billing_email", "change": "added"}, {"kind": "index", "name": "orders.idx", "change": "added"})
+    verdict = check_budget(report, {"verdict": "pass"}, [], WIDE, PROVED)
+    assert verdict["within"] is True, verdict["reasons"]
+
+
+@pytest.mark.parametrize("diff", [
+    {"kind": "column", "name": "accounts.email", "change": "changed"},
+    {"kind": "column", "name": "accounts.email", "change": "removed"},
+    {"kind": "trigger", "name": "accounts.t", "change": "added"},
+    {"kind": "table", "name": "accounts_new", "change": "added"},
+])
+def test_any_other_schema_change_needs_a_person(diff):
+    assert check_budget(_schema_report(diff), {"verdict": "pass"}, [], WIDE, PROVED)["within"] is False
+
+
+def test_a_new_column_needs_a_person_unless_the_list_says_so_and_the_undo_is_proved():
+    report = _schema_report({"kind": "column", "name": "accounts.b", "change": "added"})
+    assert check_budget(report, {"verdict": "pass"}, [], {"auto_apply_scope": {"accounts": ["x"]}, "allow_ddl": False}, PROVED)["within"] is False
+    assert check_budget(report, {"verdict": "pass"}, [], WIDE, None)["within"] is False
+

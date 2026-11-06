@@ -565,7 +565,8 @@ export function DecisionBar({ run, setRun, pollFast }: { run: Run; setRun: (r: R
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [panelInView, setPanelInView] = useState(false);
-  const waiting = run.status === 'awaiting_approval' || run.status === 'approved';
+  // A race's runs can't be approved, so there's no decision to keep in reach.
+  const waiting = (run.status === 'awaiting_approval' || run.status === 'approved') && !run.race;
 
   useEffect(() => {
     const el = document.getElementById('decision');
@@ -663,7 +664,16 @@ export function DecisionSection({ run, setRun, pollFast }: { run: Run; setRun: (
   );
 }
 
+function RacePanel() {
+  return (
+    <Notice tone="wait" title="This plan is held. It came from a race, which only rehearses.">
+      In a normal run a different person would approve these exact hashes. Here the server refuses to approve or apply it, so nothing from a race can reach prod. To take this further, start the task from <Link href="/">New task</Link>.
+    </Notice>
+  );
+}
+
 function DecisionPanel({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) => void; pollFast: (on: boolean) => void }) {
+  if (run.race && run.status === 'awaiting_approval') return <RacePanel />;
   switch (run.status) {
     case 'awaiting_approval':
       return run.can?.approve ? <ApprovePanel run={run} setRun={setRun} /> : <RequesterPanel run={run} />;
@@ -692,7 +702,7 @@ function DecisionPanel({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) =
             Blocked. Nothing reached prod.
           </div>
           <p className="outcome-line">{run.blocked_reason ?? 'The run was blocked.'}</p>
-          <p>{guardrail ? 'There is nothing for a reviewer to sign. The plan itself has to change.' : 'There is nothing to approve. The plan itself has to change.'}</p>
+          {run.race?.lane !== 'alone' && <p>{guardrail ? 'There is nothing for a reviewer to sign. The plan itself has to change.' : 'There is nothing to approve. The plan itself has to change.'}</p>}
           <p>
             <Link href="/">Start a new task</Link>
           </p>

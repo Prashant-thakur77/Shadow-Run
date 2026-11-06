@@ -12,6 +12,7 @@ import type {
   Me,
   ProdChecksum,
   PublicInfo,
+  Race,
   Receipt,
   RedTeamRun,
   Run,
@@ -136,6 +137,8 @@ export const api = {
   run: (id: string) => call<Run>('GET', `/api/runs/${encodeURIComponent(id)}`),
   startRun: (body: { task?: string; steps?: { type: 'sql' | 'shell'; cmd: string }[]; target_id?: string; source?: string }) =>
     call<{ id: string; status: string }>('POST', '/api/runs', { source: 'web', ...body }),
+  raceStart: (task: string) => call<Race>('POST', '/api/race', { task }),
+  race: (id: string) => call<Race>('GET', `/api/race/${encodeURIComponent(id)}`),
   approve: (id: string, c: Pick<Challenge, 'plan_hash' | 'guardrails_hash' | 'report_hash' | 'nonce'>) =>
     call<Run>('POST', `/api/runs/${encodeURIComponent(id)}/approve`, {
       plan_hash: c.plan_hash,

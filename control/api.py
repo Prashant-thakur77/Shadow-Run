@@ -92,6 +92,10 @@ class RunBody(BaseModel):
     rehearse_only: bool = False
 
 
+class RaceBody(BaseModel):
+    task: str = Field(min_length=1, max_length=2000)
+
+
 class ApproveBody(BaseModel):
     plan_hash: str
     guardrails_hash: str
@@ -145,14 +149,14 @@ def refuse_oversized(steps: Any) -> None:
         raise HTTPException(413, problem)
 
 
-def limit(user: str, action: str, per_hour: int) -> None:
+def limit(user: str, action: str, per_hour: int, cost: int = 1) -> None:
     """The demo logins are public, so nothing that costs money or disturbs prod may be unlimited."""
     now = time.time()
     key = (client_ip.get(), action)
     hits = [t for t in _hits.get(key, []) if now - t < 3600]
-    if len(hits) >= per_hour:
+    if len(hits) + cost > per_hour:
         raise HTTPException(429, f"limit of {per_hour} {action} per hour reached")
-    hits.append(now)
+    hits.extend([now] * cost)
     _hits[key] = hits
 
 
@@ -172,13 +176,14 @@ def run_view(run: dict, user: str | None = None) -> dict:
     # While the loop runs there is no final attempt yet, so show the latest one.
     final = next((a for a in attempts if a["n"] == run.get("final_attempt")), None) or (attempts[-1] if attempts else None)
     v["final"] = final
-    if run["status"] == "awaiting_approval" and run.get("plan_hash"):
+    in_race = bool(run.get("race"))
+    if run["status"] == "awaiting_approval" and run.get("plan_hash") and not in_race:
         v["challenge"] = challenge(run)
     v.pop("approval_nonce", None)
     v["can"] = {
-        "approve": run["status"] == "awaiting_approval" and user is not None and user != run["requester"],
-        "approve_blocked_reason": "You requested this run, so a different person has to approve it." if run["status"] == "awaiting_approval" and user == run["requester"] else None,
-        "apply": run["status"] == "approved",
+        "approve": run["status"] == "awaiting_approval" and user is not None and user != run["requester"] and not in_race,
+        "approve_blocked_reason": "You requested this run, so a different person has to approve it." if run["status"] == "awaiting_approval" and user == run["requester"] and not in_race else None,
+        "apply": run["status"] == "approved" and not in_race,
         "rehearse_again": run["status"] in ("drift_detected", "rolled_back"),
     }
     ev = run.get("evidence") or {}
@@ -576,6 +581,33 @@ def receipts() -> dict:
     if so:
         items.append({"group": "Soak", "claim": f"{so['rehearsals']} rehearsals, every one contained with teardown confirmed", "value": "yes" if so["all_contained"] and so["all_teardown_ok"] else "NO", "at": so["at"], "source": "bench/soak.json", "rerun": so["rerun"]})
     return {"items": items, "note": "Nothing here is estimated. A claim with no measurement isn't listed." if items else "not measured yet"}
+
+
+@app.post("/api/race", status_code=201)
+async def start_race(body: RaceBody, user: str = Depends(auth.current_user)) -> dict:
+    """One task, both ways at once. It's two agent runs, so it counts as two, and it needs room for two."""
+    s = svc()
+    task = body.task.strip()
+    if not task:
+        raise HTTPException(422, "send a task")
+    if not s.store.get_target(DEMO_TARGET_ID):
+        raise HTTPException(404, "this deployment has no demo database to race on")
+    if len(s._tasks) + 2 > settings.MAX_RUNNING:
+        raise HTTPException(429, "the runner is busy; try again in a minute")
+    if s.store.count_runs_since(user, time.time() - 3600) + 2 > settings.RUNS_PER_HOUR * 12:
+        raise HTTPException(429, "the demo is very busy; try again in a while")
+    require_inference_budget()
+    limit(user, "agent runs", settings.RUNS_PER_HOUR, cost=2)
+    limit(user, "runs", settings.RUNS_PER_HOUR * 4, cost=2)
+    return s.start_race(task, user)
+
+
+@app.get("/api/race/{race_id}")
+def get_race(race_id: str, user: str = Depends(auth.current_user)) -> dict:
+    race = svc().store.kv_get(f"race:{race_id}")
+    if not race:
+        raise HTTPException(404, "no such race")
+    return race
 
 
 @app.post("/api/runs/{run_id}/rehearse-again", status_code=201)
