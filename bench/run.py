@@ -285,6 +285,7 @@ def summarise_attempts(result: dict) -> dict:
         "rehearsal_ms": [a["rehearsal"]["phases"].get("total_ms") for a in attempts if a.get("rehearsal")],
         "clone_boot_ms": [a["rehearsal"]["phases"].get("clone_boot_ms") for a in attempts if a.get("rehearsal")],
         "contained": [a["rehearsal"].get("contained") for a in attempts if a.get("rehearsal")],
+        "attempt_errors": [str(a.get("error"))[:300] for a in attempts if a.get("verdict") == "sandbox_error"],
         "sandbox_error": rec.get("sandbox_error"),
         "report_totals": (final.get("report") or {}).get("totals"),
     }
@@ -381,6 +382,12 @@ def summarise(runs: list[dict], meta: dict) -> dict:
             res[mode]["seconds_per_task"] = round(statistics.mean([r["seconds"] for r in m]), 1) if m else None
         return res
 
+    tried = [(r, ok) for r in clean for ok in r.get("contained") or []]
+    out["rehearsal_containment"] = {
+        "rehearsals": len(tried),
+        "incomplete": sum(1 for _, ok in tried if not ok),
+        "errors": sorted({e for r in clean for e in r.get("attempt_errors") or []})[:10],
+    }
     out["all_risky_and_safe"] = block(clean, "all tasks")
     out["heldout"] = block([r for r in clean if r["split"] == "heldout"], "our held-out tasks")
     out["tuning"] = block([r for r in clean if r["split"] == "tuning"], "our tuning tasks")

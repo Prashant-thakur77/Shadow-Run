@@ -13,7 +13,7 @@ import yaml
 
 from control import approvals, evidence, llm, settings
 from control import gate as static_gate
-from control.agent import describe_schema, draft_guardrails, draft_host_guardrails, run_loop, second_opinion
+from control.agent import changed_anything, describe_schema, draft_guardrails, draft_host_guardrails, run_loop, second_opinion
 from control.apply import apply_host_plan, apply_plan
 from control.approvals import ApprovalError
 from control.plan import guardrails_hash, sha256_hex
@@ -310,9 +310,7 @@ class Service:
 
         run["plan_hash"] = final["plan_hash"]
         run["report_hash"] = final["report_hash"]
-        totals = final.get("report", {}).get("totals", {})
-        changed = totals.get("rows_changed", 0) or totals.get("ddl_commands", 0) or totals.get("files_created", 0) or totals.get("files_deleted", 0) or totals.get("files_changed", 0) or totals.get("services_stopped", 0)
-        if not changed:
+        if not changed_anything(final.get("report", {})):
             # Nothing to apply, so nothing reaches prod and nobody is asked to approve anything.
             run["status"] = "no_change"
             self.event(run, "no_change", {"note": "The rehearsal changed nothing, so nothing was applied."})

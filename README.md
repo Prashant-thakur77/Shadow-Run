@@ -334,7 +334,7 @@ Re-run: `python -m bench.scale --scales 1.0 8.0 90.0 320.0`.
 
 Thin clones (DBLab, ZFS) are the fix at larger sizes, and they aren't built. PII masking isn't built either, so a clone holds real data, though it has no way to send it anywhere.
 
-Linux host targets are weaker than Postgres ones. systemd needs a boot path that microsandbox only offers with a NIC present, so host rehearsals use a deny-all policy, a downed link and the host firewall instead of no NIC. The demo's "prod host" is a long-lived VM on the VX1, and apply on a host can't be transactional: it keeps a tar and restores it on any mismatch.
+Linux host targets are weaker than Postgres ones. systemd needs a boot path that microsandbox only offers with a NIC present, so host rehearsals use a deny-all policy, a downed link and the host firewall instead of no NIC. Files are hashed under `/etc`, `/var/app`, `/srv`, `/opt/app`, `/home` and `/root`. Elsewhere a change shows up by inode change time and sends the plan to a person, except in `/proc`, `/sys`, `/dev`, `/run`, `/tmp`, `/var/tmp` and the system journal, which aren't watched. The demo's "prod host" is a long-lived VM on the VX1, and apply on a host can't be transactional: it keeps a tar and restores it on any mismatch.
 
 A plan that behaves differently on purpose, such as one branching on `current_user` or `random()`, is caught at apply as a mismatch and rolled back, which can also reject harmless nondeterminism. Timestamp columns are the exception: because `now()` legitimately differs between rehearsal and apply, only whether they are NULL is compared. A plan that writes a wrong timestamp on the right rows would pass that one check.
 

@@ -55,6 +55,11 @@ def check_host_budget(report: dict, gate: dict, guardrails: list[dict], budget: 
     totals = report.get("totals", {})
     if not totals:
         reasons.append("no measurements from the rehearsal")
+    files = report.get("files")
+    if files is not None and "outside_measured" not in files:
+        reasons.append("changes outside the hashed folders were not measured")
+    elif files and files["outside_measured"]:
+        reasons.append(f"{files['counts']['outside_measured']} path(s) changed outside the folders hashed here, such as {files['outside_measured'][0]}")
     # Measured as well as classified: a wrapper such as `bash -c` can hide rm from the gate, not from this.
     if gate.get("highest_risk") == "irreversible_write" or totals.get("files_deleted", 0) > 0:
         reasons.append(IRREVERSIBLE_REASON)
@@ -91,6 +96,10 @@ def check_budget(report: dict, gate: dict, guardrails: list[dict], budget: dict 
         reasons.append(IRREVERSIBLE_REASON)
     if report.get("unlogged_changes"):
         reasons.append("rows changed with no row-level record, so the numbers here do not cover this change")
+    if "sequences_unexplained" in report and report["sequences_unexplained"] is None:
+        reasons.append("sequences were not measured")
+    elif report.get("sequences_unexplained"):
+        reasons.append(f"a sequence moved with no new row, which doesn't roll back: {report['sequences_unexplained'][0]['name']}")
     executable = [d["name"] for d in report.get("schema_diff", []) if d.get("kind") in ("trigger", "function", "rule") and d.get("change") != "removed"]
     if executable:
         reasons.append("the plan adds code that keeps running on prod: " + ", ".join(executable[:3]))

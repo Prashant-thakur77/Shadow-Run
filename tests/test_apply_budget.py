@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 import psycopg
 import pytest
 
+from checker.blast import build_report
 from control.apply import apply_plan
 from control.budget import check_budget
 from control.snapshot import ProdConn, fingerprint, take_snapshot
@@ -309,8 +310,9 @@ def test_a_moved_business_number_needs_a_person():
 
 
 def _host(files, **kw):
-    counts = {k: len(files.get(k, [])) for k in ("created", "changed", "deleted")}
-    return {"kind": "host", "totals": {"files_changed": counts["changed"]}, "files": {**files, "counts": counts}, **kw}
+    outside = files.get("outside_measured", [])
+    counts = {**{k: len(files.get(k, [])) for k in ("created", "changed", "deleted")}, "outside_measured": len(outside)}
+    return {"kind": "host", "totals": {"files_changed": counts["changed"]}, "files": {"outside_measured": outside, **files, "counts": counts}, **kw}
 
 
 @pytest.mark.parametrize("report,within", [
@@ -318,6 +320,8 @@ def _host(files, **kw):
     (_host({"changed": ["/etc/nginx/nginx.conf"]}), False),
     (_host({"created": ["/usr/local/bin/x"]}), False),
     (_host({"changed": ["/var/app/logs/a"]}, services_started=["backdoor"]), False),
+    # On the list, plus a write the hashed folders don't cover.
+    (_host({"changed": ["/var/app/logs/a"], "outside_measured": ["/var/spool/cron/crontabs/root"]}), False),
 ])
 def test_host_changes_stay_inside_the_named_paths(report, within):
     budget = {"auto_apply_paths": ["/var/app/logs/"]}
@@ -495,3 +499,36 @@ def test_controls_say_whether_they_attack_or_confirm_the_honest_path():
 
     assert control_kind("Requester approves their own run") == "attack"
     assert control_kind("Apply the approved plan") == "honest path"
+
+
+def test_a_host_report_that_did_not_watch_outside_the_hashed_folders_needs_a_person():
+    report = {"kind": "host", "totals": {"files_changed": 1}, "files": {"changed": ["/var/app/logs/a"], "counts": {"changed": 1}}}
+    assert check_budget(report, {"verdict": "pass"}, [], {"auto_apply_paths": ["/var/app/logs/"]})["within"] is False
+
+
+def _sequence_report(**kw):
+    return {"totals": {"rows_changed": 1}, "tables": [], "schema_diff": [], **kw}
+
+
+def test_a_sequence_that_moved_with_no_new_row_needs_a_person():
+    moved = [{"name": "public.invoices_id_seq", "owner": "invoices", "before": 900, "after": 1}]
+    assert "invoices_id_seq" in " ".join(check_budget(_sequence_report(sequences_unexplained=moved), {"verdict": "pass"}, [])["reasons"])
+
+
+def test_sequences_that_were_not_measured_need_a_person():
+    assert check_budget(_sequence_report(sequences_unexplained=None), {"verdict": "pass"}, [])["within"] is False
+    assert check_budget(_sequence_report(sequences_unexplained=[]), {"verdict": "pass"}, [])["within"] is True
+
+
+def test_a_new_row_explains_its_own_sequence_and_nothing_else_does():
+    base = {"table_rows_before": {"invoices": 1}, "table_rows_after": {"invoices": 2}, "foreign_keys": []}
+    changes = [{"step": 1, "table": "invoices", "op": "INSERT", "via": "direct", "rows": 1}]
+    moved = [
+        {"name": "public.invoices_id_seq", "owner": "invoices", "before": 1, "after": 2},
+        {"name": "public.orders_id_seq", "owner": "orders", "before": 7, "after": 1},
+    ]
+    report = build_report({**base, "changes": changes, "sequences_moved": moved})
+    assert [m["name"] for m in report["sequences_unexplained"]] == ["public.orders_id_seq"]
+    assert any("orders_id_seq moved from 7 to 1" in s["text"] for s in report["sentences"])
+    assert build_report({**base, "changes": changes})["sequences_unexplained"] is None
+

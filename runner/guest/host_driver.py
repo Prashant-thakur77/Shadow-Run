@@ -18,6 +18,10 @@ import time
 ROOTS = ["/etc", "/var/app", "/srv", "/opt/app", "/home", "/root"]
 SKIP = ("/etc/ssl", "/etc/alternatives", "/etc/systemd/system/multi-user.target.wants", "/root/.cache")
 OUTPUT_CAP = 8000
+# Never persistent, the system log, or the sandbox's own agent. Everything else outside ROOTS is watched by change time.
+NOT_WATCHED = ("/proc", "/sys", "/dev", "/run", "/tmp", "/var/tmp", "/var/log/journal", "/.msb")
+WATCH_MARKER = "/run/.sr-watch"
+OUTSIDE_CAP = 50
 
 
 def manifest() -> dict[str, dict]:
@@ -78,6 +82,16 @@ def diff_manifest(a: dict, b: dict) -> dict:
     }
 
 
+def changed_outside_roots() -> list[str]:
+    """ROOTS are hashed file by file. Elsewhere a change still shows in the inode's change time, which `touch` can't backdate."""
+    prune: list[str] = []
+    for path in (*ROOTS, *NOT_WATCHED):
+        prune += ["-path", path, "-o"]
+    r = subprocess.run(["find", "/", "-xdev", "(", *prune[:-1], ")", "-prune", "-o", "-cnewer", WATCH_MARKER, "-print"], capture_output=True, text=True, timeout=30)
+    # Deepest first: the file a plan wrote says more than the folders above it.
+    return sorted(r.stdout.splitlines(), key=lambda p: (-p.count("/"), p))
+
+
 def run_steps(steps: list[dict], timeout: float) -> tuple[list[dict], str | None]:
     """Stops at the first failure, like `set -e` across steps."""
     results = []
@@ -122,19 +136,25 @@ def op_rehearse(job: dict) -> dict:
     boot = wait_for_boot()
     before = manifest()
     services_before = services()
+    with open(WATCH_MARKER, "w"):
+        pass
     t0 = time.perf_counter()
     steps, error = run_steps(job["steps"], float(job.get("step_timeout", 60)))
     execute_ms = round((time.perf_counter() - t0) * 1000, 1)
     time.sleep(0.3)
+    outside = changed_outside_roots()
     after = manifest()
     services_after = services()
     guardrails = run_checks(job.get("guardrails", []))
+    files = diff_manifest(before, after)
+    files["outside_measured"] = outside[:OUTSIDE_CAP]
+    files["counts"]["outside_measured"] = len(outside)
     return {
         "ok": error is None,
         "error": error,
         "boot_state": boot,
         "steps": steps,
-        "files": diff_manifest(before, after),
+        "files": files,
         "services_before": services_before,
         "services_after": services_after,
         "services_stopped": sorted(set(services_before["running"]) - set(services_after["running"])),

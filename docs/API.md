@@ -52,6 +52,8 @@ Base URL: the public URL (see `infra/STATE.json` -> `public_url`, or `SHADOWRUN_
   - `cascade_graph: {nodes: [{table, deleted, updated, direct, cascade}], edges: [{from, to, on_delete, rows}]}`
   - `samples: {table: {DELETE|UPDATE|INSERT: [{before, after}]}}`, up to 5 rows.
   - `ddl: [{step, tag, object_type, identity}]`, `schema_diff: [{kind, name, change}]`, `xact_counts`, `capture_gaps` (non-empty means the row log missed changes Postgres counted; show it loudly)
+  - `sequences_unexplained: [{name, owner, before, after}]`: sequences that moved with no new row in their table. `null` means they were not measured. Either one needs a person.
+  - Host targets: `files: {created, changed, deleted, counts, outside_measured}`. `outside_measured` lists paths changed outside the hashed folders, seen by inode change time. Any path there needs a person.
 - `rehearsal`: the run record:
   - `sandbox`, `limits: {cpus, memory_mib, max_duration_s, network}`
   - `host: {kernel, hostname, kvm_device, kvm_rw}`, `guest: {kernel, hostname}`, `image: {reference, digest}`

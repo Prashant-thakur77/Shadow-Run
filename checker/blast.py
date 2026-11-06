@@ -117,6 +117,15 @@ def build_report(result: dict, thresholds: dict | None = None) -> dict[str, Any]
             table_rec(u["table"])["unlogged"] = True
         sentences.append({"step": None, "table": u["table"], "op": "REWRITE", "rows": None, "via": "direct", "path": None, "text": f"{u['table']}: {u['detail']}"})
 
+    # A new row explains its own sequence moving. Anything else moved one with no row to show for it.
+    moved = result.get("sequences_moved")
+    unexplained = None if moved is None else [m for m in moved if not (per_table.get(_short(m.get("owner") or "")) or {}).get("inserted")]
+    for m in unexplained or []:
+        sentences.append({
+            "step": None, "table": None, "op": "SEQUENCE", "rows": None, "via": "direct", "path": None,
+            "text": f"sequence {m['name']} moved from {m['before']} to {m['after']} with no new row, and that doesn't roll back",
+        })
+
     for rec in per_table.values():
         base = rec["rows_before"] or 0
         rec["pct_of_table"] = round(100.0 * (rec["updated"] + rec["deleted"]) / base, 1) if base else None
@@ -151,6 +160,7 @@ def build_report(result: dict, thresholds: dict | None = None) -> dict[str, Any]
         "xact_counts": result.get("xact_counts", {}),
         "capture_gaps": result.get("capture_gaps", []),
         "unlogged_changes": result.get("unlogged_changes", []),
+        "sequences_unexplained": unexplained,
         "metrics": _metric_deltas(result.get("metrics", [])),
     }
 
@@ -174,6 +184,8 @@ def build_host_report(result: dict) -> dict[str, Any]:
         line(f"{counts['changed']} files changed", "UPDATE", counts["changed"])
     if counts.get("created"):
         line(f"{counts['created']} files created", "INSERT", counts["created"])
+    if counts.get("outside_measured"):
+        line(f"{counts['outside_measured']} paths changed outside the folders hashed here, such as {files['outside_measured'][0]}", "OUTSIDE", counts["outside_measured"])
     for unit in result.get("services_started", []):
         line(f"service {unit} started", "SERVICE_STARTED")
 

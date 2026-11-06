@@ -439,6 +439,26 @@ def eval_metrics(cur, metrics: list[dict]) -> dict:
     return out
 
 
+def sequence_state(cur) -> dict:
+    """A sequence leaves no row behind and doesn't roll back, so a plan can move one with no row changed at all."""
+    cur.execute(
+        """SELECT format('%I.%I', s.schemaname, s.sequencename), s.last_value,
+                  (SELECT d.refobjid::regclass::text FROM pg_depend d
+                   WHERE d.classid = 'pg_class'::regclass AND d.objid = format('%I.%I', s.schemaname, s.sequencename)::regclass
+                     AND d.refclassid = 'pg_class'::regclass AND d.deptype IN ('a', 'i') LIMIT 1)
+           FROM pg_sequences s WHERE s.schemaname <> 'shadow'"""
+    )
+    return {name: {"value": value, "owner": owner} for name, value, owner in cur.fetchall()}
+
+
+def moved_sequences(before: dict, after: dict) -> list[dict]:
+    return [
+        {"name": name, "owner": after[name]["owner"], "before": before[name]["value"], "after": after[name]["value"]}
+        for name in sorted(set(before) & set(after))
+        if before[name]["value"] != after[name]["value"]
+    ]
+
+
 def op_rehearse(job: dict) -> dict:
     timing: dict = {"postgres_start_ms": start_postgres()["ms"]}
     steps = job["steps"]
@@ -450,6 +470,7 @@ def op_rehearse(job: dict) -> dict:
     before_counts = txrun.table_counts(scur)
     before_schema = txrun.schema_state(scur)
     metrics_before = eval_metrics(scur, metrics)
+    sequences_before = sequence_state(scur)
 
     conn = agent_conn()
     cur = conn.cursor()
@@ -486,6 +507,7 @@ def op_rehearse(job: dict) -> dict:
     report = collect(scur, before_counts, before_schema, committed, counts)
     timing["collect_ms"] = round((time.perf_counter() - t0) * 1000, 1)
     metrics_after = eval_metrics(scur, metrics)
+    sequences_moved = moved_sequences(sequences_before, sequence_state(scur))
     measured = [
         {"id": m["id"], "name": m.get("name", m["id"]), "unit": m.get("unit", "count"), "before": metrics_before.get(m["id"]), "after": metrics_after.get(m["id"])}
         for m in metrics
@@ -501,6 +523,7 @@ def op_rehearse(job: dict) -> dict:
     sup.close()
     return {
         "metrics": measured,
+        "sequences_moved": sequences_moved,
         "undo": undo,
         "undo_statements": undo_statements,
         "ok": error is None,

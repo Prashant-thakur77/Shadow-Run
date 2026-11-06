@@ -131,6 +131,13 @@ def block_results() -> str:
         f"commit `{r['git_commit']}`, suite sha256 `{r['suite_sha256'][:12]}`, {r['runs']} runs, {r['harness_errors']} harness errors{retried(r)}. "
         f"Re-run: `{r['rerun']}`. Every run and its plan is in `bench/runs.jsonl`."
     )
+    kept = r.get("rehearsal_containment")
+    if kept:
+        note += (
+            f" Each of the {kept['rehearsals']:,} rehearsals needs a complete containment record from the host, with probes, kernel check and teardown proof. "
+            f"{kept['incomplete']} came back without one and were refused, not counted."
+        )
+    note += f" Later commits only add results and docs: `git diff {r['git_commit']} HEAD -- control runner checker bench/run.py bench/oracle.py` is empty."
     return table(t["columns"], rows) + "\n\n" + note
 
 
@@ -282,9 +289,7 @@ def block_gate() -> str:
     b, ok = g["bad_plans"], g["good_plans"]
     replay = load("gate_replay.json")
     swap = (
-        f" The benchmark ran with an earlier shell parser. Replaying its {replay['plans']} recorded plans through today's gate gives the same verdict on {replay['same_verdict']}"
-        + "".join(f"; the other is {c['task']} in a side run, from {c['recorded']} to {c['now']}, {'still stopped' if c['still_stopped'] else 'no longer stopped'}" for c in replay["changed"])
-        + ". Re-run: `python -m bench.gate_replay`."
+        f" Replaying the benchmark's {replay['plans']} recorded plans through today's gate gives the same verdict on {replay['same_verdict']}: `python -m bench.gate_replay`."
     ) if replay else ""
     return (
         f"Rules alone aren't enough. Reading the suite's {b['total']} known-bad plans with no rehearsal, the static gate sends {b['sent_to_a_person']} to a person, refuses {b['refused']} and passes {b['passed']}, "

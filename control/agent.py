@@ -252,8 +252,10 @@ def compare_runs(first: dict, second: dict) -> dict:
     return {"ok": not differs, "differs": differs, "sandbox": second.get("sandbox"), "ms": (second.get("phases") or {}).get("total_ms"), "contained": second.get("contained")}
 
 
-def _changed_anything(report: dict) -> bool:
+def changed_anything(report: dict) -> bool:
     t = report.get("totals", {})
+    if report.get("sequences_unexplained") or ((report.get("files") or {}).get("counts") or {}).get("outside_measured"):
+        return True
     return any(t.get(k) for k in ("rows_changed", "ddl_commands", "files_created", "files_deleted", "files_changed", "services_stopped"))
 
 
@@ -370,7 +372,7 @@ async def run_loop(
         attempt["undo"] = result.get("undo")
         if undo_statements and on_undo:
             on_undo(n, undo_statements)
-        if not failed and _changed_anything(report):
+        if not failed and changed_anything(report):
             # A second microVM must reproduce the result. A plan that is not deterministic is caught here,
             # before anyone approves it, instead of at apply. Adapted from Nusa's confirm step.
             on_event("reproducing", {"attempt": n})
@@ -400,7 +402,7 @@ async def run_loop(
             if measured_failures >= max_attempts:
                 break
             continue
-        if fixed_steps is None and not nudged and gate["highest_risk"] == static_gate.READ and not _changed_anything(report):
+        if fixed_steps is None and not nudged and gate["highest_risk"] == static_gate.READ and not changed_anything(report):
             # The agent only looked, and the request was to do something. Give it what it saw and one more go.
             nudged = True
             attempt["verdict"] = "read_only_plan"

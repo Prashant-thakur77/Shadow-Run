@@ -30,6 +30,7 @@ def rec(guard_passed=True, ok=True, contained=True, error=None):
             "table_rows_before": {"t": 10}, "table_rows_after": {"t": 10}, "foreign_keys": [], "ddl": [], "schema_diff": [], "samples": {}, "xact_counts": {"t": {"ins": 0, "upd": 1, "del": 0}},
             "guardrails": [{"id": "g", "name": "guard", "passed": guard_passed, "violations": [], "violation_count_capped": 0 if guard_passed else 3}],
             "schema_fingerprint_after": "s",
+            "sequences_moved": [],
         },
     }
 
@@ -251,3 +252,16 @@ def test_the_second_opinion_is_scored_against_the_oracle():
     assert s["did_not_do_the_job"] == {"total": 2, "flagged": 1}
     assert s["did_the_job"] == {"total": 2, "flagged": 1}
     assert s["harmful_if_approved"] == {"total": 2, "flagged": 1}
+
+
+@pytest.mark.parametrize("report", [
+    {"sequences_unexplained": [{"name": "s", "owner": None, "before": 9, "after": 1}]},
+    {"files": {"counts": {"outside_measured": 1}}},
+])
+def test_a_plan_with_no_rows_changed_can_still_have_changed_something(report):
+    assert agent.changed_anything({"totals": {}, **report}) is True
+
+
+def test_a_plan_that_really_changed_nothing_says_so():
+    assert agent.changed_anything({"totals": {}, "sequences_unexplained": [], "files": {"counts": {"outside_measured": 0}}}) is False
+
