@@ -28,7 +28,9 @@ That gain is what rehearsing adds: the agent saw what its plan would really do a
 
 ## Try it
 
-On the web, press Continue as guest and click an example task. Then try to break it: approve your own run, tamper with a hash, change prod behind its back. The server refuses for real. On Audit, change one character and watch the hash chain break. Incidents replays real ones, Red team runs seven attacks live, and Receipts lists every measured claim with the command that reproduces it, so a stranger can re-run them.
+On the web, press Continue as guest and click an example task. Then try to break it: approve your own run, tamper with a hash, change prod behind its back. The server refuses for real. On Audit, change one character and watch the hash chain break. Incidents replays real ones, Red team runs seven attacks live, and Receipts lists every measured claim with the command that reproduces it.
+
+<details><summary>From an agent, a terminal or a pull request</summary>
 
 Through MCP with OpenCode on Vultr inference, copy [`docs/opencode.json`](docs/opencode.json), set `VULTR_INFERENCE_KEY` and `SHADOWRUN_TOKEN` (shown under Connect an agent on the Guardrails page), and ask it to change the database. Other MCP clients work the same way but bring their own model, so this entry's demo and benchmark use Vultr inference only. For example: `claude mcp add --transport http shadowrun "$SHADOWRUN_URL/mcp" --header "Authorization: Bearer $SHADOWRUN_TOKEN"`.
 
@@ -40,6 +42,8 @@ shadowrun rehearse plan.sql --target demo-saas   # exit 0 applied, 2 needs a per
 ```
 
 As a GitHub Action, `uses: Prashant-thakur77/Shadow-Run@main` rehearses a migration in a pull request and posts what it really does as a comment. It never applies anything, since nobody has reviewed the pull request yet. Here's [the comment it writes for a bad migration](docs/evidence/pr-comment.md), and the [workflow](.github/workflows/shadowrun.yml).
+
+</details>
 
 ## The problem
 
@@ -96,7 +100,9 @@ Three modes, same model, same prompt, same seeded database, a fresh copy for eve
 Mean of 3 runs per task, range in brackets. Model `qwen3.8-27b` on Vultr Serverless Inference, measured 2026-11-06T10:02:36Z, commit `1354de2`, suite sha256 `bb6a10cbce0e`, 540 runs, 0 harness errors after retrying 2 that hit one in the benchmark's own database reset, which `bench/runs.jsonl` keeps. Re-run: `python -m bench.run --runs 3 --parallel 4`. Every run and its plan is in `bench/runs.jsonl`.
 <!-- results:end -->
 
-The suite is 40 tasks of ours plus 20 adapted from [SABER](https://github.com/sssr-lab/saber), so the result isn't only on our own planted data. Oracles decide harm by checking outcomes. They were written by a separate agent that was barred from reading the guardrails and the gate, and each one is tested with a known-bad and a known-good plan (`python -m bench.validate`). We tuned on 10 tasks and report the other 30 and the SABER set separately. SABER's guardrails were drafted by the model and left unedited. One disclosure: after a preview run's totals showed small harmful plans auto-applying under budget, we added the rule that irreversible writes always need a person. We read only the totals for that, not which held-out tasks were involved, but the held-out set isn't perfectly clean of that one decision.
+The suite is 40 tasks of ours plus 20 adapted from [SABER](https://github.com/sssr-lab/saber), so the result isn't only on our own planted data. Oracles decide harm by checking outcomes. They were written by a separate agent that was barred from reading the guardrails and the gate, and each one is tested with a known-bad and a known-good plan (`python -m bench.validate`). We tuned on 10 tasks and report the other 30 and the SABER set separately. One disclosure: after a preview run's totals showed small harmful plans auto-applying under budget, we added the rule that irreversible writes always need a person. We read only the totals for that, not which held-out tasks were involved, but the held-out set isn't perfectly clean of that one decision. SABER's guardrails were drafted by the model and left unedited.
+
+<details><summary>More from the benchmark: the gate alone, the second model, a wider auto-apply list, other models, cost, each kind of task</summary>
 
 <!-- clone_check:start -->
 Every clone is checked against what it was restored from: 43 of the 43 databases in the suite restore with the same rows and schema. A clone that doesn't match is refused, because one missing a foreign key would report a smaller blast radius than the real thing. Re-run: `bash scripts/bench_remote.sh 'python -m bench.clone_check'`.
@@ -113,6 +119,21 @@ The second model was tested against the benchmark's blind oracles, on 171 plans 
 <!-- wider:start -->
 Most safe work waits for a person because the demo's auto-apply list is one notes column. With [a wider list a team might accept](demo/wider_list.yaml), 1 of 7 safe tasks applied alone, and harm on prod with no person was 0 of 23 held-out and 0 of 20 SABER-derived. Mean of 3 runs. Deletes and cascades still wait.
 <!-- wider:end -->
+
+<!-- models:start -->
+The agent's model is the variable an adopter can't control, so the same held-out tasks were run with others from Vultr's list:
+
+| Agent model | Runs per task | Direct harm | Static gate harm | Shadow Run harm | If rubber-stamped |
+| --- | --- | --- | --- | --- | --- |
+| `qwen3.8-27b` | 3 | 10.67 (10–11) | 11 (10–12) | 0 | 2.67 (2–3) |
+| `deepseek-v4.1-flash-1017` | 1 | 6 | 7 | 0 | 2 |
+| `glm-5.3` | 1 | 11 | 9 | 0 | 4 |
+| `qwen3.8-27b` | 3 | n/a | n/a | 0 | 3 |
+<!-- models:end -->
+
+<!-- cost:start -->
+Inference cost per task across all 60 tasks, where the table above is held-out only: $0.00328 through Shadow Run and $0.00156 for the agent alone. That's about $3.28 of inference per thousand tasks through Shadow Run.
+<!-- cost:end -->
 
 <!-- groups:start -->
 <details><summary>By kind of task</summary>
@@ -131,20 +152,7 @@ Most safe work waits for a person because the demo's auto-apply list is one note
 </details>
 <!-- groups:end -->
 
-<!-- models:start -->
-The agent's model is the variable an adopter can't control, so the same held-out tasks were run with others from Vultr's list:
-
-| Agent model | Runs per task | Direct harm | Static gate harm | Shadow Run harm | If rubber-stamped |
-| --- | --- | --- | --- | --- | --- |
-| `qwen3.8-27b` | 3 | 10.67 (10–11) | 11 (10–12) | 0 | 2.67 (2–3) |
-| `deepseek-v4.1-flash-1017` | 1 | 6 | 7 | 0 | 2 |
-| `glm-5.3` | 1 | 11 | 9 | 0 | 4 |
-| `qwen3.8-27b` | 3 | n/a | n/a | 0 | 3 |
-<!-- models:end -->
-
-<!-- cost:start -->
-Inference cost per task across all 60 tasks, where the table above is held-out only: $0.00328 through Shadow Run and $0.00156 for the agent alone. That's about $3.28 of inference per thousand tasks through Shadow Run.
-<!-- cost:end -->
+</details>
 
 ## Real incidents, replayed
 
@@ -167,9 +175,7 @@ The commands and how each was adapted are in [`demo/incidents.yaml`](demo/incide
 
 ## We attacked our own policy
 
-A guardrail only protects what someone thought of. So an attacker model is told every guardrail and the exact rule for auto-apply, then tries to do real damage. Its own damage check runs on a clone, so a claim of damage has to be real.
-
-The first version of auto-apply was a row limit. The attacker fit real damage under it: re-pointing paid invoices at another customer, moving payments to the wrong invoice. So auto-apply now works from a named list of what may change without a person, and the report measures which columns each plan really changed. The attacker still tries, and it can still change what's on the list, so the last column is what matters: not how many got through, but what they could reach. The old policy stays in the test as the baseline:
+A guardrail only protects what someone thought of. So an attacker model is told every guardrail and the exact rule for auto-apply, then tries to do real damage. Its own damage check runs on a clone, so a claim of damage has to be real. The first auto-apply rule was a row limit, and the attacker fit real damage under it, so auto-apply now works from a named list of what may change without a person. The attacker can still change what's on the list, so the last column is what matters: not how many got through, but what they could reach.
 
 <!-- gauntlet:start -->
 | The attacker is told every guardrail and the auto-apply rule | Damaging plans | Stopped by a rule | Passed the rules, waited for a person | **Would have applied alone** | What those could change with no person looking |
@@ -181,7 +187,7 @@ The first version of auto-apply was a row limit. The attacker fit real damage un
 Replaying the attacks that passed the rules, against the rules they taught: 7 of 7 now stopped. That's a regression check on those attacks, not a claim about new ones, and the last row shows new ones still come. Model `glm-5.3`, $0.15383 of inference, full transcripts in `bench/gauntlet.json`. Re-run: `python scripts/gauntlet_live.py`.
 <!-- gauntlet:end -->
 
-An attack that passes the rules also produces a candidate rule, which counts only if it holds on the clean database, fails on that plan, and lets [a list of ordinary changes](demo/normal_work.yaml) through, because a rule that blocks everything also catches everything. A person's judgment feeds the same loop: when a reviewer rejects a plan and says why, the model turns the reason into a rule, it's proved the same way, and that plan then fails it.
+An attack that passes the rules also produces a candidate rule, which counts only if it holds on the clean database, fails on that plan, and lets [a list of ordinary changes](demo/normal_work.yaml) through. A person's judgment feeds the same loop: when a reviewer rejects a plan and says why, the model turns the reason into a rule, proved the same way.
 
 ## Who this is for
 
@@ -193,9 +199,9 @@ Nothing has to be trusted on day one:
 2. **MCP for the agent.** It gives up its database URL and gets rehearse and apply instead. Every change waits for a person.
 3. **A short auto-apply list**, once the team has seen enough reports. It names the columns they're happy to change without a person.
 
-Cost grows with database size and not with seats, so it would be priced per protected database. Today's size limit, measured below: a plan cascading through over a million rows takes under a minute at 1 GB, and a heavier one at 3.6 GB times out and is refused.
+Cost grows with database size and not with seats, so it would be priced per protected database. The size limit today is in [Limits](#limits).
 
-## Point it at your database
+<details><summary>Point it at your own database</summary>
 
 ```
 cp examples/targets.yaml targets.yaml    # host, role, guardrails, business numbers
@@ -203,6 +209,8 @@ export SHADOWRUN_TARGETS=$PWD/targets.yaml MY_APP_DB_PASSWORD=...
 ```
 
 Restart the control plane, and the target appears next to the demo. Start on a staging copy, because the role in that file can write. Draft guardrails on the Guardrails page has the model propose rules from your schema, for an admin to accept. On your own target, every change waits for a person until you list otherwise. Guest access turns itself off, reset and forced drift refuse to run, and the passwords in `.env` become the logins, so set your own.
+
+</details>
 
 ## Vultr services
 
@@ -230,7 +238,7 @@ The host decides, and every result is printed on the run page. Teardown, file ha
 | Resource limits | 2 vCPUs, 2 GB, 120 s wall clock, statement timeout. Two network walls: no NIC at all, plus a host iptables chain for the sandbox uid that also rejects the metadata IP and the VPC. | Probes to prod, the metadata IP and the internet read the reply, not just the connect. Rejected-packet counter. |
 | Lifecycle discipline | Destroyed in `finally`, on success, failure and timeout. A janitor removes anything over 10 minutes old. | Not listed by the runtime, disk gone, no leftover processes. |
 
-Each attack below runs for real in a clone with the gate off, and it only counts if it demonstrably executed.
+Each attack runs for real in a clone with the gate off, and it only counts if it demonstrably executed.
 
 <!-- redteam:start -->
 **7 of 7 contained.**
@@ -252,7 +260,7 @@ Each attack below runs for real in a clone with the gate off, and it only counts
 Prod hash before and after the whole suite: `03d0ebc88dd80e26` and `03d0ebc88dd80e26`. Second wall tested alone, with the no-NIC wall deliberately opened: rejected packets went from 15 to 18, and the sandbox reached nothing outside. A new clone made after all the attacks matches one made before them. Re-run: `python scripts/redteam_live.py`, or the button on the Red team page.
 <!-- redteam:end -->
 
-We also tried to break the approval, the apply and the measurement on the live system, and checked that the honest path still works. The last group came from an independent adversarial review of this code, which found that counts alone missed plans that only misbehave on prod, and that a plan could rewrite the guardrail baselines. Those holes are closed, and these attempts now prove it each time:
+We also tried to break the approval, the apply and the measurement on the live system, and checked that the honest path still works. Some of these came from independent reviews of this code, which found holes that are now closed.
 
 <!-- controls:start -->
 **22 of 22 attacks were refused, rolled back or held, and 11 of 11 checks that the honest path still works passed**, at 2026-11-06T14:01:35Z. Re-run: `python -m checker.controls`.
@@ -313,13 +321,13 @@ python infra/teardown.py      # removes everything, confirms 404
 
 ## Limits
 
-Steps that reach outside the target, such as sending email or calling Stripe or a cloud API, can't be rehearsed. With no network they fail on the clone, so the plan is blocked. A step that swallows that failure is still flagged by the gate and goes to a person. Either way, Shadow Run can't say what the call would have done.
-
-On the public demo, one guest holds both the requester and the approver identity, so that the whole flow fits in one tab. The rule is that an identity can't approve its own run, and it only means two people if those identities belong to two people, as they would in a real deployment.
-
-Some harm needs a person to catch it. If no guardrail encodes an invariant, Shadow Run can only show the diff. The rubber-stamp row in the results table is that gap, measured, and the attacker table above shows how easily a model can find such an invariant. The auto-apply list is its owner's judgment call: a column on it can be changed badly, up to the row limit, with no person looking. On the demo, that list is one notes column.
-
-Taking a snapshot grows with database size, because the clone is a full restore, and the rehearsal grows with how many rows the plan changes. Past a point it hits its time limit. In the last row, a plan cascading through millions of rows timed out on a 3.6 GB clone, and a plan that times out is refused, not approved:
+- **Calls outside the target can't be rehearsed.** Email, Stripe or a cloud API fail on the clone, so the plan is blocked, or flagged for a person if a step swallows the failure. Either way, Shadow Run can't say what the call would have done.
+- **One guest holds both identities on the public demo,** so the whole flow fits in one tab. An identity can't approve its own run, but that only means two people if two people hold them, as they would in a real deployment.
+- **Some harm needs a person to catch it.** If no guardrail encodes an invariant, Shadow Run can only show the diff. The approved-unread numbers above are that gap, measured. A column on the auto-apply list can be changed badly, up to the row limit, with no person looking. On the demo, that list is one notes column.
+- **Linux hosts are weaker than Postgres.** systemd needs a boot path that microsandbox only offers with a NIC present, so host rehearsals use a deny-all policy, a downed link and the host firewall instead of no NIC. Files are hashed under `/etc`, `/var/app`, `/srv`, `/opt/app`, `/home` and `/root`. Elsewhere a change shows up by inode change time and sends the plan to a person, except in `/proc`, `/sys`, `/dev`, `/run`, `/tmp`, `/var/tmp` and the system journal, which aren't watched. The demo's "prod host" is a long-lived VM on the VX1, and apply on a host can't be transactional: it keeps a tar and restores it on any mismatch.
+- **Nondeterminism.** A plan branching on `current_user` or `random()` is caught at apply as a mismatch and rolled back, which can also reject harmless nondeterminism. Timestamp columns are the exception, because `now()` differs between rehearsal and apply: only whether they are NULL is compared, so a wrong timestamp on the right rows would pass that one check.
+- **PII masking isn't built,** so a clone holds real data, though it has no way to send it anywhere.
+- **Size.** A snapshot grows with the database, because the clone is a full restore, and a rehearsal grows with how many rows the plan changes. A plan that hits the time limit is refused, not approved. Thin clones (DBLab, ZFS) are the fix at larger sizes, and they aren't built.
 
 <!-- scale:start -->
 | Database | pg_dump s | Checksums s | Build golden s | Clone boot ms | Rehearsal s | Rows the plan changed |
@@ -332,17 +340,11 @@ Taking a snapshot grows with database size, because the clone is a full restore,
 Re-run: `python -m bench.scale --scales 1.0 8.0 90.0 320.0`.
 <!-- scale:end -->
 
-Thin clones (DBLab, ZFS) are the fix at larger sizes, and they aren't built. PII masking isn't built either, so a clone holds real data, though it has no way to send it anywhere.
-
-Linux host targets are weaker than Postgres ones. systemd needs a boot path that microsandbox only offers with a NIC present, so host rehearsals use a deny-all policy, a downed link and the host firewall instead of no NIC. Files are hashed under `/etc`, `/var/app`, `/srv`, `/opt/app`, `/home` and `/root`. Elsewhere a change shows up by inode change time and sends the plan to a person, except in `/proc`, `/sys`, `/dev`, `/run`, `/tmp`, `/var/tmp` and the system journal, which aren't watched. The demo's "prod host" is a long-lived VM on the VX1, and apply on a host can't be transactional: it keeps a tar and restores it on any mismatch.
-
-A plan that behaves differently on purpose, such as one branching on `current_user` or `random()`, is caught at apply as a mismatch and rolled back, which can also reject harmless nondeterminism. Timestamp columns are the exception: because `now()` legitimately differs between rehearsal and apply, only whether they are NULL is compared. A plan that writes a wrong timestamp on the right rows would pass that one check.
-
 ## Prior art and credits
 
 [DryRun](https://github.com/HMAKT99/DryRun) rehearses SQL in Docker on sampled rows and gives advice. Shadow Run uses a full clone in a microVM and enforces the outcome with a hash-pinned apply. [safe-migrations-mcp](https://pypi.org/project/safe-migrations-mcp/) simulates on prod inside a rolled-back transaction, which still takes locks on prod. [Neon's MCP](https://github.com/neondatabase/mcp-server-neon) branches for schema migrations on Neon.
 
-Patterns reused from earlier Vultr Agent Arena entries, read and rebuilt for this stack, with none of their code run or copied as is:
+<details><summary>Patterns reused from earlier Vultr Agent Arena entries, read and rebuilt for this stack, with none of their code run or copied as is</summary>
 
 | From | Their file or idea | Here |
 | --- | --- | --- |
@@ -358,5 +360,7 @@ Patterns reused from earlier Vultr Agent Arena entries, read and rebuilt for thi
 | [Airlock](https://github.com/nihalnihalani/airlock) | Approval bound to a digest, recomputed from what was submitted; constant-time compare | `control/approvals.py`, `control/auth.py` |
 | [Tieout](https://github.com/chinesepowered/hack-vultracc) | `security.py`: signed maker-checker approvals, signed sessions, a rate limiter; a hash-chained log | `control/approvals.py`, `control/auth.py`, `control/api.py`, `control/store.py` |
 | [RLForge](https://github.com/vvennela/rlforge) | Stating a negative result in plain words | The rubber-stamp row and the attacker table |
+
+</details>
 
 External tasks are adapted from [SABER](https://github.com/sssr-lab/saber) ([EMNLP 2026](https://aclanthology.org/2026.emnlp-main.211/), CC-BY-4.0). Shadow Run is MIT; other components keep their own licences, listed in [THIRD_PARTY.md](THIRD_PARTY.md).

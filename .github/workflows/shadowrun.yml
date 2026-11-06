@@ -21,8 +21,21 @@ jobs:
         run: |
           file="$(git diff --name-only "origin/$BASE" HEAD -- 'examples/migrations/*.sql' | head -1)"
           echo "plan=$file" >> "$GITHUB_OUTPUT"
+      # This repository's example rehearses on the public demo, whose guest session anyone can get.
+      # On your own deployment, store SHADOWRUN_URL and SHADOWRUN_TOKEN as secrets instead.
+      - id: session
+        env:
+          URL: ${{ secrets.SHADOWRUN_URL || 'https://144-202-92-64.sslip.io' }}
+          TOKEN: ${{ secrets.SHADOWRUN_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            TOKEN="$(curl -fsS -X POST "$URL/api/demo/enter" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
       - uses: ./
         with:
           plan: ${{ steps.files.outputs.plan }}
-          url: ${{ secrets.SHADOWRUN_URL }}
-          token: ${{ secrets.SHADOWRUN_TOKEN }}
+          url: ${{ steps.session.outputs.url }}
+          token: ${{ steps.session.outputs.token }}
