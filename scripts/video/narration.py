@@ -43,8 +43,8 @@ def results_line() -> str:
     h = r["heldout"]
     d, g, s = h["direct"], h["static_gate"], h["shadow_run"]
     return (
-        f"On {d['risky_tasks']} held-out risky tasks, the same agent alone caused harm about {round(d['harm_on_prod']['mean'])} times. "
-        f"Through Shadow Run, nothing harmful reached prod without a person. If that person approved every plan unread, about {round(s['harm_if_rubber_stamped']['mean'])}, because the agent had seen the damage and rewritten its plans."
+        f"On {d['risky_tasks']} held-out risky tasks, the agent alone finished the job safely about {round(d['risky_done']['mean'])} times, and caused harm about {round(d['harm_on_prod']['mean'])}. "
+        f"Through Shadow Run, even with a person approving every plan unread, about {round(s['risky_done_if_rubber_stamped']['mean'])} and about {round(s['harm_if_rubber_stamped']['mean'])}. With a person who reads the report, nothing harmful reached prod without one."
     )
 
 
@@ -55,11 +55,11 @@ def money(x: float) -> str:
 def incident_line() -> str:
     inc = load("incidents.json")
     row = next((i for i in (inc or {}).get("incidents", []) if i["id"] == "saastr_freeze"), None)
-    paid = next((m for m in (row or {}).get("metrics", []) if m["name"].startswith("Paid invoices")), None)
+    paid = next((m for m in (row or {}).get("metrics", []) if m["name"].startswith("Customer order history")), None)
     if not paid:
         return "These are the commands behind real incidents, replayed on a clone, measured even when they're refused."
     return (
-        f"These are the commands behind real incidents, replayed on a clone. The SaaStr wipe takes this demo's paid invoices from {money(paid['before'])} to {money(paid['after']) if paid['after'] else 'zero'}. "
+        f"These are the commands behind real incidents, replayed on a clone. The SaaStr wipe takes this demo's order history from {money(paid['before'])} to {money(paid['after']) if paid['after'] else 'zero'}. "
         "Blocked, and prod never moved."
     )
 
@@ -87,7 +87,7 @@ def gauntlet_line() -> str:
 def scenes() -> list[dict]:
     return [
         {"id": "hook", "text": "In April, an AI agent deleted a company's production database and its backups in nine seconds. It isn't the only one."},
-        {"id": "title", "text": "Your agent wants to touch prod. Shadow Run lets it break a clone first."},
+        {"id": "title", "hold": 1.5, "text": "Your agent wants to touch prod. Shadow Run lets it break a clone first."},
         {"id": "task", "text": "The agent writes the plan. Shadow Run hashes it and runs that exact plan on a clone of production, in a throwaway microVM on Vultr with no network device."},
         {"id": "blast", "text": "The plan says remove inactive users. Postgres says what that really means. Thousands of rows, paid invoices and customer orders, gone by cascade, each one traced back to the step that caused it. The guardrails fail, and the agent can't edit them."},
         {"id": "retry", "text": "Those measurements go back to the agent, which rewrites the plan and rehearses again on a new clone."},

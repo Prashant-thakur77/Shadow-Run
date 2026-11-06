@@ -32,6 +32,7 @@ bench() {
 
 publish() {
   python -m bench.gate_score
+  python -m bench.gate_replay
   python -m bench.second_opinion_eval
   python scripts/make_readme_table.py
   python scripts/make_submission.py

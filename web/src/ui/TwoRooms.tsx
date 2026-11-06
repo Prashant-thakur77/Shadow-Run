@@ -519,10 +519,16 @@ export function TwoRooms({
   unit = 'rows',
   prod: prodView,
   live,
+  network,
+  verdicts = false,
 }: {
   control: RehearsalControl;
   hero: PublicHero;
   phone?: boolean;
+  /** What the clone's network was, from the run's record. Nothing is printed if the caller doesn't know. */
+  network?: string | null;
+  /** On a stacked layout, keeps both rooms' verdicts on screen until prod's own footer scrolls in. */
+  verdicts?: boolean;
   /** The dollars are records on a seeded demo database, not money anyone spent, so the labels say so. */
   seeded?: boolean;
   /** Receives the printed scale once the layout is known, so a caption can state it. */
@@ -611,6 +617,8 @@ export function TwoRooms({
   const prodEvent = hero.timeline.find((e) => e.type === 'prod_checked');
   const prodOffset = prodEvent ? `+${prodEvent.t.toFixed(1)} s` : null;
   const latest = prodLanded && prodOffset ? { label: 'hash checked', value: prodOffset, tone: undefined } : lastLine;
+  const cloneGone = !live && cue >= script.crtEnd;
+  const teardown = teardownWords(hero.teardown);
 
   return (
     <Frame className="rooms" data-status={control.status}>
@@ -624,7 +632,7 @@ export function TwoRooms({
                 {hero.command.join(' ')}
               </code>
             )}
-            <span className="room-head-note">no NIC</span>
+            {network && <span className="room-head-note">{network}</span>}
           </header>
           <div className="room-body">
             {!phone && (
@@ -680,6 +688,28 @@ export function TwoRooms({
         <div className="rooms-seam" aria-hidden="true">
           <i ref={hand} className="rooms-hand" />
         </div>
+
+        {/* Sits on the seam and sticks to the bottom of the screen until it gets there. Same clock as the footers, so each
+            word lands when that room's footer does. A copy of them, so it's hidden from screen readers. */}
+        {phone && verdicts && (
+          <div className="rooms-verdicts" aria-hidden="true">
+            <div className="rooms-verdict">
+              <span className="rooms-verdict-word" key={cloneGone ? 'gone' : 'waiting'}>
+                {cloneGone ? `Clone: ${teardown.clean ? 'gone' : 'check'}` : 'Clone'}
+              </span>
+              <span className="rooms-verdict-note">{cloneGone ? (teardown.clean ? 'Teardown confirmed' : 'Teardown not confirmed') : 'Rehearsing'}</span>
+            </div>
+            <div className={`rooms-verdict${prodLanded ? ` is-${prodTone}` : ''}`}>
+              <span className="rooms-verdict-word" key={prodLanded ? 'landed' : 'waiting'}>
+                {prodLanded ? `Prod: ${prodWord}` : 'Prod'}
+              </span>
+              <span className="rooms-verdict-note">
+                {prodLanded && <Mark tone={prodTone} size={12} />}
+                {prodLanded ? prodVerdict : 'Not checked yet'}
+              </span>
+            </div>
+          </div>
+        )}
 
         {phone && (
           <div className="rooms-latest" aria-hidden="true">

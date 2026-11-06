@@ -630,6 +630,55 @@
   .rooms-latest .is-bad {
     color: var(--bad);
   }
+  /* Both rooms' verdicts on the seam. Sticky, so the first screen ends on them, and it comes to rest between the rooms. */
+  .rooms-verdicts {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-bottom: env(safe-area-inset-bottom);
+    border-top: 1px solid var(--line-2);
+    border-bottom: 1px solid var(--line-2);
+    background: var(--bg);
+  }
+  .rooms-verdict {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 9px var(--s-3);
+  }
+  .rooms-verdict + .rooms-verdict {
+    border-left: 1px solid var(--line-2);
+  }
+  .rooms-verdict-word {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+    animation: foot-land var(--dur-fast) var(--ease-press) both;
+  }
+  .rooms-verdict-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--ink-2);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .rooms-verdict.is-good .rooms-verdict-word,
+  .rooms-verdict.is-good .rooms-verdict-note {
+    color: var(--good);
+  }
+  .rooms-verdict.is-bad .rooms-verdict-word,
+  .rooms-verdict.is-bad .rooms-verdict-note {
+    color: var(--bad);
+  }
   .rooms-events {
     margin: 0;
     border-width: 1px 0 0;

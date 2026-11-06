@@ -1,16 +1,16 @@
 {
-  "at": "2026-11-06T07:50:46Z",
+  "at": "2026-11-06T13:23:28Z",
   "rehearsals": 50,
   "all_contained": true,
   "all_teardown_ok": true,
-  "rehearsal_ms_p50": 3106.2,
-  "clone_boot_ms_p50": 1233.2,
-  "wall_s": 136.3,
+  "rehearsal_ms_p50": 3128.0,
+  "clone_boot_ms_p50": 1209.1,
+  "wall_s": 142.1,
   "statuses": {
     "awaiting_approval": 22,
     "blocked": 28
   },
   "prod_unchanged": true,
-  "leftover_check_raw": "[]\n0\n0",
+  "leftover_check_raw": "[\n  {\n    \"created_at\": \"2026-11-06T12:24:19.126878571+00:00\",\n    \"image\": \"sr-host:0.1\",\n    \"name\": \"sr-prodhost-demo\",\n    \"status\": \"Running\"\n  }\n]\n0\n0",
   "rerun": "python scripts/soak.py --n 50"
 }

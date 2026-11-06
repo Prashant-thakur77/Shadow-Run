@@ -15,6 +15,17 @@ export const isHostReport = (a: Attempt | null | undefined) => a?.report?.kind =
 /** Dollars on the demo targets are records on a seeded database, not money anyone spent. */
 export const isSeeded = (run: Run) => run.target_id?.startsWith('demo') ?? false;
 
+/** What this attempt's own record says about the clone's network. `lo` and `dummy0` are what an unplugged guest has, so
+ *  anything else is a real device, as a Linux host's `eth0` is. Null until the record says, so nothing is claimed early. */
+export function networkNote(attempt: Attempt | null | undefined): string | null {
+  const rehearsal = attempt?.rehearsal;
+  const policy = rehearsal?.limits?.network ?? '';
+  const devices = rehearsal?.probes?.nics?.filter((n) => n !== 'lo' && n !== 'dummy0');
+  if (devices ? devices.length === 0 : /no NIC/i.test(policy)) return 'no NIC';
+  if (/deny-all/i.test(policy) && /link down/i.test(policy)) return 'deny-all, link down';
+  return devices?.length ? `${devices.join(', ')} present` : null;
+}
+
 /** Only what happened in this attempt, with the clock starting as its plan froze. Time spent planning is not part of a
  *  rehearsal, and leaving it in would make a replay sit idle for as long as the model took to think. */
 function attemptTimeline(run: Run, attempt: Attempt): { type: string; t: number }[] {

@@ -1248,6 +1248,68 @@
   flex-direction: column;
   min-width: 0;
 }
+/* The one change in the table, large enough to read on a video frame. The table below keeps the honest count. */
+.gr .gt-drop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-4) var(--s-5);
+  border-bottom: 1px solid var(--line-2);
+}
+.gr .gt-drop-title {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 2.6vw, 38px);
+  font-weight: 700;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+.gr .gt-drop-sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4) 0;
+}
+.gr .gt-drop-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.gr .gt-drop-side + .gt-drop-side {
+  padding-left: var(--s-4);
+  border-left: 1px solid var(--line-2);
+}
+.gr .gt-drop-when {
+  color: var(--ink-2);
+  font-size: var(--fs-m);
+}
+.gr .gt-drop-big {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--s-3);
+}
+.gr .gt-drop-unit {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 2.3vw, 34px);
+  font-weight: 700;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+.gr .gt-drop-side.is-bad .gt-drop-big {
+  color: var(--bad);
+}
+.gr .gt-drop-side.is-good .gt-drop-big {
+  color: var(--good);
+}
+.gr .gt-drop-note {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.45;
+}
+.gr .gt-drop-note code {
+  color: var(--ink);
+  font-size: inherit;
+}
 .gr .gt-published-head {
   display: flex;
   flex-direction: column;
@@ -2069,6 +2131,18 @@ a.gt-strip-cell:hover {
   .gr .gt-seam-side + .gt-seam-side {
     border-top: 1px solid var(--line-2);
     border-left: 0;
+  }
+  .gr .gt-drop-sides {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gr .gt-drop-side + .gt-drop-side {
+    padding-top: var(--s-4);
+    padding-left: 0;
+    border-top: 1px solid var(--line-2);
+    border-left: 0;
+  }
+  .gr .gt-drop-big .t-num-xl {
+    font-size: 56px;
   }
   .gr .gauntlet-head {
     grid-template-columns: minmax(0, 1fr);

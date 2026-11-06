@@ -10,6 +10,7 @@ import { Figure, sourceLine } from '../ui/Figure';
 import { Frame } from '../ui/Frame';
 import { Label } from '../ui/Label';
 import { Measured } from '../ui/Measured';
+import { finishesMore, HoldQueueAnswer, Outcomes, type OutcomeMode } from '../ui/Outcomes';
 import { PageHead, useFirstSight } from './_evidence';
 
 // The shape bench/run.py's summarise() writes. Every field may be missing, and the page says so when it is.
@@ -23,6 +24,9 @@ interface ModeStats {
   risky_tasks?: number;
   safe_tasks?: number;
   harm_on_prod?: PerRun;
+  /** Done with no harm. */
+  risky_done?: PerRun;
+  risky_done_if_rubber_stamped?: PerRun;
   safe_wrongly_blocked?: PerRun;
   harm_if_rubber_stamped?: PerRun;
   held_harm_only_a_person_catches?: PerRun;
@@ -92,8 +96,63 @@ function harmRows(b: Block): HarmRow[] {
   ];
 }
 
+function outcomeModes(b: Block): OutcomeMode[] {
+  return [
+    { key: 'direct', label: 'Agent directly', done: b.direct?.risky_done, harm: b.direct?.harm_on_prod },
+    { key: 'static_gate', label: 'Static gate', done: b.static_gate?.risky_done, harm: b.static_gate?.harm_on_prod },
+    { key: 'unread', label: 'A person approves every plan unread', done: b.shadow_run?.risky_done_if_rubber_stamped, harm: b.shadow_run?.harm_if_rubber_stamped },
+  ];
+}
+
+const outcomesSource = (runs: number | undefined) => `${SOURCE} · mean of ${num(runs)} runs per task · neither is the tasks minus the other two · cells are counted, not matched to tasks`;
+
+/** The strongest result on the page, and the answer to the first objection. Stopping harm alone could be a queue. */
+function Lead({ block, measured, runs }: { block: Block; measured: number | null; runs: number | undefined }) {
+  const modes = outcomeModes(block);
+  const total = block.direct?.risky_tasks;
+  const more = finishesMore(modes);
+  return (
+    <Figure className="ev-figure-block" n={1} measured={measured} extra={outcomesSource(runs)}>
+      <h2 className="ev-statement">
+        {more ? (
+          'The agent finishes more of the work correctly'
+        ) : (
+          <>
+            Done, harmful or neither, of <span className="mono">{num(total)}</span> risky tasks held out from tuning
+          </>
+        )}
+      </h2>
+      {more && (
+        <p className="ev-lead-line">
+          Of <span className="mono">{num(total)}</span> risky tasks held out from tuning, <span className="mono">{num(modes[2].done?.mean)}</span> were done with no harm when a person approved every plan unread. The agent alone managed <span className="mono">{num(modes[0].done?.mean)}</span>.
+        </p>
+      )}
+      <Outcomes total={total} modes={modes} showRuns aside={<HoldQueueAnswer total={total} modes={modes} harmAlone={block.shadow_run?.harm_on_prod?.mean} held={block.shadow_run?.risky_held?.mean} />} />
+    </Figure>
+  );
+}
+
+/** The same three outcomes on tasks we did not write. */
+function ExternalOutcomes({ block, n, measured, runs }: { block: Block; n: number; measured: number | null; runs: number | undefined }) {
+  const modes = outcomeModes(block);
+  const total = block.direct?.risky_tasks;
+  return (
+    <div className="ev-chart">
+      <Figure n={n} measured={measured} extra={outcomesSource(runs)}>
+        <div className="ev-chart-title">
+          <h2 className="t-h3">{block.label ?? 'External tasks'}: done, harmful or neither</h2>
+          <span className="t-caption">
+            <span className="mono">{num(total)}</span> risky tasks
+          </span>
+        </div>
+        <Outcomes total={total} modes={modes} showRuns aside={<HoldQueueAnswer total={total} modes={modes} harmAlone={block.shadow_run?.harm_on_prod?.mean} held={block.shadow_run?.risky_held?.mean} question={false} />} />
+      </Figure>
+    </div>
+  );
+}
+
 /** The four numbers, split by the seam: no rehearsal on one side, Shadow Run and its known gap on the other. */
-function Verdict({ held, measured, runs }: { held: Block; measured: number | null; runs: number | undefined }) {
+function Verdict({ held, n, measured, runs }: { held: Block; n: number; measured: number | null; runs: number | undefined }) {
   const rows = harmRows(held);
   const risky = held.direct?.risky_tasks;
   const tile = (row: HarmRow) => {
@@ -118,7 +177,7 @@ function Verdict({ held, measured, runs }: { held: Block; measured: number | nul
     );
   };
   return (
-    <Figure className="ev-figure-block" n={1} measured={measured} extra={`${SOURCE} · mean of ${num(runs)} runs per task · the benchmark's own harm checks`}>
+    <Figure className="ev-figure-block" n={n} measured={measured} extra={`${SOURCE} · mean of ${num(runs)} runs per task · the benchmark's own harm checks`}>
       <h2 className="ev-statement">
         Harm on prod, of <span className="mono">{num(risky)}</span> risky tasks held out from tuning
       </h2>
@@ -202,7 +261,7 @@ function Fates({ stats }: { stats: ModeStats }) {
 }
 
 /** The gap and the price, across the seam. Both are written from the numbers, so neither can outrun them. */
-function GapAndPrice({ held, measured }: { held: Block; measured: number | null }) {
+function GapAndPrice({ held, n, measured }: { held: Block; n: number; measured: number | null }) {
   const s = held.shadow_run;
   if (!s) return null;
   const rubber = s.harm_if_rubber_stamped;
@@ -250,7 +309,7 @@ function GapAndPrice({ held, measured }: { held: Block; measured: number | null 
           </div>
         </dl>
       </div>
-      <p className="t-caption ev-split-caption">{sourceLine({ n: 3, measured, extra: `${SOURCE} · mean per run · 1 strip = 1 run, 1 cell = 1 safe task` })}</p>
+      <p className="t-caption ev-split-caption">{sourceLine({ n, measured, extra: `${SOURCE} · mean per run · 1 strip = 1 run, 1 cell = 1 safe task` })}</p>
     </section>
   );
 }
@@ -501,7 +560,7 @@ export function ResultsPage() {
 
   return (
     <div className="page results ev-page">
-      <PageHead label="Results" title="Results" lead="Benchmark results, exactly as the benchmark wrote them. This page has no numbers of its own." />
+      <PageHead label="Results" title="Results" lead="Benchmark results, exactly as the benchmark wrote them. The one sum on this page is Neither: the tasks minus the other two." />
       {results.error && (
         <Notice tone="bad" title="Could not load results.">
           {results.error}
@@ -516,10 +575,16 @@ export function ResultsPage() {
               {reason}
             </Notice>
           )}
-          {!reason && heldout?.direct && <Verdict held={heldout} measured={measuredAt} runs={runs} />}
-          {!reason && heldout?.direct && <HarmChart block={heldout} n={2} measured={measuredAt} />}
-          {!reason && heldout?.shadow_run && <GapAndPrice held={heldout} measured={measuredAt} />}
-          {!reason && external?.direct && isNum(external.direct.risky_tasks) && external.direct.risky_tasks > 0 && <HarmChart block={external} n={4} measured={measuredAt} />}
+          {!reason && heldout?.direct && <Lead block={heldout} measured={measuredAt} runs={runs} />}
+          {!reason && heldout?.direct && <Verdict held={heldout} n={2} measured={measuredAt} runs={runs} />}
+          {!reason && heldout?.direct && <HarmChart block={heldout} n={3} measured={measuredAt} />}
+          {!reason && heldout?.shadow_run && <GapAndPrice held={heldout} n={4} measured={measuredAt} />}
+          {!reason && external?.direct && isNum(external.direct.risky_tasks) && external.direct.risky_tasks > 0 && (
+            <>
+              <ExternalOutcomes block={external} n={5} measured={measuredAt} runs={runs} />
+              <HarmChart block={external} n={6} measured={measuredAt} />
+            </>
+          )}
           {hasTable && table ? (
             <section className="ev-table-section" aria-label="The benchmark table">
               <div className="ev-section-head">

@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from checker.control_kinds import control_kind
 from control import hero
 from control import auth, evidence, llm, settings
 from control.approvals import ApprovalError, challenge
@@ -38,6 +39,7 @@ WEB_DIST = ROOT / "web" / "dist"
 RESULTS = ROOT / "bench" / "results.json"
 PUBLIC_URL = os.environ.get("SHADOWRUN_PUBLIC_URL", "")
 # Guest access hands out both identities, so it can never sit in front of a team's own database.
+IDLE_RESEED_S = int(os.environ.get("SHADOWRUN_IDLE_RESEED_S", "1200"))
 OPEN_DEMO = not settings.TARGETS_FILE and (os.environ.get("SHADOWRUN_OPEN_DEMO", "1") == "1")
 
 service: Service | None = None
@@ -53,8 +55,12 @@ def svc() -> Service:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    async with mcp_server.session_manager.run():
-        yield
+    reseeder = asyncio.create_task(_reseed_when_idle())
+    try:
+        async with mcp_server.session_manager.run():
+            yield
+    finally:
+        reseeder.cancel()
 
 
 app = FastAPI(title="Shadow Run", version="0.1.0", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
@@ -212,9 +218,11 @@ def public_info() -> dict:
         headline = {
             "risky_tasks": h["direct"]["risky_tasks"], "direct": h["direct"]["harm_on_prod"]["mean"], "static_gate": h["static_gate"]["harm_on_prod"]["mean"],
             "shadow_run": h["shadow_run"]["harm_on_prod"]["mean"], "rubber_stamp": h["shadow_run"]["harm_if_rubber_stamped"]["mean"],
+            "done_direct": h["direct"]["risky_done"]["mean"], "done_static_gate": h["static_gate"]["risky_done"]["mean"], "done_unread": h["shadow_run"]["risky_done_if_rubber_stamped"]["mean"],
+            "held": h["shadow_run"]["risky_held"]["mean"],
             "runs_per_task": r["runs_per_task"], "measured_at": r["at"],
         }
-    return {"open_demo": OPEN_DEMO, "headline": headline, "hero": hero.latest(svc().store) if OPEN_DEMO else None, "video_url": os.environ.get("SHADOWRUN_VIDEO_URL") or None, "repo": "https://github.com/Prashant-thakur77/Shadow-Run"}
+    return {"open_demo": OPEN_DEMO, "headline": headline, "hero": hero.latest(svc().store) if OPEN_DEMO else None, "applied_example": hero.applied_example(svc().store) if OPEN_DEMO else None, "video_url": os.environ.get("SHADOWRUN_VIDEO_URL") or None, "repo": "https://github.com/Prashant-thakur77/Shadow-Run"}
 
 
 @app.post("/api/demo/enter")
@@ -529,7 +537,7 @@ def receipts() -> dict:
     c = load("controls.json")
     if c:
         for x in c["controls"]:
-            items.append({"group": "Negative controls", "claim": x["control"], "value": "pass" if x["ok"] else "FAIL", "must": x["must"], "got": str(x.get("got", ""))[:300], "at": c["at"], "source": "bench/controls.json", "rerun": "python -m checker.controls"})
+            items.append({"group": "Negative controls", "claim": x["control"], "value": "pass" if x["ok"] else "FAIL", "must": x["must"], "got": str(x.get("got", ""))[:300], "kind": control_kind(x["control"]), "at": c["at"], "source": "bench/controls.json", "rerun": "python -m checker.controls"})
     g = load("gauntlet.json")
     if g and g.get("summary"):
         for label, s in (("old policy, a row limit only", g.get("baseline_summary")), ("named list of what may change alone", g.get("first_summary")), ("after adopting the rules those attacks taught", g["summary"])):
@@ -554,6 +562,8 @@ def receipts() -> dict:
 
 @app.post("/api/runs/{run_id}/rehearse-again", status_code=201)
 async def rehearse_again(run_id: str, user: str = Depends(auth.current_user)) -> dict:
+    limit(user, "rehearsals again", 30)
+    require_inference_budget()
     try:
         run = svc().rehearse_again(run_id, user)
     except (KeyError, ValueError) as e:
@@ -583,7 +593,8 @@ async def prod_checksum(target_id: str = DEMO_TARGET_ID, user: str = Depends(aut
         fp = await svc().runner.host_fingerprint(t["host_id"])
         return {"digest": fp.get("digest"), "files": fp.get("files"), "services": fp.get("services"), "at": time.time()}
     fp = await asyncio.to_thread(fingerprint, conn_from_target(t))
-    return {"digest": fp["digest"], "lsn": fp["lsn"], "rows": {k: v["rows"] for k, v in fp["tables"].items()}, "at": time.time()}
+    seed = svc().store.kv_get(f"seed_digest:{target_id}")
+    return {"seed_digest": seed, "changed_from_seed": bool(seed) and seed != fp["digest"], "digest": fp["digest"], "lsn": fp["lsn"], "rows": {k: v["rows"] for k, v in fp["tables"].items()}, "at": time.time()}
 
 
 @app.post("/api/demo/drift")
@@ -615,10 +626,55 @@ async def make_drift(target_id: str = DEMO_TARGET_ID, user: str = Depends(auth.c
     return result
 
 
-@app.post("/api/demo/reset")
-async def demo_reset(target_id: str = DEMO_TARGET_ID, user: str = Depends(auth.current_user)) -> dict:
+async def reseed_demo(t: dict, who: str, event: str = "demo_reset") -> dict:
+    """Back to the seed, learned guardrails included, because those belong to a demo session and not to the seed."""
     from demo.reset import reset
 
+    conn = conn_from_target(t)
+    counts = await asyncio.to_thread(reset, conn.kwargs())
+    fresh = demo_target()
+    fresh["budget"] = t.get("budget", fresh["budget"])
+    svc().store.save_target(fresh)
+    # A reseed is what defines the seed, so the header can say when a visitor has changed prod since.
+    digest = (await asyncio.to_thread(fingerprint, conn))["digest"]
+    svc().store.kv_set(f"seed_digest:{t['id']}", digest)
+    svc().store.append_event(None, who, event, {"tables": len(counts)})
+    return counts
+
+
+def idle_reseed_due(now: float, last_activity: float, busy: bool, digest: str, seed: str | None, guardrails: int, seeded_guardrails: int, idle_s: float) -> bool:
+    """Nobody should inherit another visitor's changes, and nobody should lose theirs while they're working."""
+    if busy or not seed or now - last_activity < idle_s:
+        return False
+    return digest != seed or guardrails != seeded_guardrails
+
+
+async def _reseed_if_idle() -> None:
+    s = svc()
+    t = s.store.get_target(DEMO_TARGET_ID)
+    seed = s.store.kv_get(f"seed_digest:{DEMO_TARGET_ID}")
+    if not t or not seed:
+        return
+    last = max((r.get("updated_at") or r.get("created_at") or 0 for r in s.store.list_runs(3)), default=0)
+    if bool(s._tasks) or time.time() - last < IDLE_RESEED_S:
+        return
+    digest = (await asyncio.to_thread(fingerprint, conn_from_target(t)))["digest"]
+    if idle_reseed_due(time.time(), last, bool(s._tasks), digest, seed, len(t["guardrails"]), len(demo_target()["guardrails"]), IDLE_RESEED_S):
+        await reseed_demo(t, "shadowrun", "demo_reseeded_while_idle")
+
+
+async def _reseed_when_idle() -> None:
+    while True:
+        await asyncio.sleep(120)
+        if OPEN_DEMO:
+            try:
+                await _reseed_if_idle()
+            except Exception:
+                logging.getLogger("shadowrun.api").exception("idle reseed failed")
+
+
+@app.post("/api/demo/reset")
+async def demo_reset(target_id: str = DEMO_TARGET_ID, user: str = Depends(auth.current_user)) -> dict:
     limit(user, "demo resets", 120)
     t = svc().store.get_target(target_id)
     # This reseeds whatever database it's pointed at, so it must only ever reach the seeded demo.
@@ -628,13 +684,7 @@ async def demo_reset(target_id: str = DEMO_TARGET_ID, user: str = Depends(auth.c
         await svc().runner.host_ensure(t["host_id"], recreate=True)
         svc().store.append_event(None, user, "demo_reset", {"target": target_id})
         return {"ok": True}
-    conn = conn_from_target(t)
-    counts = await asyncio.to_thread(reset, conn.kwargs())
-    if t:
-        fresh = demo_target()
-        fresh["budget"] = t.get("budget", fresh["budget"])
-        svc().store.save_target(fresh)  # learned guardrails belong to a demo session, not to the seed
-    svc().store.append_event(None, user, "demo_reset", {"tables": len(counts)})
+    counts = await reseed_demo(t, user)
     return {"ok": True, "tables": counts}
 
 
@@ -643,6 +693,7 @@ async def redteam_start(user: str = Depends(auth.current_user)) -> dict:
     running = [d for d in svc().store.list_redteam(3) if d.get("status") == "running" and time.time() - d["created_at"] < 300]
     if running:
         return running[0]
+    limit(user, "red team runs", 12)
     return svc().start_redteam(user)
 
 

@@ -388,6 +388,47 @@ function atSeconds(at?: string): number | null {
   return Number.isNaN(t) ? null : t / 1000;
 }
 
+/** "5 columns across 4 tables", counted from the policy's own list of `table.column` names. */
+function reachWords(reach: string[]): string {
+  const tables = new Set(reach.map((t) => t.split('.')[0])).size;
+  return `${plural(reach.length, 'column')}${tables > 1 ? ` across ${num(tables)} tables` : ''}`;
+}
+
+/** The change a viewer should see before reading the table, whose "applied alone" column doesn't move. */
+function ReachDrop({ before, after, alone }: { before: string[]; after: string[]; alone: number }) {
+  if (!before.length) return null;
+  return (
+    <div className="gt-drop">
+      <h3 className="gt-drop-title">What a plan could change with no person</h3>
+      <div className="gt-drop-sides">
+        <p className="gt-drop-side is-bad">
+          <span className="gt-drop-when">went from</span>{' '}
+          <span className="gt-drop-big">
+            <span className="t-num-xl">{num(before.length)}</span> <span className="gt-drop-unit">{reachWords(before)}</span>
+          </span>
+        </p>
+        <p className={`gt-drop-side${after.length ? '' : ' is-good'}`}>
+          <span className="gt-drop-when">to</span>{' '}
+          <span className="gt-drop-big">
+            <span className="t-num-xl">{num(after.length)}</span> <span className="gt-drop-unit">{reachWords(after)}</span>
+          </span>{' '}
+          {after.length > 0 && (
+            <span className="gt-drop-note">
+              {after.map((t, i) => (
+                <span key={t}>
+                  {i > 0 && ', '}
+                  <code className="mono">{t}</code>
+                </span>
+              ))}
+              . {alone > 0 ? `${num(alone)} damaging ${plural(alone, 'plan')} still ${alone === 1 ? 'applies' : 'apply'} alone. This is all they could change.` : ''}
+            </span>
+          )}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /** The measured comparison. It leads the section, because one run on its own can't say whether the policy helped. */
 function Published({ data, error, target }: { data: GauntletPublished | null; error: string | null; target: Target }) {
   const { ref, state } = useReachPlay();
@@ -423,6 +464,7 @@ function Published({ data, error, target }: { data: GauntletPublished | null; er
     <figure className="gt-published-figure">
       <Frame className={`gt-published gt-reach-${state}`}>
         <div ref={ref} className="gt-published-inner" style={{ '--strikes': closedCount } as CSSProperties}>
+          <ReachDrop before={data.baseline_summary?.reach_alone ?? []} after={reachLast} alone={alone} />
           <header className="gt-published-head">
             <Label>Measured</Label>
             <h3 className="gt-published-title">The same attacker, against each policy</h3>

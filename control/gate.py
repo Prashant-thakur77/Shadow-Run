@@ -8,11 +8,13 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shlex
 import shutil
 import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
-import bashlex
 import sqlglot
 from sqlglot import exp
 from sqlglot.dialects.postgres import Postgres
@@ -216,26 +218,56 @@ DESTRUCTIVE_COMMANDS = {
 SERVICE_COMMANDS = {"systemctl", "service", "kill", "pkill", "killall", "reboot", "shutdown", "halt", "poweroff", "init", "crontab"}
 # These run other programs, so the first word of the command says nothing about what happens.
 OPAQUE_COMMANDS = {"bash", "sh", "zsh", "dash", "ksh", "eval", "exec", "source", ".", "python", "python2", "python3", "perl", "ruby", "node", "php", "lua", "awk", "gawk", "busybox", "env", "nohup", "timeout", "xargs", "command", "nice", "setsid", "socat", "openssl"}
+# Words that run the command after them.
+COMMAND_PREFIXES = {"sudo", "doas", "time"}
 EXTERNAL_COMMANDS = {"curl", "wget", "scp", "rsync", "ssh", "sftp", "nc", "ncat", "sendmail", "mail", "aws", "gcloud", "az", "terraform", "kubectl", "stripe", "git"}
 
 
+def _shfmt() -> str:
+    binary = shutil.which("shfmt") or str(Path(sys.executable).parent / "shfmt")
+    if not Path(binary).exists():
+        raise ValueError("shfmt is not installed, so this shell can't be read")
+    return binary
+
+
+def _shell_word(raw: str) -> str:
+    """A word as the shell reads it before expansion: quotes off, $VARS and $(...) left in place."""
+    try:
+        return " ".join(shlex.split(raw))
+    except ValueError:
+        return raw
+
+
 def shell_commands(cmd: str) -> list[list[str]]:
-    """Every simple command in the script, with its words. Unparseable input raises."""
+    """Every simple command in a shell string as its words, including those in loops, `if`, functions and $(...).
+
+    shfmt parses as strictly as bash and only parses. Text it can't read raises, and the caller blocks it.
+    """
+    src = cmd.encode("utf-8", "surrogateescape")
+    parsed = subprocess.run([_shfmt(), "--to-json", "-ln", "bash"], input=src, capture_output=True, timeout=10)
+    if parsed.returncode != 0:
+        raise ValueError(parsed.stderr.decode("utf-8", "replace").strip() or "shfmt could not read this")
+    tree = json.loads(parsed.stdout)
+    if not tree.get("Stmts"):
+        raise ValueError("there is no command here")
     out: list[list[str]] = []
 
-    def visit(node) -> None:
-        if node.kind == "command":
-            out.append([p.word for p in node.parts if p.kind == "word"])
-        for attr in ("parts", "list"):
-            for child in getattr(node, attr, []) or []:
+    def text(node: dict) -> str:
+        return src[node["Pos"]["Offset"] : node["End"]["Offset"]].decode("utf-8", "replace")
+
+    def visit(node: Any) -> None:
+        if isinstance(node, list):
+            for child in node:
                 visit(child)
-        for attr in ("command",):
-            child = getattr(node, attr, None)
-            if child is not None and hasattr(child, "kind"):
+        elif isinstance(node, dict):
+            if node.get("Type") == "CallExpr" and node.get("Args"):
+                out.append([_shell_word(text(a)) for a in node["Args"]])
+            elif node.get("Type") == "DeclClause":
+                out.append([node["Variant"]["Value"], *(text(a) for a in node.get("Args") or [])])
+            for child in node.values():
                 visit(child)
 
-    for tree in bashlex.parse(cmd):
-        visit(tree)
+    visit(tree)
     return out
 
 
@@ -263,8 +295,11 @@ def check_shell_step(step: int, cmd: str) -> tuple[list[dict], str]:
             continue
         prog = words[0].rsplit("/", 1)[-1]
         args = words[1:]
-        if prog == "sudo" and args:
+        while prog in COMMAND_PREFIXES and args and not args[0].startswith("-"):
             prog, args = args[0].rsplit("/", 1)[-1], args[1:]
+        if prog in COMMAND_PREFIXES and args:
+            # `sudo -u x rm ...`: which word is the program depends on the flags, so it isn't readable from here.
+            prog = "env"
         flags = "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--"))
         long_flags = [a for a in args if a.startswith("--")]
         text = " ".join(words)[:300]

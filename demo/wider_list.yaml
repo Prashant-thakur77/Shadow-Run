@@ -1,0 +1,6 @@
+# A longer auto-apply list than the demo's, closer to what a team might accept after a few weeks of reading reports.
+# Deletes, cascades and anything over the row budget still wait for a person. Measured in bench/results.wider_list.json.
+feature_flags: [enabled, note]
+products: [name, active]
+job_logs: "*"
+job_logs_archive: "*"

@@ -13,6 +13,7 @@ from typing import Any
 INCIDENT = "saastr_freeze"
 FALLBACK = Path(__file__).resolve().parent.parent / "bench" / "hero.json"
 _cache: dict[str, Any] = {"at": 0.0, "value": None}
+_applied_cache: dict[str, Any] = {"at": 0.0, "value": None}
 
 
 def build(run: dict) -> dict | None:
@@ -64,4 +65,26 @@ def latest(store: Any) -> dict | None:
     if value is None and FALLBACK.exists():
         value = json.loads(FALLBACK.read_text())
     _cache.update(at=now, value=value)
+    return value
+
+
+def applied_example(store: Any) -> dict | None:
+    """A real run a person approved and that applied, because the hero's replay is blocked and stops before that part."""
+    now = time.time()
+    if now - _applied_cache["at"] < 60:
+        return _applied_cache["value"]
+    value = None
+    for run in store.list_runs(200):
+        apply = run.get("apply") or {}
+        approval = run.get("approval") or {}
+        final = next((a for a in run.get("attempts", []) if a["n"] == run.get("final_attempt")), None) or {}
+        if run.get("status") == "applied" and run.get("target_id") == "demo-saas" and approval.get("kind") == "human" and not run.get("undo_of") and final.get("report"):
+            totals = final["report"].get("totals") or {}
+            value = {
+                "run_id": run["id"], "measured_at": run.get("created_at"), "plan_hash": run.get("plan_hash"), "rows_changed": totals.get("rows_changed"),
+                "prod_before": run.get("prod_before_apply") or (run.get("prod_check") or {}).get("before"), "prod_after": run.get("prod_after"),
+                "actual_counts": apply.get("actual_counts"), "undo_verified": (final.get("undo") or {}).get("verified"), "reproduced": (final.get("reproduced") or {}).get("ok"),
+            }
+            break
+    _applied_cache.update(at=now, value=value)
     return value

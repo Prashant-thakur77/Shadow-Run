@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createContext, Fragment, lazy, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, errorText } from './api/client';
 import type { Health, ProdChecksum } from './api/types';
 import { AuthProvider, useAuth } from './auth/AuthContext';
@@ -87,25 +87,33 @@ function Shell() {
   else if (path === '/audit') page = <AuditPage />;
 
   return (
-    <div className="app">
-      <Header />
-      <main className="main">
-        <Boundary key={path} label="page">
-          <Suspense
-            fallback={
-              <div className="page">
-                <Loading />
-              </div>
-            }
-          >
-            {page}
-          </Suspense>
-        </Boundary>
-      </main>
-      <StatusBar />
-      <BottomBar />
-    </div>
+    <ProdProvider active={!!user}>
+      <div className="app">
+        <Header />
+        <main className="main">
+          <Boundary key={path} label="page">
+            <Suspense
+              fallback={
+                <div className="page">
+                  <Loading />
+                </div>
+              }
+            >
+              <AfterReseed>{page}</AfterReseed>
+            </Suspense>
+          </Boundary>
+        </main>
+        <StatusBar />
+        <BottomBar />
+      </div>
+    </ProdProvider>
   );
+}
+
+/** A reseed resets rows and learned guardrails, so whatever page is open reads everything again. */
+function AfterReseed({ children }: { children: ReactNode }) {
+  const { reseeds } = useProd();
+  return <Fragment key={reseeds}>{children}</Fragment>;
 }
 
 function NotFound() {
@@ -164,8 +172,10 @@ function Nav() {
     };
     place();
     void document.fonts?.ready.then(place);
-    window.addEventListener('resize', place);
-    return () => window.removeEventListener('resize', place);
+    // The nav's own box, since the chip beside it can also push it onto its own row.
+    const observer = new ResizeObserver(place);
+    if (navRef.current) observer.observe(navRef.current);
+    return () => observer.disconnect();
   }, [path]);
 
   return (
@@ -221,6 +231,7 @@ function BottomBar() {
   const [theme, toggleTheme] = useTheme();
   const { path } = useLocation();
   const isActive = useIsActive();
+  const { unseeded } = useProd();
   const sheet = useRef<HTMLDialogElement>(null);
   const items = user ? NAV.filter((n) => ['/', '/redteam', '/incidents', '/receipts'].includes(n.href)) : [{ href: '/', label: 'Enter' }, ...NAV.filter((n) => ['/incidents', '/receipts', '/results'].includes(n.href))];
   const rest = user ? NAV.filter((n) => !items.some((i) => i.href === n.href)) : [];
@@ -239,7 +250,11 @@ function BottomBar() {
         ))}
         {user && (
           <button type="button" className="bottombar-link" onClick={() => sheet.current?.showModal()}>
-            More
+            <span className="bottombar-more">
+              More
+              {unseeded && <i className="bottombar-dot" aria-hidden="true" />}
+              {unseeded && <span className="sr-only">, prod has changed since the seed</span>}
+            </span>
           </button>
         )}
       </nav>
@@ -253,6 +268,7 @@ function BottomBar() {
           }}
         >
           <div className="more-sheet-body">
+            <SeedRow />
             <ul className="more-sheet-links">
               {rest.map((n) => (
                 <li key={n.href}>
@@ -281,14 +297,39 @@ function BottomBar() {
   );
 }
 
-function ProdIndicator() {
+interface ProdStatus {
+  data: ProdChecksum | null;
+  failed: boolean;
+  /** The hash moved while this page was open. */
+  changed: boolean;
+  /** A demo target's prod differs from its last reseed, because of a run here or another visitor's. */
+  unseeded: boolean;
+  reseeding: boolean;
+  /** What the last press of Reseed came to, for a few seconds. */
+  reseedNote: { text: string; failed: boolean } | null;
+  reseed: () => Promise<void>;
+  reseeds: number;
+}
+
+const ProdContext = createContext<ProdStatus>({ data: null, failed: false, changed: false, unseeded: false, reseeding: false, reseedNote: null, reseed: async () => {}, reseeds: 0 });
+const useProd = () => useContext(ProdContext);
+
+/** One measurement of prod, for the chip in the header and the More sheet on phones. */
+function ProdProvider({ active, children }: { active: boolean; children: ReactNode }) {
   const [data, setData] = useState<ProdChecksum | null>(null);
   const [failed, setFailed] = useState(false);
   const [changed, setChanged] = useState(false);
+  const [unseeded, setUnseeded] = useState(false);
+  const [reseeding, setReseeding] = useState(false);
+  const [reseedNote, setReseedNote] = useState<ProdStatus['reseedNote']>(null);
+  const [reseeds, setReseeds] = useState(0);
   const last = useRef<string | undefined>(undefined);
   const lastTarget = useRef<string | undefined>(undefined);
+  const measureNow = useRef<() => Promise<void>>(async () => {});
+  const noteTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
+    if (!active) return;
     let stopped = false;
     let flash: number | undefined;
     const measure = async () => {
@@ -298,6 +339,8 @@ function ProdIndicator() {
         if (stopped || target !== currentTarget()) return;
         setFailed(false);
         setData(res);
+        // Only a reseed defines the seed, so until one has happened this stays false and nothing is claimed.
+        setUnseeded(res.changed_from_seed === true && target.startsWith('demo'));
         // Moving to another target is not a change to prod.
         const sameTarget = lastTarget.current === target;
         lastTarget.current = target;
@@ -311,6 +354,7 @@ function ProdIndicator() {
         if (!stopped) setFailed(true);
       }
     };
+    measureNow.current = measure;
     void measure();
     const timer = window.setInterval(measure, 15000);
     window.addEventListener('sr:prod-changed', measure);
@@ -320,17 +364,73 @@ function ProdIndicator() {
       window.clearTimeout(flash);
       window.removeEventListener('sr:prod-changed', measure);
     };
+  }, [active]);
+
+  useEffect(() => () => window.clearTimeout(noteTimer.current), []);
+
+  const reseed = useCallback(async () => {
+    setReseeding(true);
+    setReseedNote(null);
+    window.clearTimeout(noteTimer.current);
+    let note: ProdStatus['reseedNote'];
+    try {
+      await api.demoReset(currentTarget());
+      // Asked for, so it isn't flagged as a surprise on the next measurement.
+      last.current = undefined;
+      await measureNow.current();
+      setReseeds((n) => n + 1);
+      note = { text: 'Reseeded', failed: false };
+    } catch (e) {
+      note = { text: `Could not reseed. ${errorText(e)}`, failed: true };
+    }
+    setReseeding(false);
+    setReseedNote(note);
+    noteTimer.current = window.setTimeout(() => setReseedNote(null), 6000);
   }, []);
 
+  const value = useMemo(() => ({ data, failed, changed, unseeded, reseeding, reseedNote, reseed, reseeds }), [data, failed, changed, unseeded, reseeding, reseedNote, reseed, reseeds]);
+  return <ProdContext.Provider value={value}>{children}</ProdContext.Provider>;
+}
+
+function ProdIndicator() {
+  const { data, failed, changed, unseeded, reseeding, reseedNote, reseed } = useProd();
+  const seedLine = unseeded || reseedNote;
+  const measuredFrom = data?.digest ? `Prod checksum ${data.digest}, LSN ${data.lsn ?? 'unknown'}. Measured from the control plane.` : undefined;
   return (
-    <span
-      className={changed ? 'prod is-changed' : 'prod'}
-      title={data?.digest ? `Prod checksum ${data.digest}, LSN ${data.lsn ?? 'unknown'}. Measured from the control plane.` : undefined}
-    >
-      <span className="prod-label">{data?.files !== undefined ? 'Prod server' : 'Prod'}</span>
-      <code className="mono prod-hash">{failed ? 'unavailable' : data?.digest ? short(data.digest, 8).replace('…', '') : '…'}</code>
-      {changed && <span className="prod-changed">changed</span>}
+    <span className={`prod${changed ? ' is-changed' : ''}${seedLine ? ' has-seed-line' : ''}`} title={measuredFrom && data?.seed_digest ? `${measuredFrom} Seed checksum ${data.seed_digest}.` : measuredFrom}>
+      <span className="prod-main">
+        <span className="prod-label">{data?.files !== undefined ? 'Prod server' : 'Prod'}</span>
+        <code className="mono prod-hash">{failed ? 'unavailable' : data?.digest ? short(data.digest, 8).replace('…', '') : '…'}</code>
+        {changed && <span className="prod-changed">changed</span>}
+      </span>
+      {seedLine && (
+        <span className="prod-seed" role="status">
+          {unseeded && <span title={reseedNote?.failed ? reseedNote.text : undefined}>{reseedNote?.failed ? 'Could not reseed' : 'changed since the seed'}</span>}
+          {unseeded && (
+            <button type="button" className="textbtn prod-reseed" disabled={reseeding} onClick={() => void reseed()}>
+              {reseeding ? 'Reseeding' : 'Reseed'}
+            </button>
+          )}
+          {!unseeded && reseedNote && <span>{reseedNote.text}</span>}
+        </span>
+      )}
     </span>
+  );
+}
+
+/** Phones: the chip has room for the words and no room for a good tap target, so the button lives here. */
+function SeedRow() {
+  const { unseeded, reseeding, reseedNote, reseed } = useProd();
+  if (!unseeded && !reseedNote) return null;
+  return (
+    <div className="more-sheet-seed" role="status">
+      <p>{reseedNote?.failed ? reseedNote.text : unseeded ? 'Prod has changed since the seed. A run here, or another visitor, changed it.' : reseedNote?.text}</p>
+      {unseeded && (
+        <button type="button" className="btn" disabled={reseeding} onClick={() => void reseed()}>
+          {reseeding ? 'Reseeding' : 'Reseed'}
+        </button>
+      )}
+    </div>
   );
 }
 

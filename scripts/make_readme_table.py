@@ -7,6 +7,7 @@ Blocks are marked <!-- name:start --> ... <!-- name:end -->. A block whose sourc
 from __future__ import annotations
 
 import json
+import sys
 import urllib.request
 import os
 import re
@@ -15,6 +16,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BENCH = ROOT / "bench"
+sys.path.insert(0, str(ROOT))
+from checker.control_kinds import control_kind  # noqa: E402
 NOT_YET = "Not measured yet."
 
 
@@ -81,15 +84,32 @@ def block_headline() -> str:
     n = d["risky_tasks"]
     runs = [json.loads(line) for line in (BENCH / "runs.jsonl").read_text().splitlines() if line.strip()]
     # A run that hit a harness error was retried, so it would otherwise count twice.
-    risky = [r for r in runs if r.get("mode") == "shadow_run" and r.get("risky") and r.get("outcome") != "harness_error"]
-    rewrote = sum(1 for r in risky if r.get("tries", 1) > 1)
-    return (
-        f"**On {n} risky tasks held out from tuning, the same agent caused harm on prod {times(d['harm_on_prod']['mean'])} running directly and {times(g['harm_on_prod']['mean'])} behind a static rule gate. "
-        f"Through Shadow Run, nothing harmful reached prod without a person. If that person approved every plan unread, harm was {s['harm_if_rubber_stamped']['mean']:g}.**\n\n"
-        f"Read those last two together. The zero is mostly the hold: {s['risky_held']['mean']:g} of {n} risky plans waited for a person, and anything that holds every plan would score zero too. "
-        f"The drop to {s['harm_if_rubber_stamped']['mean']:g} is what rehearsing and the frozen guardrails add: the agent saw what its plan would really do and rewrote it, in {rewrote} of {len(risky)} risky runs. "
-        f"The price is approvals, since all {s['safe_held']['mean']:g} safe tasks waited too. A rehearsal takes {s['rehearsal_s']['p50']} s at the median, boot to destroy."
+    held_out = [r for r in runs if r.get("mode") == "shadow_run" and r.get("risky") and r.get("split") == "heldout" and r.get("outcome") != "harness_error"]
+    rewrote = sum(1 for r in held_out if r.get("tries", 1) > 1)
+    done = lambda m: m["risky_done"]["mean"]
+    unread_done, unread_harm = s["risky_done_if_rubber_stamped"]["mean"], s["harm_if_rubber_stamped"]["mean"]
+    neither = lambda doing, harm: round(n - doing - harm, 2)
+    board = table(
+        [f"Of {n} held-out risky tasks", "Agent directly", "Static gate", "Shadow Run, every plan approved unread"],
+        [
+            ["Did the job, no harm", f"{done(d):g}", f"{done(g):g}", f"**{unread_done:g}**"],
+            ["Harm on prod", f"{d['harm_on_prod']['mean']:g}", f"{g['harm_on_prod']['mean']:g}", f"**{unread_harm:g}**"],
+            ["Neither", f"{neither(done(d), d['harm_on_prod']['mean']):g}", f"{neither(done(g), g['harm_on_prod']['mean']):g}", f"{neither(unread_done, unread_harm):g}"],
+        ],
     )
+    return (
+        f"**The same agent on {n} risky tasks held out from tuning finished the job safely {times(done(d))} running directly, and {times(unread_done)} through Shadow Run, even with a person approving every plan unread. Harm fell from {d['harm_on_prod']['mean']:g} to {unread_harm:g}.**\n\n"
+        + board + "\n\n"
+        f"That gain is what rehearsing adds: the agent saw what its plan would really do and rewrote it, in {rewrote} of {len(held_out)} held-out runs. The static gate's {g['harm_on_prod']['mean']:g} against {d['harm_on_prod']['mean']:g} is noise at this sample size. "
+        f"With a person who reads the report, nothing harmful reached prod without one, a harm count of {s['harm_on_prod']['mean']:g}, but that zero is mostly the hold: {s['risky_held']['mean']:g} of {n} risky plans waited, and anything that holds every plan would score zero too. "
+        f"The price is approvals, since all {s['safe_held']['mean']:g} safe tasks waited as well. A rehearsal takes {s['rehearsal_s']['p50']} s at the median, boot to destroy."
+    )
+
+
+def retried(r: dict) -> str:
+    """runs.jsonl keeps a run that hit a harness error, so a reader counting lines should know why there are more."""
+    extra = sum(1 for line in (BENCH / "runs.jsonl").read_text().splitlines() if line.strip()) - r["runs"]
+    return f" after retrying {extra} that hit one in the benchmark's own database reset, which `bench/runs.jsonl` keeps" if extra > 0 else ""
 
 
 def block_results() -> str:
@@ -108,7 +128,7 @@ def block_results() -> str:
             rows.append(["Forced drift with the drift check off: rolled back, prod unchanged", "n/a", "n/a", "yes" if roll["ok"] else "NO"])
     note = (
         f"Mean of {r['runs_per_task']} runs per task, range in brackets. Model `{r['model']}` on Vultr Serverless Inference, measured {r['at']}, "
-        f"commit `{r['git_commit']}`, suite sha256 `{r['suite_sha256'][:12]}`, {r['runs']} runs, {r['harness_errors']} harness errors. "
+        f"commit `{r['git_commit']}`, suite sha256 `{r['suite_sha256'][:12]}`, {r['runs']} runs, {r['harness_errors']} harness errors{retried(r)}. "
         f"Re-run: `{r['rerun']}`. Every run and its plan is in `bench/runs.jsonl`."
     )
     return table(t["columns"], rows) + "\n\n" + note
@@ -118,13 +138,24 @@ def block_groups() -> str:
     r = load("results.json")
     if not r or r.get("status") != "measured":
         return NOT_YET
-    rows = []
-    for name, b in r["by_group"].items():
-        d, g, s = b["direct"], b["static_gate"], b["shadow_run"]
-        if not d.get("risky_tasks"):
-            continue
-        rows.append([f"{name} ({d['risky_tasks']})", fmt_mean(d["harm_on_prod"]), fmt_mean(g["harm_on_prod"]), fmt_mean(s["harm_on_prod"]), fmt_mean(s.get("risky_blocked_gate")), fmt_mean(s.get("risky_blocked_guardrail")), fmt_mean(s.get("risky_held")), fmt_mean(s.get("held_harm_only_a_person_catches"))])
-    return table(["Group (risky tasks)", "Direct harm", "Static gate harm", "Shadow Run harm", "Stopped by gate", "Stopped by guardrail", "Held for a person", "Of those held, harmful if approved"], rows)
+    columns = [("Stopped by gate", "risky_blocked_gate"), ("Stopped by guardrail", "risky_blocked_guardrail"), ("Held for a person", "risky_held"), ("If approved unread, harm", "harm_if_rubber_stamped"), ("If approved unread, did the job", "risky_done_if_rubber_stamped")]
+    groups = {name: b for name, b in r["by_group"].items() if b["direct"].get("risky_tasks")}
+    # A column of zeros says nothing here.
+    shown = [(label, key) for label, key in columns if any((b["shadow_run"].get(key) or {}).get("mean") for b in groups.values())]
+    rows = [[f"{name} ({b['direct']['risky_tasks']})", fmt_mean(b["direct"]["harm_on_prod"]), fmt_mean(b["static_gate"]["harm_on_prod"]), fmt_mean(b["shadow_run"]["harm_on_prod"]), *[fmt_mean(b["shadow_run"].get(key)) for _, key in shown]] for name, b in groups.items()]
+    body = table(["Group (risky tasks)", "Direct harm", "Static gate harm", "Shadow Run harm, no person", *[label for label, _ in shown]], rows)
+    return f"<details><summary>By kind of task</summary>\n\n{body}\n\n</details>"
+
+
+def block_wider() -> str:
+    w = load("results.wider_list.json")
+    if not w or w.get("status") != "measured":
+        return ""
+    held, ext = w["heldout"]["shadow_run"], w["external"]["shadow_run"]
+    return (
+        f"Most safe work waits for a person because the demo's auto-apply list is one notes column. With [a wider list a team might accept](demo/wider_list.yaml), {held.get('safe_auto_applied', {}).get('mean', 0):g} of {held['safe_tasks']} safe tasks applied alone, "
+        f"and harm on prod with no person was {held['harm_on_prod']['mean']:g} of {held['risky_tasks']} held-out and {ext['harm_on_prod']['mean']:g} of {ext['risky_tasks']} SABER-derived. Mean of {w['runs_per_task']} runs. Deletes and cascades still wait."
+    )
 
 
 def block_redteam() -> str:
@@ -132,7 +163,8 @@ def block_redteam() -> str:
     if not rt or not rt.get("attacks"):
         return NOT_YET
     rows = [[a["title"], a["expected"], "contained" if a["contained"] else "NOT CONTAINED", f"{a['wall_s']:.1f}"] for a in rt["attacks"]]
-    out = table(["Attack", "Expected", "Result", "Wall s"], rows)
+    contained = sum(1 for a in rt["attacks"] if a["contained"])
+    out = f"**{contained} of {len(rt['attacks'])} contained.**\n\n<details><summary>Each attack</summary>\n\n" + table(["Attack", "Expected", "Result", "Wall s"], rows) + "\n\n</details>"
     out += f"\n\nProd hash before and after the whole suite: `{rt['prod_before'][:16]}` and `{rt['prod_after'][:16]}`."
     w = rt.get("wall_two") or {}
     if w.get("firewall_before"):
@@ -148,9 +180,11 @@ def block_controls() -> str:
     c = load("controls.json")
     if not c:
         return NOT_YET
-    rows = [[x["control"], x["must"], "pass" if x["ok"] else "FAIL"] for x in c["controls"]]
-    body = table(["Attempt", "Must", "Result"], rows)
-    return f"**{c['passed']} of {c['total']} passed** at {c['at']}. Re-run: `python -m checker.controls`." + where(c) + f"\n\n<details><summary>All {c['total']} attempts</summary>\n\n{body}\n\n</details>"
+    rows = [[x["control"], control_kind(x["control"]), x["must"], "pass" if x["ok"] else "FAIL"] for x in c["controls"]]
+    attacks = [x for x in c["controls"] if control_kind(x["control"]) == "attack"]
+    honest = [x for x in c["controls"] if control_kind(x["control"]) != "attack"]
+    head = f"**{sum(1 for x in attacks if x['ok'])} of {len(attacks)} attacks were refused, rolled back or held, and {sum(1 for x in honest if x['ok'])} of {len(honest)} checks that the honest path still works passed**, at {c['at']}. Re-run: `python -m checker.controls`." + where(c)
+    return head + f"\n\n<details><summary>All {c['total']}</summary>\n\n" + table(["Check", "Kind", "Must", "Result"], rows) + "\n\n</details>"
 
 
 def block_models() -> str:
@@ -188,13 +222,21 @@ def block_budget() -> str:
     if not r or r.get("status") != "measured":
         return NOT_YET
     a = r["all_risky_and_safe"]
-    return f"Inference cost per task, averaged over the benchmark: ${a['shadow_run']['cost_per_task_usd']} through Shadow Run, ${a['direct']['cost_per_task_usd']} for the agent alone."
+    per_thousand = (a["shadow_run"]["cost_per_task_usd"] + r["heldout"]["shadow_run"].get("vx1_usd_per_rehearsal", 0)) * 1000
+    return f"Inference cost per task across all {r['runs'] // (3 * r['runs_per_task'])} tasks, where the table above is held-out only: ${a['shadow_run']['cost_per_task_usd']} through Shadow Run and ${a['direct']['cost_per_task_usd']} for the agent alone. That's about ${per_thousand:.2f} of inference per thousand tasks through Shadow Run."
 
 
 def money(unit: str, v: float | None) -> str:
     if v is None:
         return "gone"
     return f"${v:,.0f}" if unit == "usd" else f"{v:,.0f}"
+
+
+def short_command(command: str) -> str:
+    first = command.strip().splitlines()[0]
+    if len(first) > 44:
+        first = first[:44].rsplit(" ", 1)[0] + " ..."
+    return first.replace("|", "\\|")
 
 
 def block_incidents() -> str:
@@ -205,8 +247,13 @@ def block_incidents() -> str:
     for r in d["incidents"]:
         measured = r["measured"][0] if r["measured"] else "nothing to measure: the command failed in the sandbox"
         moved = "; ".join(f"{m['name']}: {money(m['unit'], m['before'])} to {money(m['unit'], m['after'])}" for m in r["metrics"][:1])
-        rows.append([f"[{r['who']}, {r['when']}]({r['source']})", f"`{r['command'].splitlines()[0][:44]}`", (moved or measured)[:90], "reached prod" if r["reached_prod"] else "stopped", "yes" if r["prod_unchanged"] else "NO"])
+        rows.append([f"[{r['who']}, {r['when']}]({r['source']})", f"`{short_command(r['command'])}`", (moved or measured)[:90], "reached prod" if r["reached_prod"] else "stopped", "yes" if r["prod_unchanged"] else "NO"])
     return table(["Incident", "Command", "Measured on the clone", "Result", "Prod unchanged"], rows) + f"\n\nThe commands and how each was adapted are in [`demo/incidents.yaml`](demo/incidents.yaml). Re-run: `{d['rerun']}`." + where(d)
+
+
+def block_video() -> str:
+    url = os.environ.get("SHADOWRUN_VIDEO_URL")
+    return f"Demo video: {url}" if url else ""
 
 
 def block_second_opinion() -> str:
@@ -233,9 +280,15 @@ def block_gate() -> str:
     if not g:
         return ""
     b, ok = g["bad_plans"], g["good_plans"]
+    replay = load("gate_replay.json")
+    swap = (
+        f" The benchmark ran with an earlier shell parser. Replaying its {replay['plans']} recorded plans through today's gate gives the same verdict on {replay['same_verdict']}"
+        + "".join(f"; the other is {c['task']} in a side run, from {c['recorded']} to {c['now']}, {'still stopped' if c['still_stopped'] else 'no longer stopped'}" for c in replay["changed"])
+        + ". Re-run: `python -m bench.gate_replay`."
+    ) if replay else ""
     return (
         f"Rules alone aren't enough. Reading the suite's {b['total']} known-bad plans with no rehearsal, the static gate sends {b['sent_to_a_person']} to a person, refuses {b['refused']} and passes {b['passed']}, "
-        f"which only a rehearsal can catch. It flags {ok['sent_to_a_person']} of the {ok['total']} known-good plans and refuses {ok['refused']}. Re-run: `{g['rerun']}`."
+        f"which only a rehearsal can catch. It flags {ok['sent_to_a_person']} of the {ok['total']} known-good plans and refuses {ok['refused']}. Re-run: `{g['rerun']}`.{swap}"
     )
 
 
@@ -265,7 +318,7 @@ def block_gauntlet() -> str:
 
 
 BLOCKS = {
-    "incidents": block_incidents, "gate": block_gate, "clone_check": block_clone_check, "second_opinion": block_second_opinion, "gauntlet": block_gauntlet, "models": block_models,
+    "incidents": block_incidents, "video": block_video, "wider": block_wider, "gate": block_gate, "clone_check": block_clone_check, "second_opinion": block_second_opinion, "gauntlet": block_gauntlet, "models": block_models,
     "live": block_live, "headline": block_headline, "results": block_results, "groups": block_groups, "redteam": block_redteam,
     "controls": block_controls, "scale": block_scale, "soak": block_soak, "cost": block_budget,
 }

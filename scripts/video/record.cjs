@@ -33,7 +33,6 @@ async function withPage(id, user, fn) {
   let trim = 0;
   if (user) {
     // The way a judge gets in: the guest button holds both demo identities, so switching is one click.
-    await page.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => { document.documentElement.style.zoom = '1.25'; }); });
     await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: 'Continue as guest' }).click();
     await page.getByRole('heading', { name: 'Give the agent a task' }).waitFor();
@@ -42,7 +41,9 @@ async function withPage(id, user, fn) {
     trim = (Date.now() - started) / 1000;
   }
   const t0 = Date.now();
-  const skipTo = await fn(page, token, ctx);
+  const cuts = [];
+  const clock = () => (Date.now() - started) / 1000;
+  const skipTo = await fn(page, token, ctx, { clock, cut: (from, to) => { if (to - from > 1) cuts.push([from, to]); } });
   const video = page.video();
   await ctx.close();
   await browser.close();
@@ -50,6 +51,7 @@ async function withPage(id, user, fn) {
   // A scene can ask to drop its setup from the front of the clip, as seconds since it began.
   const cut = trim + (typeof skipTo === 'number' ? skipTo : 0);
   fs.writeFileSync(path.join(OUT, `scene-${id}.trim`), String(cut));
+  fs.writeFileSync(path.join(OUT, `scene-${id}.cuts`), JSON.stringify(cuts));
   console.log(id, ((Date.now() - t0) / 1000).toFixed(1) + 's recorded, trim ' + cut.toFixed(1));
 }
 
@@ -95,9 +97,17 @@ const stories = {
     });
   },
   async title() {
-    await withPage('title', null, async page => {
-      await page.setContent(card(`<div style="font-size:112px;font-weight:700;letter-spacing:-2px">Shadow Run</div><div style="font-size:40px;margin-top:20px;color:#c9c6bf">Your agent wants to touch prod.<br>Shadow Run lets it break a clone first.</div>`));
-      await sleep(secs('title') * 1000 + 400);
+    await withPage('title', null, async (page, _token, _ctx, { clock }) => {
+      await page.goto(BASE + '/');
+      const replay = page.getByRole('button', { name: 'Replay' }).first();
+      await replay.waitFor({ timeout: 30000 });
+      await page.waitForTimeout(400);
+      await replay.click();
+      const skip = clock();
+      // Long enough for prod's side to land, which is the point of the shot.
+      await page.getByText(/Unchanged/).first().waitFor({ timeout: 30000 }).catch(() => {});
+      await sleep(1500);
+      return skip;
     });
   },
   async task() {
@@ -157,11 +167,12 @@ const stories = {
     });
   },
   async redteam() {
-    await withPage('redteam', 'judge', async page => {
+    await withPage('redteam', 'judge', async (page, _token, _ctx, { clock, cut }) => {
       await page.goto(BASE + '/redteam');
       await page.waitForTimeout(1200);
       await page.getByRole('button', { name: /Run the red team/ }).click();
       const started = Date.now();
+      const cutFrom = clock() + 9;
       for (;;) {
         await sleep(1200);
         const r = await page.evaluate(async () => (await (await fetch('/api/redteam?limit=1', { credentials: 'include' })).json())[0]?.status);
@@ -169,6 +180,7 @@ const stories = {
         const n = await page.evaluate(() => document.body.scrollHeight);
         await page.evaluate(([h, t]) => window.scrollTo({ top: ((t % 30000) / 30000) * h * 0.75, behavior: 'smooth' }), [n, Date.now() - started]);
       }
+      cut(cutFrom, clock() - 3);
       await sleep(1200);
       const latest = await page.evaluate(async () => (await (await fetch('/api/redteam?limit=1', { credentials: 'include' })).json())[0]);
       if (!latest?.wall_two?.contained && !process.env.VIDEO_DRY_RUN) throw new Error('the second wall did not hold, so this scene cannot be recorded');
@@ -232,7 +244,7 @@ const stories = {
     });
   },
   async undo() {
-    await withPage('undo', 'judge', async (page, token) => {
+    await withPage('undo', 'judge', async (page, token, _ctx, { clock, cut }) => {
       const begun = Date.now();
       await api(page.request, 'post', '/api/demo/reset', token);
       const before = (await api(page.request, 'get', '/api/prod-checksum', token)).digest;
@@ -260,6 +272,7 @@ const stories = {
       await page.evaluate(() => window.scrollBy(0, 200));
       await page.waitForTimeout(2500);
       await undo.click();
+      const cutFrom = clock() + 1.5;
       await page.waitForURL(u => !u.toString().includes(made.id), { timeout: 30000 }).catch(() => {});
       const undoId = page.url().split('/runs/')[1];
       for (let i = 0; i < 180; i++) {
@@ -277,7 +290,9 @@ const stories = {
       fs.writeFileSync(path.join(OUT, 'undo-proof.txt'), `${before} ${after}\n`);
       await page.reload();
       await page.waitForTimeout(1800);
-      await sleep(3500);
+      await goTo(page, page.getByText('Prod is back where it started').first(), -160);
+      cut(cutFrom, clock() - 0.5);
+      await sleep(6000);
       return skip;
     });
   },
@@ -341,8 +356,11 @@ const stories = {
   async results() {
     await withPage('results', 'judge', async page => {
       await page.goto(BASE + '/results');
+      await page.getByRole('heading', { name: /Harm on prod/i }).first().waitFor({ timeout: 30000 });
       await page.waitForTimeout(1200);
-      await sleep(secs('results') * 1000 + 400);
+      await sleep(secs('results') * 500);
+      await goTo(page, page.getByText('What the zero depends on').first(), -120);
+      await sleep(secs('results') * 500 + 400);
     });
   },
   async close() {
@@ -352,8 +370,10 @@ const stories = {
     const r = fs.existsSync(resultsPath) ? JSON.parse(fs.readFileSync(resultsPath, 'utf8')) : null;
     const h = r && r.status === 'measured' ? r.heldout : null;
     const headline = h
-      ? `<div style="font-size:64px;font-weight:700;line-height:1.1">Harm on ${h.direct.risky_tasks} held-out risky tasks</div>
-         <div style="font-size:40px;margin-top:24px;color:#c9c6bf">Agent directly <b style="color:#ef6a5a">${h.direct.harm_on_prod.mean}</b> &nbsp; Static gate <b style="color:#ef6a5a">${h.static_gate.harm_on_prod.mean}</b> &nbsp; Shadow Run <b style="color:#7fd1b9">${h.shadow_run.harm_on_prod.mean}</b></div>`
+      ? `<div style="font-size:60px;font-weight:700;line-height:1.1">${h.direct.risky_tasks} held-out risky tasks</div>
+         <div style="font-size:38px;margin-top:26px;color:#c9c6bf">Agent alone: <b style="color:#efece6">${h.direct.risky_done.mean}</b> done safely, <b style="color:#ef6a5a">${h.direct.harm_on_prod.mean}</b> harm</div>
+         <div style="font-size:38px;margin-top:12px;color:#c9c6bf">Shadow Run, approved unread: <b style="color:#7fd1b9">${h.shadow_run.risky_done_if_rubber_stamped.mean}</b> done safely, <b style="color:#ef6a5a">${h.shadow_run.harm_if_rubber_stamped.mean}</b> harm</div>
+         <div style="font-size:38px;margin-top:12px;color:#c9c6bf">Shadow Run, no person: <b style="color:#7fd1b9">${h.shadow_run.harm_on_prod.mean}</b> harm</div>`
       : '<div style="font-size:72px;font-weight:700">Let it break a clone first.</div>';
     await withPage('close', null, async page => {
       await page.setContent(`<!doctype html><html><body style="margin:0;background:#fff;display:flex;align-items:center;justify-content:center;height:100vh"><div style="width:1500px">${svg}</div></body></html>`);

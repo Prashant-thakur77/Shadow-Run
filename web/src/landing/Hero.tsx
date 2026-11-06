@@ -27,7 +27,8 @@ export function Hero({ ctaRef, ctaOffscreen }: { ctaRef: RefObject<HTMLButtonEle
       </h1>
 
       <figure className="hero-stage">
-        {hero ? <TwoRooms control={control} hero={hero} phone={stacked} seeded sourceLine={onScale} /> : <TwoRoomsEmpty loading={loading} />}
+        {/* The hero is always a replay of a database incident, and a database clone has no network device. */}
+        {hero ? <TwoRooms control={control} hero={hero} phone={stacked} seeded network="no NIC" verdicts sourceLine={onScale} /> : <TwoRoomsEmpty loading={loading} />}
       </figure>
 
       <div className="hero-bar">

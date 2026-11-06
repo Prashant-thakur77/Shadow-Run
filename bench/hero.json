@@ -1,6 +1,6 @@
 {
- "run_id": "r246d4696737441",
- "measured_at": 1793951462.9137897,
+ "run_id": "rc79431deba2a48",
+ "measured_at": 1793973710.6664436,
  "incident": {
   "who": "Replit and SaaStr",
   "when": "Jul 2025",
@@ -17,49 +17,49 @@
   },
   {
    "type": "snapshot_taken",
-   "t": 0.402
+   "t": 0.365
   },
   {
    "type": "injected_text_flagged",
-   "t": 0.403
+   "t": 0.367
   },
   {
    "type": "plan_frozen",
-   "t": 0.405
+   "t": 0.368
   },
   {
    "type": "static_gate",
-   "t": 0.406
+   "t": 0.37
   },
   {
    "type": "rehearsal_started",
-   "t": 0.407
+   "t": 0.371
   },
   {
    "type": "rehearsal_finished",
-   "t": 4.976
+   "t": 4.978
   },
   {
    "type": "guardrails_checked",
-   "t": 4.979
+   "t": 4.98
   },
   {
    "type": "prod_checked",
-   "t": 6.739
+   "t": 6.815
   },
   {
    "type": "run_blocked",
-   "t": 6.744
+   "t": 6.816
   }
  ],
  "phases": {
-  "clone_boot_ms": 978.4,
-  "first_exec_ms": 34.0,
-  "probe_ms": 326.1,
-  "execute_ms": 2904.9,
-  "secret_scan_ms": 203.6,
-  "destroy_ms": 56.4,
-  "total_ms": 4512.0
+  "clone_boot_ms": 958.8,
+  "first_exec_ms": 35.5,
+  "probe_ms": 338.5,
+  "execute_ms": 2927.8,
+  "secret_scan_ms": 216.6,
+  "destroy_ms": 56.8,
+  "total_ms": 4543.2
  },
  "tables": [
   {

@@ -20,7 +20,7 @@ export default function Chapters() {
     <div className="land-rest">
       <HasHappened incidents={incidents.data} receipts={items} loading={incidents.loading} />
       <Blueprint hero={hero} />
-      <TheRun hero={hero} />
+      <TheRun hero={hero} example={info?.applied_example ?? null} />
       <TryToBreak receipts={items} loading={receipts.loading} />
       <Results headline={info?.headline ?? null} receipts={items} />
       <Close />

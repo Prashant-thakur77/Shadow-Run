@@ -1,11 +1,13 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { PublicHero } from '../../api/types';
-import { num, short } from '../../lib/format';
+import type { AppliedExample, PublicHero } from '../../api/types';
+import { isNum, num, short, when } from '../../lib/format';
+import { Mark } from '../../ui/bits';
 import { Frame } from '../../ui/Frame';
 import { Measured } from '../../ui/Measured';
 import { barsFromPhases, RunGantt } from '../../ui/RunGantt';
 import { sourceLine } from '../../ui/Figure';
 import { useScrub } from '../../ui/useScrub';
+import { useLanding } from '../context';
 import { ChapterHead, pad, Pager, Segments, useMode } from './parts';
 
 const STAGES = [
@@ -182,17 +184,92 @@ function Stack({ hero, svgRef, compact }: { hero: PublicHero | null; svgRef?: Re
   );
 }
 
-function values(hero: PublicHero | null, stage: number): ReactNode {
+const FIRST_APPLIED_STAGE = 5;
+
+const valueRow = (k: string, v: ReactNode, tone?: 'good' | 'bad') => (
+  <div key={k}>
+    <dt>{k}</dt>
+    <dd className={tone ? `is-${tone}` : undefined}>{v}</dd>
+  </div>
+);
+
+/** A word only when the record has one. A failure says so, and a missing value claims nothing. */
+function proved(ok: boolean | null | undefined, yes: string, no: string): ReactNode {
+  if (ok === null || ok === undefined) return 'Not measured';
+  return (
+    <>
+      <Mark tone={ok ? 'good' : 'bad'} size={12} /> {ok ? yes : no}
+    </>
+  );
+}
+
+/** The replay above was blocked, so the last stages come from a run that got there, and it says so in plain words. */
+function AppliedValues({ example, stage, blocked }: { example: AppliedExample; stage: number; blocked: boolean }) {
+  const { enter, guestOff, busy } = useLanding();
+  const href = `/runs/${encodeURIComponent(example.run_id)}`;
+  const counts = Object.entries(example.actual_counts ?? {});
+  const onProd = counts.reduce((sum, [, c]) => sum + (c.ins ?? 0) + (c.upd ?? 0) + (c.del ?? 0), 0);
+  const words = counts.flatMap(([table, c]) =>
+    [
+      [c.ins, 'inserted'],
+      [c.upd, 'updated'],
+      [c.del, 'deleted'],
+    ]
+      .filter(([n]) => isNum(n) && n > 0)
+      .map(([n, verb]) => `${table}: ${num(n)} ${verb}`),
+  );
+  const matched = counts.length > 0 && isNum(example.rows_changed) ? onProd === example.rows_changed : null;
+  return (
+    <>
+      <p className="run-values-other">
+        {blocked ? 'The replay above was blocked, so it never got here. This is a different run that did: ' : 'This is a different run from the replay above: '}
+        {guestOff ? (
+          <code className="mono">{example.run_id}</code>
+        ) : (
+          <a
+            className="mono"
+            href={href}
+            onClick={(e) => {
+              e.preventDefault();
+              if (!busy) void enter(href);
+            }}
+          >
+            {example.run_id}
+          </a>
+        )}
+        , measured {when(example.measured_at)}.
+      </p>
+      {stage === FIRST_APPLIED_STAGE && (
+        <dl className="run-values">
+          {valueRow('plan hash', short(example.plan_hash, 12))}
+          {valueRow('second clone', proved(example.reproduced, 'same result', 'different result'), example.reproduced === true ? 'good' : example.reproduced === false ? 'bad' : undefined)}
+        </dl>
+      )}
+      {stage === FIRST_APPLIED_STAGE + 1 && (
+        <dl className="run-values">
+          {valueRow('rows changed', <Measured value={example.rows_changed} format={num} />)}
+          {valueRow('prod before', short(example.prod_before, 12))}
+          {valueRow('prod after', short(example.prod_after, 12))}
+        </dl>
+      )}
+      {stage >= FIRST_APPLIED_STAGE + 2 && (
+        <dl className="run-values">
+          {valueRow('on prod', words.length ? words.join(', ') : 'Not measured')}
+          {valueRow('against rehearsal', proved(matched, `${num(example.rows_changed)} rows, same count`, `${num(example.rows_changed)} rows, different count`), matched === true ? 'good' : matched === false ? 'bad' : undefined)}
+          {valueRow('undo, on a clone', proved(example.undo_verified, 'proved', 'not proved'), example.undo_verified === true ? 'good' : example.undo_verified === false ? 'bad' : undefined)}
+        </dl>
+      )}
+    </>
+  );
+}
+
+function values(hero: PublicHero | null, example: AppliedExample | null, stage: number): ReactNode {
+  const blocked = !!hero?.timeline.some((e) => e.type === 'run_blocked');
+  if (stage >= FIRST_APPLIED_STAGE && example) return <AppliedValues example={example} stage={stage} blocked={blocked} />;
   if (!hero) return <p className="run-values-none">Not measured yet</p>;
   const at = (type: string) => hero.timeline.find((e) => e.type === type)?.t;
   const off = (t: number | undefined) => (t === undefined ? null : `+${Math.round(t * 1000).toLocaleString('en-US')} ms`);
-  const row = (k: string, v: ReactNode, tone?: 'good' | 'bad') => (
-    <div key={k}>
-      <dt>{k}</dt>
-      <dd className={tone ? `is-${tone}` : undefined}>{v}</dd>
-    </div>
-  );
-  const blocked = hero.timeline.some((e) => e.type === 'run_blocked');
+  const row = valueRow;
   switch (stage) {
     case 0:
       return (
@@ -234,7 +311,7 @@ function values(hero: PublicHero | null, stage: number): ReactNode {
   }
 }
 
-function StageCard({ hero, index }: { hero: PublicHero | null; index: number }) {
+function StageCard({ hero, example, index }: { hero: PublicHero | null; example: AppliedExample | null; index: number }) {
   const ref = useRef<SVGSVGElement>(null);
   useLayoutEffect(() => {
     if (ref.current) apply(ref.current, POSES[index]);
@@ -247,12 +324,12 @@ function StageCard({ hero, index }: { hero: PublicHero | null; index: number }) 
       </span>
       <p className="run-card-line">{s.line}</p>
       <Stack hero={hero} svgRef={ref} compact />
-      <div className="run-values-box">{values(hero, index)}</div>
+      <div className="run-values-box">{values(hero, example, index)}</div>
     </div>
   );
 }
 
-export function TheRun({ hero }: { hero: PublicHero | null }) {
+export function TheRun({ hero, example }: { hero: PublicHero | null; example: AppliedExample | null }) {
   const mode = useMode();
   const sectionRef = useRef<HTMLElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -274,6 +351,7 @@ export function TheRun({ hero }: { hero: PublicHero | null }) {
 
   const head = <ChapterHead id="run-title" label="The run" title="Every step leaves a number." />;
   const caption = hero ? sourceLine({ n: 3, run: hero.run_id, measured: hero.measured_at, extra: 'drawing not to scale' }) : 'drawing not to scale';
+  const appliedCaption = example ? sourceLine({ n: 3, run: example.run_id, measured: example.measured_at, extra: 'drawing not to scale' }) : caption;
 
   if (mode !== 'pinned') {
     return (
@@ -284,18 +362,21 @@ export function TheRun({ hero }: { hero: PublicHero | null }) {
             <Pager label="The eight stages of a run" count={STAGES.length}>
               {STAGES.map((_, i) => (
                 <div className="pager-page" key={i}>
-                  <StageCard hero={hero} index={i} />
+                  <StageCard hero={hero} example={example} index={i} />
                 </div>
               ))}
             </Pager>
           ) : (
             <div className="run-flat">
               {STAGES.map((_, i) => (
-                <StageCard key={i} hero={hero} index={i} />
+                <StageCard key={i} hero={hero} example={example} index={i} />
               ))}
             </div>
           )}
-          <p className="t-caption">{caption}</p>
+          <p className="t-caption">
+            {caption}
+            {example && ` · stages ${FIRST_APPLIED_STAGE + 1} to ${STAGES.length} from run ${example.run_id}`}
+          </p>
         </div>
       </section>
     );
@@ -318,9 +399,9 @@ export function TheRun({ hero }: { hero: PublicHero | null }) {
         <figure className="run-figure">
           <Frame className="run-tile">
             <Stack hero={hero} svgRef={svgRef} />
-            <div className="run-values-box">{values(hero, stage)}</div>
+            <div className="run-values-box">{values(hero, example, stage)}</div>
           </Frame>
-          <figcaption className="t-caption figure-caption">{caption}</figcaption>
+          <figcaption className="t-caption figure-caption">{stage >= FIRST_APPLIED_STAGE ? appliedCaption : caption}</figcaption>
         </figure>
       </div>
     </section>

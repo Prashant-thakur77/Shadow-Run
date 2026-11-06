@@ -157,6 +157,31 @@
   white-space: nowrap;
   view-transition-name: prod-chip;
 }
+.prod-main {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.prod.has-seed-line {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 2px 8px;
+}
+.prod-seed {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  line-height: 1.25;
+}
+.prod-reseed {
+  padding: 0;
+  color: var(--ink);
+  font-size: var(--fs-xs);
+  line-height: 1.25;
+}
 .prod-label {
   color: var(--ink-3);
   font-family: var(--font-mono);
@@ -232,6 +257,22 @@
 }
 .more-sheet .identity {
   justify-content: space-between;
+}
+.more-sheet-seed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--line-2);
+  font-size: var(--fs-s);
+  line-height: 1.4;
+}
+.more-sheet-seed p {
+  color: var(--ink-2);
+}
+.more-sheet-seed .btn {
+  flex: none;
 }
 
 /* Bottom status bar: quiet unless something is down. */
@@ -412,6 +453,24 @@
   }
 }
 
+/* The chip's seed line needs room this single row doesn't have, so the nav takes its own row, as it does below 1040. */
+@media (min-width: 1041px) and (max-width: 1140px) {
+  .topbar-row:has(.prod.has-seed-line) {
+    flex-wrap: wrap;
+    height: auto;
+    padding-top: var(--s-2);
+  }
+  .topbar-row:has(.prod.has-seed-line) .nav {
+    order: 3;
+    width: calc(100% + var(--gutter) * 2);
+    max-width: 100vw;
+    margin: var(--s-2) calc(var(--gutter) * -1) 0;
+    padding: 0 calc(var(--gutter) - 8px);
+    border-top: 1px solid var(--line);
+    min-height: 38px;
+  }
+}
+
 @media (max-width: 719px) {
   html {
     scroll-padding-top: 72px;
@@ -455,6 +514,21 @@
   .bottombar-link.is-active {
     color: var(--ink);
     box-shadow: inset 0 1px 0 var(--ink);
+  }
+  .bottombar-more {
+    position: relative;
+  }
+  .bottombar-dot {
+    position: absolute;
+    top: -2px;
+    right: -9px;
+    width: 6px;
+    height: 6px;
+    background: var(--ink);
+  }
+  /* The button is in the More sheet here, where it can be a proper tap target. */
+  .prod-reseed {
+    display: none;
   }
   .account {
     grid-template-columns: minmax(0, 1fr);

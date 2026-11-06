@@ -239,3 +239,47 @@ def test_shell_plans_touching_credentials_or_permissions_go_to_a_person(cmd, rul
 def test_ordinary_shell_commands_are_not_flagged_for_this(cmd):
     rules = {f["rule"] for f in check_plan(normalize_plan([{"type": "shell", "cmd": cmd}]), "host")["findings"]}
     assert not rules & {"credential_files", "secret_read", "permission_weakening"}
+
+
+
+# ---------------------------------------------------------------------- the shell parser
+
+@pytest.mark.parametrize(
+    "cmd,rule",
+    [
+        ("ls\n\\rm -rf /var/lib/x", "rm"),  # a backslash at the start of a line
+        ("a\n\\\nrm -rf /var/lib/x", "rm"),  # a line continuation that starts a new command
+        ("time rm -rf /", "rm_root"),
+        ("/usr/bin/time rm -rf /", "rm_root"),
+        ("coproc rm -rf /", "rm_root"),
+        ("[[ -f a ]] && rm -rf /", "rm_root"),
+        ("case $x in a) rm -rf /;; esac", "rm_root"),
+        ("f() { rm -rf /; }; f", "rm_root"),
+        ('echo "$(rm -rf /)"', "rm_root"),
+        ("export A=$(rm -rf /)", "rm_root"),
+        ("cat <(rm -rf /)", "rm_root"),
+        ('"rm" -rf /', "rm_root"),
+        ("sudo -u root rm -rf /", "opaque_command"),
+    ],
+)
+def test_shell_commands_are_found_wherever_they_hide(cmd, rule):
+    findings, _ = gate.check_shell_step(1, cmd)
+    assert rule in {f["rule"] for f in findings}
+
+
+@pytest.mark.parametrize("cmd", ["echo 'unterminated", "if true; then", "do it", "done", ")", "", "   ", "# only a comment"])
+def test_shell_it_cannot_read_is_blocked(cmd):
+    findings, kind = gate.check_shell_step(1, cmd)
+    assert [f["severity"] for f in findings if f["rule"] == "unparseable"] == ["block"]
+    assert kind == gate.IRREVERSIBLE
+
+
+def test_without_the_parser_shell_is_blocked(monkeypatch):
+    monkeypatch.setattr(gate.shutil, "which", lambda _: None)
+    monkeypatch.setattr(gate.sys, "executable", "/nonexistent/python")
+    findings, _ = gate.check_shell_step(1, "ls")
+    assert {f["rule"] for f in findings} == {"unparseable"}
+
+
+def test_an_ordinary_read_passes():
+    assert gate.check_shell_step(1, "ls --color=auto /var/app | grep -v x")[0] == []

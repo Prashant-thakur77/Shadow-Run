@@ -136,18 +136,19 @@ function ConnectAgent() {
       </dl>
       <div className="connect-recipes">
         <div className="connect-recipe">
-          <h3 className="subhead">Claude Code</h3>
-          <CodeBlock text={claude} />
+          <h3 className="subhead">OpenCode on Vultr inference</h3>
+          <p>Save this as opencode.json, then set VULTR_INFERENCE_KEY and SHADOWRUN_TOKEN.</p>
+          <CodeBlock text={opencode} />
+        </div>
+        <div className="connect-recipe">
           <h3 className="subhead">CI</h3>
           <CodeBlock
             text={`shadowrun rehearse plan.sql --target demo-saas
 # exit 0 applied or nothing to do, 2 needs a person, 3 blocked, 4 rolled back or drifted`}
           />
-        </div>
-        <div className="connect-recipe">
-          <h3 className="subhead">OpenCode on Vultr inference</h3>
-          <p>Save this as opencode.json, then set VULTR_INFERENCE_KEY and SHADOWRUN_TOKEN.</p>
-          <CodeBlock text={opencode} />
+          <h3 className="subhead">Other MCP clients</h3>
+          <p>They bring their own model. This demo and the benchmark use Vultr inference only.</p>
+          <CodeBlock text={claude} />
         </div>
       </div>
     </>

@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from checker.control_kinds import control_kind  # noqa: E402
 
 
 def load(name: str) -> dict | None:
@@ -29,9 +31,11 @@ def main() -> int:
         h = r["heldout"]
         ext = r["external"]
         d, s, sg = h["direct"], h["shadow_run"], h["static_gate"]
+        unread_done, unread_harm = s["risky_done_if_rubber_stamped"]["mean"], s["harm_if_rubber_stamped"]["mean"]
         headline = (
-            f"On {d['risky_tasks']} risky tasks held out from tuning, the same agent caused harm on prod {g(d['harm_on_prod']['mean'])} times running directly and {g(sg['harm_on_prod']['mean'])} times behind a static rule gate. "
-            f"Through Shadow Run, nothing harmful reached prod without a person, because {g(s['risky_held']['mean'])} of those plans waited for one. If that person approved every plan unread, harm was {g(s['harm_if_rubber_stamped']['mean'])}, because the agent had seen the measured damage and rewritten its plans."
+            f"On {d['risky_tasks']} risky tasks held out from tuning, the same agent finished the job safely {g(d['risky_done']['mean'])} times running directly and caused harm {g(d['harm_on_prod']['mean'])} times. "
+            f"Through Shadow Run, even with a person approving every plan unread, it finished safely {g(unread_done)} times and caused harm {g(unread_harm)} times, because it saw the measured damage and rewrote its plans. "
+            f"With a person who reads the report, nothing harmful reached prod without one, since {g(s['risky_held']['mean'])} of those plans waited for a person, including every safe task. That is the price."
         )
         external = (
             f"On {ext['direct']['risky_tasks']} tasks adapted from the outside SABER benchmark: {g(ext['direct']['harm_on_prod']['mean'])} direct, "
@@ -44,6 +48,18 @@ def main() -> int:
         headline = "(Fill in after the final benchmark: run scripts/make_submission.py again.)"
         external = timing = ""
     containment = f"{rt.get('contained', '?')} of {rt.get('total', '?')} red-team attacks contained, checked from the host, with prod's hash unchanged." if rt else ""
+    brief = (
+        "AI agents with real access keep destroying production data with one command. Shadow Run sits between an agent and prod and holds the only credential. "
+        "Every risky plan is frozen, hashed and run on a full clone of prod in a fresh Microsandbox microVM on Vultr, with no network device and no secrets. Postgres reports what really happened, frozen guardrails check it, and failures go back to the agent to rewrite the plan. "
+        "A different person approves those exact hashes, and the same plan runs on prod in one transaction that rolls back if anything differs from the rehearsal.\n\n"
+        + (
+            f"On {h['direct']['risky_tasks']} risky tasks held out from tuning, the agent alone finished the job safely {g(h['direct']['risky_done']['mean'])} times and caused harm {g(h['direct']['harm_on_prod']['mean'])} times. "
+            f"Through Shadow Run, even with every plan approved unread: {g(h['shadow_run']['risky_done_if_rubber_stamped']['mean'])} and {g(h['shadow_run']['harm_if_rubber_stamped']['mean'])}. "
+            "With a person who reads the report, nothing harmful reached prod without one, since nearly every plan waits for a person. That is the price.\n\n"
+            if measured else ""
+        )
+        + "Every LLM call goes to Vultr Serverless Inference, on VX1, Cloud Compute, Managed PostgreSQL, Object Storage and a VPC. It ships as a web app, an MCP server, a CLI and a GitHub Action."
+    )
     gt = load("gauntlet.json") or {}
     attack = ""
     if gt.get("baseline_summary"):
@@ -53,7 +69,8 @@ def main() -> int:
             f"so auto-apply now works from a named list. {now['would_auto_apply']} of the same attacker's {now['real_attacks']} damaging plans would still apply alone, but they can only change what the owner listed: {', '.join(now.get('reach_alone', [])) or 'nothing'}. What it finds becomes a candidate rule, which counts only if it holds on the clean database, fails on the attack and lets ordinary changes through. "
             f"Replayed against the rules they taught, {replay['caught']} of {replay['total']} of those attacks are now stopped."
         )
-    controls = f"{c.get('passed', '?')} of {c.get('total', '?')} attempts to break the approval and apply were refused or rolled back as designed." if c else ""
+    kinds = [control_kind(x["control"]) for x in c.get("controls", [])]
+    controls = f"{kinds.count('attack')} attacks on the approval, the apply and the measurement were refused, rolled back or held, and {kinds.count('honest path')} checks confirm the honest path still works." if c and c.get("passed") == c.get("total") else ""
 
     text = f"""# Lablab submission
 
@@ -81,9 +98,15 @@ Every plan that passes also comes with an undo, written from the row log and pro
 
 {attack}
 
-It ships as an MCP server, so OpenCode, Claude Code or Cursor can route risky actions through it, plus a web app, a CLI and a GitHub Action that posts what a migration really does on the pull request. Every LLM call goes to Vultr Serverless Inference, and the model never grades itself: it proposes plans and explains results, while Postgres measures and frozen checks decide.
+It ships as an MCP server, shown with OpenCode on Vultr inference, plus a web app, a CLI and a GitHub Action that posts what a migration really does on the pull request. Every LLM call goes to Vultr Serverless Inference, and the model never grades itself: it proposes plans and explains results, while Postgres measures and frozen checks decide.
 
 Built on Vultr: VX1 for the microVMs, Cloud Compute for the control plane, Serverless Inference, Managed PostgreSQL, Object Storage and a VPC, all created from zero by one script and removed by another.
+
+## Long description, shorter
+
+Use this one if the form's limit is lower than the version above.
+
+{brief}
 
 ## Tags
 
@@ -99,9 +122,13 @@ Application URL: {url}
 
 GitHub: https://github.com/Prashant-thakur77/Shadow-Run
 
-Demo video: (upload the file, then paste the link here)
+Demo platform: Vultr (Cloud Compute for the app, VX1 for the sandboxes)
 
-Slides: (upload the deck)
+Video presentation (MP4): upload `var/video/shadow-run-demo.mp4`
+
+Slide presentation (PDF): upload `docs/slides.pdf`
+
+Cover image (16:9): upload `docs/cover.png`
 
 ## Vultr Community post (optional, after submitting)
 

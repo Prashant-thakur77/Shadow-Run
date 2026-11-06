@@ -126,6 +126,8 @@ def main() -> None:
             if what == "control":
                 pull_results(ip)
             rsync(ip)
+            if what == "control":
+                ssh(ip, 'uv pip install --quiet --python /opt/shadowrun/.venv/bin/python -e /opt/shadowrun')
             unit = "shadowrun-runner" if what == "vx1" else "shadowrun-control"
             ssh(ip, f"systemctl restart {unit} && sleep 3 && systemctl is-active {unit}")
         return

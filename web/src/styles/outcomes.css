@@ -1,0 +1,260 @@
+/* Did the job, did harm, or neither. Shared by the Results page and the landing chapter, and every rule is scoped
+   under oc-* so the order the lazy chunks load in can't change it. The columns put the seam at the page's centre. */
+.oc {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+  border: 1px solid var(--line-2);
+  background: var(--bg);
+}
+.oc-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.oc-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.oc-col-label {
+  width: 22%;
+}
+.oc-col-mode {
+  width: 22.33%;
+}
+.oc-col-last {
+  width: 33.34%;
+}
+.oc-table th,
+.oc-table td {
+  padding: 10px var(--s-4);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  text-align: left;
+  font-weight: 400;
+}
+.oc-table .oc-cold {
+  border-left: 1px solid var(--line-2);
+}
+.oc-table .oc-sides th,
+.oc-table .oc-sides td {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.oc-table .oc-modes th,
+.oc-table .oc-modes td {
+  padding-top: 6px;
+  padding-bottom: 10px;
+}
+.oc-table .oc-modes th {
+  color: var(--ink);
+  font-size: var(--fs-m);
+  font-weight: 600;
+  line-height: 1.25;
+  vertical-align: top;
+}
+.oc-row-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--ink);
+  font-size: var(--fs-m);
+  font-weight: 500;
+  line-height: 1.25;
+}
+.oc-row-name .mark {
+  flex: none;
+  color: var(--ink-3);
+  transform: translateY(1px);
+}
+/* The mark carries the colour in the row's name. Pages that colour .is-good and .is-bad don't reach this far in. */
+.oc-table .oc-row-name.is-good,
+.oc-table .oc-row-name.is-bad {
+  color: var(--ink);
+}
+.oc-row-name.is-good .mark {
+  color: var(--good);
+}
+.oc-row-name.is-bad .mark {
+  color: var(--bad);
+}
+/* The same size in every row, so the rubber-stamp figure and the neither row weigh as much as the best number. */
+.oc-table .oc-num {
+  display: inline-block;
+  font-size: clamp(34px, 4vw, 64px);
+  white-space: nowrap;
+}
+.oc-table .oc-num.ms-empty {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.3;
+  white-space: normal;
+}
+.oc-table td.is-good {
+  color: var(--good);
+}
+.oc-table td.is-bad {
+  color: var(--bad);
+}
+.oc-table .oc-row-runs .oc-row-name {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  font-weight: 400;
+}
+.oc-none {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-s);
+}
+.oc-strips {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.oc-strip {
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  gap: 1px;
+}
+.oc-strip i {
+  display: block;
+  height: 9px;
+  background: var(--bg-2);
+}
+.oc-strip i.is-good {
+  background: var(--good);
+}
+.oc-strip i.is-bad {
+  background: var(--bad);
+}
+.oc-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  list-style: none;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.45;
+}
+.oc-aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+  padding: var(--s-4);
+  border-left: 1px solid var(--line);
+  font-size: var(--fs-s);
+  line-height: 1.5;
+}
+.oc-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.oc-answer p {
+  color: var(--ink-2);
+}
+.oc-answer .mono {
+  color: var(--ink);
+}
+.oc-alone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-top: auto;
+  padding-top: var(--s-3);
+  border-top: 1px dashed var(--line-2);
+}
+.oc-alone .t-label {
+  color: var(--ink-2);
+}
+.oc-alone-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--s-2);
+  color: var(--ink-2);
+}
+.oc-alone-line .is-good {
+  color: var(--good);
+}
+.oc-alone-line .is-bad {
+  color: var(--bad);
+}
+.oc-alone-words {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+/* Below the width where the seam can sit at the page's centre, the answer moves under the table. */
+@media (max-width: 999px) {
+  .oc {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .oc-aside {
+    border-left: 0;
+    border-top: 1px solid var(--line-2);
+  }
+  .oc-col-label,
+  .oc-col-mode,
+  .oc-col-last {
+    width: 25%;
+  }
+}
+
+/* Phones: the row's name takes its own line, so the three columns keep the numbers side by side. */
+@media (max-width: 719px) {
+  .oc-table,
+  .oc-table thead,
+  .oc-table tbody {
+    display: block;
+  }
+  .oc-table colgroup {
+    display: none;
+  }
+  .oc-table tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .oc-table .oc-sides td,
+  .oc-table .oc-modes td {
+    display: none;
+  }
+  .oc-table .oc-sides th:first-of-type {
+    grid-column: span 2;
+  }
+  .oc-table th,
+  .oc-table td {
+    padding: 8px;
+  }
+  .oc-table .oc-sides th {
+    padding-right: 0;
+  }
+  .oc-table .oc-sides .bracket {
+    white-space: normal;
+  }
+  .oc-table .oc-modes th {
+    font-size: var(--fs-xs);
+  }
+  .oc-table th[scope='row'] {
+    grid-column: 1 / -1;
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+  .oc-table .oc-num {
+    font-size: clamp(26px, 8.2vw, 32px);
+  }
+  .oc-table .oc-row-runs td {
+    padding-top: 6px;
+  }
+  .oc-notes,
+  .oc-aside {
+    padding: var(--s-3);
+  }
+}

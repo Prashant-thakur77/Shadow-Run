@@ -473,3 +473,25 @@ def test_nothing_measured_means_no_public_replay():
     from control import hero
 
     assert hero.build({"id": "r", "attempts": [{"n": 1}], "final_attempt": 1}) is None
+
+
+@pytest.mark.parametrize("kw,due", [
+    ({}, True),
+    ({"last_activity": 950.0}, False),      # someone was just here
+    ({"busy": True}, False),                # a run is going
+    ({"seed": None}, False),                # no seed known, so there's nothing to compare with
+    ({"digest": "seed"}, False),            # prod is already the seed
+    ({"digest": "seed", "guardrails": 12}, True),  # a visitor left a rule behind, which can stop every apply
+])
+def test_the_demo_reseeds_only_when_nobody_is_using_it(kw, due):
+    from control.api import idle_reseed_due
+
+    args = {"now": 1000.0, "last_activity": 0.0, "busy": False, "digest": "changed", "seed": "seed", "guardrails": 10, "seeded_guardrails": 10, "idle_s": 600.0, **kw}
+    assert idle_reseed_due(**args) is due
+
+
+def test_controls_say_whether_they_attack_or_confirm_the_honest_path():
+    from checker.control_kinds import control_kind
+
+    assert control_kind("Requester approves their own run") == "attack"
+    assert control_kind("Apply the approved plan") == "honest path"

@@ -3,7 +3,7 @@ import type { Attempt, Run } from '../api/types';
 import { STACKED, useMedia, useReducedMotion } from '../lib/media';
 import { sourceLine } from '../ui/Figure';
 import { ReplayControls, TwoRooms, TwoRoomsEmpty, useRehearsal } from '../ui/TwoRooms';
-import { isHostReport, isSeeded, liveLines, prodViewFor, roomsFromRun, roomsWhileLive } from './rooms';
+import { isHostReport, isSeeded, liveLines, networkNote, prodViewFor, roomsFromRun, roomsWhileLive } from './rooms';
 import { isInProgress } from '../lib/status';
 
 /** Nothing to draw, because no clone ever ran. It says why, and shows prod's hash only if it was measured. */
@@ -95,7 +95,7 @@ export function RunRooms({ run, attempt, picked }: { run: Run; attempt: Attempt 
   return (
     <figure className="run-rooms">
       <div className="run-rooms-stage">
-        {shape && <TwoRooms control={control} hero={shape} phone={stacked} seeded={isSeeded(run)} unit={unit} prod={prod} live={stateLive} sourceLine={onScale} />}
+        {shape && <TwoRooms control={control} hero={shape} phone={stacked} seeded={isSeeded(run)} unit={unit} prod={prod} live={stateLive} network={networkNote(attempt)} sourceLine={onScale} />}
       </div>
       <figcaption className="run-rooms-bar">
         <p className="t-caption">

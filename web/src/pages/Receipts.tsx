@@ -3,6 +3,7 @@ import '../styles/pg-evidence.css';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '../api/client';
 import type { Receipt } from '../api/types';
+import { controlSplit } from '../lib/controls';
 import { asText, isNum, num, plural, whenAny } from '../lib/format';
 import type { Tone } from '../lib/status';
 import { useAsync } from '../lib/useAsync';
@@ -97,11 +98,42 @@ function Value({ r }: { r: Receipt }) {
   );
 }
 
+function Rows({ items, shared }: { items: Receipt[]; shared: boolean }) {
+  return (
+    <ul className="receipts">
+      {items.map((r, i) => (
+        <li className="receipt" key={`${r.claim}-${i}`} style={{ '--i': Math.min(i, 11) } as CSSProperties}>
+          <div className="receipt-claim">
+            {r.claim}
+            {r.detail !== undefined && r.detail !== null && r.detail !== '' && <span className="receipt-detail mono">{asText(r.detail)}</span>}
+            {!shared && (
+              <span className="receipt-meta">
+                <code className="mono">{r.source}</code>
+                {r.rerun && <Rerun command={r.rerun} />}
+              </span>
+            )}
+          </div>
+          <div className="receipt-value">
+            <Value r={r} />
+            {r.must !== undefined && r.must !== null && <span className="mono receipt-must">must be {asText(r.must)}</span>}
+          </div>
+          <div className="receipt-at mono">
+            {r.at === undefined || r.at === null ? 'No date' : whenAny(r.at)}
+            {r.commit && <span className="receipt-commit">commit {r.commit.slice(0, 10)}</span>}
+          </div>
+          {r.got && <Got got={r.got} />}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function Group({ name, items }: { name: string; items: Receipt[] }) {
   const reruns = new Set(items.map((i) => i.rerun ?? ''));
   const sources = new Set(items.map((i) => i.source ?? ''));
   const shared = reruns.size === 1 && sources.size === 1;
   const tally = tallyOf(items);
+  const split = controlSplit(items);
   const ref = useRef<HTMLElement>(null);
   const sight = useFirstSight(ref, { belowFold: true });
   return (
@@ -126,31 +158,30 @@ function Group({ name, items }: { name: string; items: Receipt[] }) {
           )}
         </p>
       )}
-      <ul className="receipts">
-        {items.map((r, i) => (
-          <li className="receipt" key={`${r.claim}-${i}`} style={{ '--i': Math.min(i, 11) } as CSSProperties}>
-            <div className="receipt-claim">
-              {r.claim}
-              {r.detail !== undefined && r.detail !== null && r.detail !== '' && <span className="receipt-detail mono">{asText(r.detail)}</span>}
-              {!shared && (
-                <span className="receipt-meta">
-                  <code className="mono">{r.source}</code>
-                  {r.rerun && <Rerun command={r.rerun} />}
-                </span>
-              )}
-            </div>
-            <div className="receipt-value">
-              <Value r={r} />
-              {r.must !== undefined && r.must !== null && <span className="mono receipt-must">must be {asText(r.must)}</span>}
-            </div>
-            <div className="receipt-at mono">
-              {r.at === undefined || r.at === null ? 'No date' : whenAny(r.at)}
-              {r.commit && <span className="receipt-commit">commit {r.commit.slice(0, 10)}</span>}
-            </div>
-            {r.got && <Got got={r.got} />}
-          </li>
-        ))}
-      </ul>
+      {split ? (
+        <>
+          <p className="receipt-split">{split.words}.</p>
+          {[
+            { title: 'Attacks', count: split.attacks },
+            { title: 'Honest path', count: split.honest },
+          ].map(
+            ({ title, count }) =>
+              count.total > 0 && (
+                <div className="receipt-kind" key={title}>
+                  <h3 className="receipt-kind-head">
+                    <span>{title}</span>{' '}
+                    <span className="mono">
+                      {num(count.hit)} of {num(count.total)} pass
+                    </span>
+                  </h3>
+                  <Rows items={count.rows} shared={shared} />
+                </div>
+              ),
+          )}
+        </>
+      ) : (
+        <Rows items={items} shared={shared} />
+      )}
     </section>
   );
 }

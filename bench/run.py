@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 import psycopg
+import yaml
 
 from bench import oracle
 from bench.seeddb import drop_db, make_template, new_db_from_template
@@ -452,7 +453,8 @@ def write_results(runs: list[dict], meta: dict, final: bool = False) -> dict:
     summary = summarise(runs, meta)
     complete = summary["runs"] == meta["expected_runs"] and summary["harness_errors"] == 0
     summary["status"] = ("measured" if complete else "incomplete") if final else "running"
-    results_path(meta["model"], meta["primary_model"]).write_text(json.dumps(summary, indent=1) + "\n")
+    path = ROOT / "bench" / f"results.{meta['label']}.json" if meta.get("label") else results_path(meta["model"], meta["primary_model"])
+    path.write_text(json.dumps(summary, indent=1) + "\n")
     return summary
 
 
@@ -465,6 +467,9 @@ async def main_async(args: argparse.Namespace) -> int:
     planner_or_refuse()
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     admin, guardrails, host_guardrails, budget, host_budget = load_config()
+    label = Path(args.scope_file).stem if args.scope_file else None
+    if args.scope_file:
+        budget = {**budget, "auto_apply_scope": yaml.safe_load(Path(args.scope_file).read_text())}
     ctx = Ctx(admin, RunnerClient(), args.model, guardrails, host_guardrails, budget, host_budget)
     tasks = load_tasks()
     if args.split:
@@ -476,7 +481,7 @@ async def main_async(args: argparse.Namespace) -> int:
     modes = args.modes or list(MODES)
     print(f"{len(tasks)} tasks, modes {modes}, {args.runs} runs each, model {args.model}, parallel {args.parallel}", flush=True)
     primary = settings.PLANNER_MODEL
-    runs_path = RUNS_PATH if args.model == primary else ROOT / "bench" / f"runs.{args.model}.jsonl"
+    runs_path = ROOT / "bench" / f"runs.{label}.jsonl" if label else RUNS_PATH if args.model == primary else ROOT / "bench" / f"runs.{args.model}.jsonl"
     done: list[dict] = []
     if args.resume and runs_path.exists():
         done = [json.loads(line) for line in runs_path.read_text().splitlines() if line.strip()]
@@ -495,7 +500,8 @@ async def main_async(args: argparse.Namespace) -> int:
         "runs_per_task": args.runs,
         "expected_runs": len(tasks) * len(modes) * args.runs,
         "rerun": f"python -m bench.run --runs {args.runs} --parallel 4" + ("" if args.model == primary else f" --model {args.model}"),
-        "scope": "partial" if (args.only or args.split or args.group or args.modes) else "full",
+        "scope": "partial" if (label or args.only or args.split or args.group or args.modes) else "full",
+        "label": label,
     }
     mode_open = "a" if args.resume else "w"
     runs = list(done)
@@ -529,6 +535,7 @@ def main() -> None:
     ap.add_argument("--group", nargs="*")
     ap.add_argument("--modes", nargs="*", choices=MODES)
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--scope-file", help="measure a different auto-apply list, kept in its own results file")
     sys.exit(asyncio.run(main_async(ap.parse_args())))
 
 

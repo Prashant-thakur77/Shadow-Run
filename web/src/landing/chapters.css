@@ -622,6 +622,21 @@
   color: var(--ink-2);
   font-size: var(--fs-s);
 }
+.run-values-other {
+  margin-bottom: var(--s-1);
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.4;
+}
+.run-values-other a,
+.run-values-other code {
+  color: var(--ink);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.run-values dd .mark {
+  vertical-align: -1px;
+}
 .run-card {
   display: flex;
   flex-direction: column;
@@ -806,6 +821,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
+}
+/* Text with no surface of its own stays on its side of the seam. */
+@media (min-width: 1000px) {
+  .results-measured > .t-caption {
+    max-width: calc(50vw - var(--margin) - var(--s-5));
+  }
 }
 
 /* Close */

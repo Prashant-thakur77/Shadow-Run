@@ -24,6 +24,14 @@ def main() -> int:
     for s in scenes:
         video = OUT / f"scene-{s['id']}.webm"
         seconds = s["seconds"] + 0.35
+        # Long real waits are cut, not sped through, and the clip says so.
+        cuts_file = OUT / f"scene-{s['id']}.cuts"
+        ranges = json.loads(cuts_file.read_text()) if cuts_file.exists() else []
+        if ranges:
+            kept = OUT / f"scene-{s['id']}.cut.mp4"
+            expr = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in ranges)
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(video), "-vf", f"select='not({expr})',setpts=N/FRAME_RATE/TB", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", str(kept)], check=True)
+            video = kept
         trim_file = OUT / f"scene-{s['id']}.trim"
         trim = float(trim_file.read_text()) if trim_file.exists() else 0.0
         have = probe(video) - trim
@@ -31,6 +39,8 @@ def main() -> int:
         speed = (have - hold) / max(0.1, seconds - hold)
         part = OUT / f"part-{s['id']}.mp4"
         base = "fps=30,scale=1600:900"
+        if ranges:
+            base += f",drawtext=fontfile={FONT}:text='waiting cut':x=w-tw-28:y=h-th-64:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=8"
         label = f",drawtext=fontfile={FONT}:text='sped up {speed:.1f}x':x=w-tw-28:y=h-th-24:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=8" if Path(FONT).exists() else ""
         if speed > 1.08:
             # Speed through the waiting, and label it. The last few seconds, the result, stay at real speed.

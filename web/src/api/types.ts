@@ -457,6 +457,9 @@ export interface ProdChecksum {
   digest?: string;
   lsn?: string;
   rows?: Record<string, number>;
+  /** The hash at the last reseed. Null until one has happened, so nothing can be said before then. */
+  seed_digest?: string | null;
+  changed_from_seed?: boolean;
   /** Host targets */
   files?: number;
   at?: number;
@@ -664,12 +667,36 @@ export interface PublicInfo {
     static_gate?: number;
     shadow_run?: number;
     rubber_stamp?: number;
+    /** Risky tasks done with no harm, by mode. */
+    done_direct?: number;
+    done_static_gate?: number;
+    done_unread?: number;
+    /** Risky tasks held for a person, with no person there. */
+    held?: number;
     runs_per_task?: number;
     measured_at?: string | number;
   } | null;
   hero?: PublicHero | null;
+  /** A real run a person approved and that applied, because the hero's replay is blocked before that part. */
+  applied_example?: AppliedExample | null;
   video_url?: string | null;
   repo?: string | null;
+}
+
+export interface AppliedExample {
+  run_id: string;
+  measured_at?: number | null;
+  plan_hash?: string | null;
+  /** On the rehearsal. */
+  rows_changed?: number | null;
+  prod_before?: string | null;
+  prod_after?: string | null;
+  /** On prod, by table. */
+  actual_counts?: Record<string, { ins?: number; upd?: number; del?: number }> | null;
+  /** The plan's undo was proved on a clone before anyone approved it. */
+  undo_verified?: boolean | null;
+  /** A second clone reproduced the result. */
+  reproduced?: boolean | null;
 }
 
 export interface Incident {
@@ -691,6 +718,8 @@ export interface Receipt {
   must?: unknown;
   /** Negative controls: what the server actually said, such as "403 maker-checker: ...". */
   got?: string;
+  /** Negative controls: "attack" or "honest path". */
+  kind?: string;
   detail?: unknown;
   at?: string | number;
   source?: string;

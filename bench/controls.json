@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-06T07:48:19Z",
+  "at": "2026-11-06T14:01:35Z",
   "url": "https://144-202-92-64.sslip.io",
   "passed": 33,
   "total": 33,
@@ -64,7 +64,7 @@
       "ok": true,
       "got": {
         "store": "vultr-object-storage",
-        "key": "runs/r27684b2866b346/evidence.json",
+        "key": "runs/r6193afc4320f4f/evidence.json",
         "bytes": 16151
       }
     },
@@ -74,7 +74,7 @@
       "ok": true,
       "got": {
         "store": "vultr-object-storage",
-        "key": "backups/r27684b2866b346/pre-apply.dump",
+        "key": "backups/r6193afc4320f4f/pre-apply.dump",
         "bytes": 1243941
       }
     },
@@ -190,7 +190,7 @@
       "control": "A second clone reproduces the result before anyone approves",
       "must": "reproduced",
       "ok": true,
-      "got": "{'ok': True, 'differs': [], 'sandbox': 'sr-run-r0fc1de3675bf40a1b', 'ms': 2561.3, 'contained': True}"
+      "got": "{'ok': True, 'differs': [], 'sandbox': 'sr-run-r2c683e6b111242a1b', 'ms': 2684.6, 'contained': True}"
     },
     {
       "control": "Apply a change, then undo it through the same pipeline",
@@ -210,8 +210,8 @@
       "ok": true,
       "got": {
         "ok": true,
-        "events": 308,
-        "head": "e1bb1d7f3b4e1f7c3602955d319a6a47f90bf9ecd80e0d66870993c3637ab71e"
+        "events": 2750,
+        "head": "9ab99af823915d3ae828a708fe0902cb7c41e1f2555e71ec635880b942301329"
       }
     }
   ]
