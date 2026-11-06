@@ -62,6 +62,26 @@ function Inside({ output }: { output?: string }) {
   );
 }
 
+// The fork bomb's time limit, from checker/redteam.py. If the runtime errors well before it, this is
+// not the expected end, so the raw error is shown with no explanation.
+const FORK_BOMB_LIMIT_S = 20;
+
+function killedAtLimit(result?: AttackResult): boolean {
+  if (result?.attack !== 'fork_bomb' || !result.ended || result.ended === 'exited') return false;
+  return (result.wall_s ?? 0) >= (result.time_cap_s ?? FORK_BOMB_LIMIT_S) - 1;
+}
+
+/** Two results read like failures unless you know what they test. */
+function AttackNote({ def, result }: { def: AttackDef; result?: AttackResult }) {
+  if (def.id === 'injected_row') {
+    return <p className="rt-note">The obeying is on purpose. A seeded ticket asks for this DROP, and this plan plays an agent that fell for it. So it is meant to run, inside the clone. The point is to show that even then nothing escapes.</p>;
+  }
+  if (result?.contained && killedAtLimit(result)) {
+    return <p className="rt-note">This is how it should end. The bomb ran until the sandbox hit its {FORK_BOMB_LIMIT_S} s limit and was killed. The runtime reports that as {result.ended}, so there is no exit code or output.</p>;
+  }
+  return null;
+}
+
 function AttackCard({ def, result, running, index }: { def: AttackDef; result?: AttackResult; running: boolean; index: number }) {
   const state = result ? (result.contained ? 'good' : 'bad') : running ? 'live' : 'pending';
   return (
@@ -88,6 +108,7 @@ function AttackCard({ def, result, running, index }: { def: AttackDef; result?: 
       <p className="rt-expected">
         <span className="label">Expected</span> {result?.expected ?? def.expected}
       </p>
+      <AttackNote def={def} result={result} />
       {result && (
         <>
           {result.sandbox_error && (
@@ -108,7 +129,7 @@ function AttackCard({ def, result, running, index }: { def: AttackDef; result?: 
               <div>
                 <dt>Ended</dt>
                 <dd>
-                  {result.ended}
+                  {killedAtLimit(result) ? `Killed at its limit (${result.ended})` : result.ended}
                   {result.exit_code !== null && result.exit_code !== undefined ? `, exit ${result.exit_code}` : ''}
                 </dd>
               </div>

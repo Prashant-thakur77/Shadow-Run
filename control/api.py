@@ -9,10 +9,11 @@ import shlex
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from contextvars import ContextVar
+from typing import Any, Literal
 from urllib.parse import urlparse
 
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -24,7 +25,8 @@ from control.mcp_server import McpAuth
 from control.mcp_server import mount as mount_mcp
 from control.plan import PlanError, normalize_plan, plan_hash
 from control.runner_client import RunnerError
-from control.service import DEMO_TARGET_ID, Service, public_target
+from control.hardening import Hardening
+from control.service import DEMO_TARGET_ID, ROOT as SERVICE_ROOT, Service, demo_target, public_target
 from control.snapshot import conn_from_target, fingerprint
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -34,6 +36,8 @@ ROOT = Path(__file__).resolve().parent.parent
 WEB_DIST = ROOT / "web" / "dist"
 RESULTS = ROOT / "bench" / "results.json"
 PUBLIC_URL = os.environ.get("SHADOWRUN_PUBLIC_URL", "")
+# Guest access hands out both identities, so it can never sit in front of a team's own database.
+OPEN_DEMO = not settings.TARGETS_FILE and (os.environ.get("SHADOWRUN_OPEN_DEMO", "1") == "1")
 
 service: Service | None = None
 mcp_server: Any = None
@@ -77,6 +81,7 @@ class RunBody(BaseModel):
     task: str | None = Field(default=None, max_length=2000)
     steps: list[dict] | None = None
     source: str = "web"
+    rehearse_only: bool = False
 
 
 class ApproveBody(BaseModel):
@@ -108,16 +113,35 @@ class CheckBody(BaseModel):
 
 
 _hits: dict[tuple[str, str], list[float]] = {}
+client_ip: ContextVar[str] = ContextVar("client_ip", default="unknown")
+
+
+@app.middleware("http")
+async def remember_client(request: Request, call_next: Any) -> Any:
+    # Every guest shares one identity, so limits go by address, or one visitor could use up everyone's.
+    # Caddy replaces X-Forwarded-For with the real peer, and the app only listens behind it.
+    forwarded = request.headers.get("x-forwarded-for", "")
+    client_ip.set(forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown"))
+    return await call_next(request)
 
 
 def limit(user: str, action: str, per_hour: int) -> None:
     """The demo logins are public, so nothing that costs money or disturbs prod may be unlimited."""
     now = time.time()
-    hits = [t for t in _hits.get((user, action), []) if now - t < 3600]
+    key = (client_ip.get(), action)
+    hits = [t for t in _hits.get(key, []) if now - t < 3600]
     if len(hits) >= per_hour:
         raise HTTPException(429, f"limit of {per_hour} {action} per hour reached")
     hits.append(now)
-    _hits[(user, action)] = hits
+    _hits[key] = hits
+
+
+def require_inference_budget() -> None:
+    """A run with fixed steps still calls the explainer, so every path that spends inference checks this."""
+    since = time.time() - 86400
+    spent = svc().store.cost_since(since) + sum(g.get("cost_usd") or 0 for g in hardening().list_gauntlets(20) if g.get("created_at", 0) >= since)
+    if spent >= settings.DAILY_USD_CAP:
+        raise HTTPException(429, "today's inference budget for this demo is used up")
 
 
 def run_view(run: dict, user: str | None = None) -> dict:
@@ -171,6 +195,33 @@ def run_summary(run: dict) -> dict:
     }
 
 
+# ------------------------------------------------------------------ one click into the demo
+
+@app.get("/api/public")
+def public_info() -> dict:
+    """What the landing page shows before anyone signs in. Numbers only from the benchmark's own file."""
+    r = json.loads(RESULTS.read_text()) if RESULTS.exists() else {}
+    headline = None
+    if r.get("status") == "measured" and r.get("scope") == "full" and r.get("harness_errors") == 0:
+        h = r["heldout"]
+        headline = {
+            "risky_tasks": h["direct"]["risky_tasks"], "direct": h["direct"]["harm_on_prod"]["mean"], "static_gate": h["static_gate"]["harm_on_prod"]["mean"],
+            "shadow_run": h["shadow_run"]["harm_on_prod"]["mean"], "rubber_stamp": h["shadow_run"]["harm_if_rubber_stamped"]["mean"],
+            "runs_per_task": r["runs_per_task"], "measured_at": r["at"],
+        }
+    return {"open_demo": OPEN_DEMO, "headline": headline, "video_url": os.environ.get("SHADOWRUN_VIDEO_URL") or None, "repo": "https://github.com/Prashant-thakur77/Shadow-Run"}
+
+
+@app.post("/api/demo/enter")
+def demo_enter(response: Response) -> dict:
+    """Continue as a guest: both public demo identities, so the requester and approver flow works in one tab."""
+    if not OPEN_DEMO:
+        raise HTTPException(403, "this deployment has no open demo")
+    judge = auth.issue("judge")
+    response.set_cookie(auth.COOKIE, judge, httponly=True, samesite="lax", secure=PUBLIC_URL.startswith("https"), max_age=settings.SESSION_TTL_S)
+    return {"username": "judge", "name": auth.users()["judge"]["name"], "token": judge, "others": {"reviewer": auth.issue("reviewer")}}
+
+
 # ------------------------------------------------------------------ auth
 
 @app.post("/api/login")
@@ -214,6 +265,7 @@ async def guardrails_draft(target_id: str, user: str = Depends(auth.current_user
     if not svc().store.get_target(target_id):
         raise HTTPException(404, "no such target")
     limit(user, "guardrail drafts", 10)
+    require_inference_budget()
     return {"drafts": await svc().draft_guardrails(target_id), "model": settings.GUARDRAIL_MODEL}
 
 
@@ -221,7 +273,10 @@ async def guardrails_draft(target_id: str, user: str = Depends(auth.current_user
 def guardrails_accept(target_id: str, body: GuardrailsBody, user: str = Depends(auth.current_user)) -> dict:
     if auth.users()[user]["role"] != "admin":
         raise HTTPException(403, "only an admin can change the frozen guardrails")
-    return public_target(svc().accept_guardrails(target_id, body.guardrails, user))
+    try:
+        return public_target(svc().accept_guardrails(target_id, body.guardrails, user))
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
 
 
 @app.post("/api/targets/{target_id}/budget")
@@ -266,17 +321,15 @@ async def create_run(body: RunBody, user: str = Depends(auth.current_user)) -> d
     s = svc()
     if not body.task and not body.steps:
         raise HTTPException(422, "send a task or steps")
-    recent = s.store.count_runs_since(user, time.time() - 3600)
     # A public demo must not be able to burn the inference budget or saturate the VX1.
-    if body.task and recent >= settings.RUNS_PER_HOUR:
-        raise HTTPException(429, f"limit of {settings.RUNS_PER_HOUR} agent runs per hour reached")
-    if recent >= settings.RUNS_PER_HOUR * 4:
-        raise HTTPException(429, "too many runs this hour")
+    if body.task:
+        limit(user, "agent runs", settings.RUNS_PER_HOUR)
+    limit(user, "runs", settings.RUNS_PER_HOUR * 4)
+    if s.store.count_runs_since(user, time.time() - 3600) >= settings.RUNS_PER_HOUR * 12:
+        raise HTTPException(429, "the demo is very busy; try again in a while")
     if len(s._tasks) >= settings.MAX_RUNNING:
         raise HTTPException(429, "the runner is busy; try again in a minute")
-    spent = sum(r.get("cost_usd") or 0 for r in s.store.list_runs(100) if r["created_at"] > time.time() - 86400)
-    if body.task and spent >= settings.DAILY_USD_CAP:
-        raise HTTPException(429, "today's inference budget for this demo is used up")
+    require_inference_budget()
     if body.steps:
         try:
             normalize_plan(body.steps)
@@ -286,6 +339,9 @@ async def create_run(body: RunBody, user: str = Depends(auth.current_user)) -> d
         run = s.new_run(body.target_id, user, body.task, body.steps, body.source if body.source in ("web", "mcp", "cli", "api") else "api")
     except KeyError as e:
         raise HTTPException(404, "no such target") from e
+    if body.rehearse_only:
+        run["rehearse_only"] = True
+        s.store.save_run(run)
     s.start(run)
     return {"id": run["id"], "status": run["status"]}
 
@@ -316,6 +372,178 @@ def reject(run_id: str, body: RejectBody, user: str = Depends(auth.current_user)
 @app.post("/api/runs/{run_id}/apply")
 async def apply_run(run_id: str, body: ApplyBody = ApplyBody(), user: str = Depends(auth.current_user)) -> dict:
     return run_view(await svc().apply(run_id, user, drift_check=body.drift_check), user)
+
+
+class LearnBody(BaseModel):
+    reason: str = Field(min_length=3, max_length=800)
+
+
+def hardening() -> Hardening:
+    return Hardening(svc())
+
+
+@app.post("/api/runs/{run_id}/undo", status_code=201)
+async def undo_run(run_id: str, user: str = Depends(auth.current_user)) -> dict:
+    try:
+        run = svc().undo_run(run_id, user)
+    except KeyError as e:
+        raise HTTPException(404, "no such run") from e
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
+    return {"id": run["id"], "status": run["status"]}
+
+
+@app.get("/api/runs/{run_id}/undo")
+def get_undo(run_id: str, user: str = Depends(auth.current_user)) -> dict:
+    run = svc().store.get_run(run_id)
+    if not run:
+        raise HTTPException(404, "no such run")
+    statements = svc().store.kv_get(f"undo:{run_id}:{run.get('final_attempt')}") or []
+    return {"statements": statements[:50]}
+
+
+@app.post("/api/runs/{run_id}/learn")
+async def learn(run_id: str, body: LearnBody, user: str = Depends(auth.current_user)) -> dict:
+    """Turn a person's reason for rejecting a plan into a guardrail, proved on a clone."""
+    run = svc().store.get_run(run_id)
+    if not run:
+        raise HTTPException(404, "no such run")
+    limit(user, "guardrails learned", 12)
+    require_inference_budget()
+    try:
+        return await hardening().learn_from_rejection(run, body.reason, user)
+    except (ValueError, llm.LLMError) as e:
+        raise HTTPException(422, str(e)[:300]) from e
+
+
+class GauntletBody(BaseModel):
+    rounds: int = Field(default=5, ge=1, le=10)
+    policy: Literal["named_scope", "row_budget_only"] = "named_scope"
+
+
+@app.post("/api/targets/{target_id}/gauntlet", status_code=201)
+async def gauntlet_start(target_id: str, body: GauntletBody | None = None, user: str = Depends(auth.current_user)) -> dict:
+    t = svc().store.get_target(target_id)
+    if not t or t["kind"] != "postgres":
+        raise HTTPException(404, "the gauntlet runs on a Postgres target")
+    running = [d for d in hardening().list_gauntlets(3) if d.get("status") == "running"]
+    if running:
+        return running[0]
+    limit(user, "gauntlet runs", 6)
+    require_inference_budget()
+    body = body or GauntletBody()
+    return hardening().start_gauntlet(target_id, user, rounds=body.rounds, policy=body.policy)
+
+
+@app.get("/api/gauntlet")
+def gauntlet_list(limit: int = 5, user: str = Depends(auth.current_user)) -> list[dict]:
+    return hardening().list_gauntlets(min(limit, 20))
+
+
+def bench_json(name: str) -> dict | None:
+    path = SERVICE_ROOT / "bench" / name
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+@app.get("/api/gauntlet/published")
+def gauntlet_published(user: str = Depends(auth.current_user)) -> dict:
+    """The measured comparison, as bench/gauntlet.json has it. Null fields mean it hasn't been measured."""
+    g = bench_json("gauntlet.json") or {}
+    if not g.get("baseline_summary"):
+        return {"measured": False}
+    replay = {k: v for k, v in (g.get("replay") or {}).items() if k != "attacks"}
+    keep = ("at", "model", "baseline_summary", "first_summary", "summary", "adopted", "guardrails_before", "guardrails_after", "cost_usd", "rerun")
+    return {"measured": True, "replay": replay, **{k: g.get(k) for k in keep}}
+
+
+@app.post("/api/gauntlet/{gauntlet_id}/replay")
+async def gauntlet_replay(gauntlet_id: str, user: str = Depends(auth.current_user)) -> dict:
+    """Do the attacks that got past the rules still get past them today?"""
+    limit(user, "gauntlet replays", 12)
+    try:
+        return await hardening().replay(gauntlet_id)
+    except KeyError as e:
+        raise HTTPException(404, "no such gauntlet") from e
+
+
+@app.post("/api/guardrails/candidates/{candidate_id}/accept")
+def candidate_accept(candidate_id: str, target_id: str = DEMO_TARGET_ID, user: str = Depends(auth.current_user)) -> dict:
+    """On a demo target anyone signed in may add a proved rule, and a reset restores the set. Elsewhere it's an admin's call,
+    because a rule that's too strict stops every apply until someone removes it."""
+    target = svc().store.get_target(target_id)
+    if target and not target.get("demo_controls") and auth.users()[user]["role"] != "admin":
+        raise HTTPException(403, "only an admin can change the frozen guardrails")
+    try:
+        return public_target(hardening().accept(candidate_id, target_id, user))
+    except KeyError as e:
+        raise HTTPException(404, "no such guardrail") from e
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
+
+
+def load_incidents() -> list[dict]:
+    import yaml
+
+    return yaml.safe_load((SERVICE_ROOT / "demo" / "incidents.yaml").read_text())
+
+
+@app.get("/api/incidents")
+def incidents() -> list[dict]:
+    return load_incidents()
+
+
+@app.post("/api/incidents/{incident_id}/replay", status_code=201)
+async def replay_incident(incident_id: str, user: str = Depends(auth.current_user)) -> dict:
+    incident = next((i for i in load_incidents() if i["id"] == incident_id), None)
+    if incident is None:
+        raise HTTPException(404, "no such incident")
+    limit(user, "incident replays", 60)
+    run = svc().replay_incident(incident, user)
+    return {"id": run["id"], "status": run["status"]}
+
+
+@app.get("/api/receipts")
+def receipts() -> dict:
+    """Every measured claim, where it lives and the command that reproduces it. Public, like the README."""
+    bench = ROOT / "bench"
+
+    def load(name: str) -> dict | None:
+        p = bench / name
+        return json.loads(p.read_text()) if p.exists() else None
+
+    items: list[dict] = []
+    r = load("results.json")
+    if r and r.get("status") == "measured":
+        for row in r["table"]["rows"]:
+            items.append({"group": "Benchmark", "claim": row[0], "values": dict(zip(r["table"]["columns"][1:], row[1:])), "at": r["at"], "source": "bench/results.json", "rerun": r["rerun"], "commit": r.get("git_commit")})
+    rt = load("redteam.json")
+    if rt and rt.get("attacks"):
+        for a in rt["attacks"]:
+            items.append({"group": "Red team", "claim": a["title"], "value": "contained" if a["contained"] else "NOT CONTAINED", "at": rt.get("created_at"), "source": "bench/redteam.json", "rerun": "python scripts/redteam_live.py"})
+    c = load("controls.json")
+    if c:
+        for x in c["controls"]:
+            items.append({"group": "Negative controls", "claim": x["control"], "value": "pass" if x["ok"] else "FAIL", "must": x["must"], "at": c["at"], "source": "bench/controls.json", "rerun": "python -m checker.controls"})
+    g = load("gauntlet.json")
+    if g and g.get("summary"):
+        for label, s in (("old policy, a row limit only", g.get("baseline_summary")), ("named list of what may change alone", g.get("first_summary")), ("after adopting the rules those attacks taught", g["summary"])):
+            if s:
+                items.append({"group": "Guardrail gauntlet", "claim": f"Real attacks stopped by a rule, {label}", "value": f"{s['caught']} of {s['real_attacks']}", "at": g.get("at"), "source": "bench/gauntlet.json", "rerun": "python scripts/gauntlet_live.py"})
+                items.append({"group": "Guardrail gauntlet", "claim": f"Real attacks that would have applied with no person looking, {label}", "value": f"{s.get('would_auto_apply', 0)} of {s['real_attacks']}", "at": g.get("at"), "source": "bench/gauntlet.json", "rerun": "python scripts/gauntlet_live.py"})
+        if g.get("replay"):
+            items.append({"group": "Guardrail gauntlet", "claim": "Attacks that passed the rules, replayed against the rules they taught", "value": f"{g['replay']['caught']} of {g['replay']['total']} now stopped", "at": g.get("at"), "source": "bench/gauntlet.json", "rerun": "python scripts/gauntlet_live.py"})
+    inc = load("incidents.json")
+    if inc:
+        for i in inc["incidents"]:
+            items.append({"group": "Incident replay", "claim": i["who"] + ", " + i["when"], "value": i["status"], "detail": "; ".join(i.get("measured", [])[:2]), "at": inc.get("at"), "source": "bench/incidents.json", "rerun": "python scripts/incidents_live.py"})
+    sc = load("scale.json")
+    if sc:
+        for row in sc["rows"]:
+            items.append({"group": "Scale", "claim": f"Rehearsal on a {row['db_mb']} MB database", "value": f"{row['rehearsal_total_s']} s" if row.get("rehearsal_total_s") else "timed out", "at": sc["at"], "source": "bench/scale.json", "rerun": sc["rerun"]})
+    so = load("soak.json")
+    if so:
+        items.append({"group": "Soak", "claim": f"{so['rehearsals']} rehearsals, every one contained with teardown confirmed", "value": "yes" if so["all_contained"] and so["all_teardown_ok"] else "NO", "at": so["at"], "source": "bench/soak.json", "rerun": so["rerun"]})
+    return {"items": items, "note": "Nothing here is estimated. A claim with no measurement isn't listed." if items else "not measured yet"}
 
 
 @app.post("/api/runs/{run_id}/rehearse-again", status_code=201)
@@ -359,6 +587,8 @@ async def make_drift(target_id: str = DEMO_TARGET_ID, user: str = Depends(auth.c
 
     limit(user, "demo drift writes", 120)
     t = svc().store.get_target(target_id)
+    if not t or not t.get("demo_controls"):
+        raise HTTPException(403, "only a demo target can be drifted on purpose")
     if t and t["kind"] == "host":
         await svc().runner.host_exec(t["host_id"], "echo drift >> /var/app/logs/app.log")
         svc().store.append_event(None, user, "demo_drift", {"target": target_id})
@@ -385,12 +615,19 @@ async def demo_reset(target_id: str = DEMO_TARGET_ID, user: str = Depends(auth.c
 
     limit(user, "demo resets", 120)
     t = svc().store.get_target(target_id)
+    # This reseeds whatever database it's pointed at, so it must only ever reach the seeded demo.
+    if not t or not t.get("demo_controls"):
+        raise HTTPException(403, "only a demo target can be reset")
     if t and t["kind"] == "host":
         await svc().runner.host_ensure(t["host_id"], recreate=True)
         svc().store.append_event(None, user, "demo_reset", {"target": target_id})
         return {"ok": True}
     conn = conn_from_target(t)
     counts = await asyncio.to_thread(reset, conn.kwargs())
+    if t:
+        fresh = demo_target()
+        fresh["budget"] = t.get("budget", fresh["budget"])
+        svc().store.save_target(fresh)  # learned guardrails belong to a demo session, not to the seed
     svc().store.append_event(None, user, "demo_reset", {"tables": len(counts)})
     return {"ok": True, "tables": counts}
 

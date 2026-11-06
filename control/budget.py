@@ -1,13 +1,52 @@
 """Blast-radius budget per target: small safe changes go through without waiting for a person."""
 from __future__ import annotations
 
-DEFAULT_BUDGET = {"max_rows_changed": 100, "max_table_pct": 10.0, "max_cascade_rows": 0, "allow_drop": False, "allow_truncate": False, "allow_ddl": True}
+# auto_apply_scope and auto_apply_paths default to nothing: a change has to be named as low-risk to skip a person.
+# Told only a row budget, an attacker model corrupted money in under 100 rows and passed every guardrail.
+DEFAULT_BUDGET = {"max_rows_changed": 100, "max_table_pct": 10.0, "max_cascade_rows": 0, "allow_drop": False, "allow_truncate": False, "allow_ddl": True, "auto_apply_scope": {}}
 
 
-DEFAULT_HOST_BUDGET = {"max_files_deleted": 20, "max_files_changed": 5, "max_services_stopped": 0}
+DEFAULT_HOST_BUDGET = {"max_files_deleted": 20, "max_files_changed": 5, "max_services_stopped": 0, "auto_apply_paths": []}
 
 
 IRREVERSIBLE_REASON = "the plan contains an irreversible write (DELETE, DROP, TRUNCATE, rm), which always needs a person"
+
+
+def outside_scope(report: dict, scope: dict) -> list[str]:
+    """What this plan changed that nobody listed as safe to change alone. scope is {table: "*" or [columns]}."""
+    reasons: list[str] = []
+    columns = report.get("changed_columns")
+    for t in report.get("tables", []):
+        name = t["table"]
+        if not (t.get("inserted") or t.get("updated") or t.get("deleted") or t.get("dropped") or t.get("truncated")):
+            continue
+        allowed = scope.get(name)
+        if allowed is None:
+            reasons.append(f"{name} is not on the auto-apply list")
+        elif allowed != "*":
+            if t.get("inserted") or t.get("deleted") or t.get("dropped") or t.get("truncated"):
+                reasons.append(f"rows were added or removed in {name}, where only {', '.join(allowed)} may change without a person")
+            if t.get("updated") and columns is None:
+                reasons.append(f"rows changed in {name}, and the columns they changed were not measured")
+            outside = [c for c in (columns or {}).get(name, {}) if c not in allowed]
+            if outside:
+                reasons.append(f"{name}.{outside[0]} is not on the auto-apply list")
+    for d in report.get("schema_diff", []):
+        table = d["name"].split(".")[0]
+        if scope.get(table) != "*":
+            reasons.append(f"schema change on {table} is not on the auto-apply list")
+    return reasons
+
+
+def outside_paths(report: dict, paths: list[str]) -> list[str]:
+    """Same rule for files. The list of files in a report is capped, so a longer change can't be cleared by it."""
+    files = report.get("files") or {}
+    touched = [*files.get("created", []), *files.get("changed", []), *files.get("deleted", [])]
+    counted = sum((files.get("counts") or {}).get(k, 0) for k in ("created", "changed", "deleted"))
+    if counted > len(touched):
+        return [f"{counted} files changed, more than the report lists, so they can't be checked against the auto-apply paths"]
+    outside = [p for p in touched if not any(p.startswith(prefix) for prefix in paths)]
+    return [f"{len(outside)} file(s) changed outside the auto-apply paths, such as {outside[0]}"] if outside else []
 
 
 def check_host_budget(report: dict, gate: dict, guardrails: list[dict], budget: dict | None = None) -> dict:
@@ -25,6 +64,12 @@ def check_host_budget(report: dict, gate: dict, guardrails: list[dict], budget: 
         reasons.append(f"{totals['files_changed']} files changed; budget is {b['max_files_changed']}")
     if totals.get("services_stopped", 0) > b["max_services_stopped"]:
         reasons.append(f"{totals['services_stopped']} service(s) stopped; budget is {b['max_services_stopped']}")
+    if report.get("services_started"):
+        reasons.append("the plan starts a service: " + ", ".join(report["services_started"][:3]))
+    if totals.get("ports_closed", 0) > 0:
+        reasons.append(f"{totals['ports_closed']} port(s) stopped listening")
+    if b.get("auto_apply_paths") is not None:
+        reasons.extend(outside_paths(report, b["auto_apply_paths"]))
     if gate.get("verdict") != "pass":
         reasons.append(f"static gate verdict is {gate.get('verdict')}")
     if any(not g.get("passed") for g in guardrails):
@@ -69,6 +114,11 @@ def check_budget(report: dict, gate: dict, guardrails: list[dict], budget: dict 
         reasons.append(f"{len(removed)} schema object(s) removed")
     if not b["allow_ddl"] and report.get("ddl"):
         reasons.append("the plan changes the schema")
+    if b.get("auto_apply_scope") is not None:
+        reasons.extend(outside_scope(report, b["auto_apply_scope"]))
+    moved = [m["name"] for m in report.get("metrics", []) if m.get("before") != m.get("after")]
+    if moved:
+        reasons.append("a business number moved: " + ", ".join(moved[:3]))
     if gate.get("verdict") != "pass":
         reasons.append(f"static gate verdict is {gate.get('verdict')}")
     if any(not g.get("passed") for g in guardrails):

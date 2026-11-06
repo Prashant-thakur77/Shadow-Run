@@ -1,0 +1,28 @@
+# Every migration in a pull request is rehearsed on a clone of prod, and the result is posted on the PR.
+name: Rehearse migrations
+on:
+  pull_request:
+    paths: ["examples/migrations/*.sql"]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  rehearse:
+    # Forks have no secrets, so only rehearse pull requests from this repository.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: files
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          file="$(git diff --name-only "origin/$BASE" HEAD -- 'examples/migrations/*.sql' | head -1)"
+          echo "plan=$file" >> "$GITHUB_OUTPUT"
+      - uses: ./
+        with:
+          plan: ${{ steps.files.outputs.plan }}
+          url: ${{ secrets.SHADOWRUN_URL }}
+          token: ${{ secrets.SHADOWRUN_TOKEN }}

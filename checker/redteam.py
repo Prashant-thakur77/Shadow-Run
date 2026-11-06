@@ -181,6 +181,11 @@ def host_state() -> dict[str, Any]:
     return {"load_1m": load, "mem_available_mib": mem.get("MemAvailable", 0) // 1024, "cpus": os.cpu_count()}
 
 
+def killed_at_the_cap(ended: str | None, wall_s: float, cap: int) -> bool:
+    """A saturated guest can't report anything, so running until it's killed is the proof. An early crash isn't."""
+    return ended not in (None, "exited") and wall_s >= cap
+
+
 async def run_attack(engine: Engine, attack_id: str, snapshot_id: str) -> dict[str, Any]:
     spec = ATTACKS.get(attack_id)
     if spec is None:
@@ -207,7 +212,8 @@ async def run_attack(engine: Engine, attack_id: str, snapshot_id: str) -> dict[s
     # An attack that never ran proves nothing, so it cannot count as contained.
     landed = bool(re.search(spec["landed"], output))
     if spec.get("or_time_cap"):
-        landed = landed or extra.get("ended") not in (None, "exited")
+        extra["time_cap_s"] = spec["timeout"]
+        landed = landed or killed_at_the_cap(extra.get("ended"), wall_s, spec["timeout"])
     after = {k: sha256_file(p) for k, p in targets.items()}
     fw_after = firewall_counters()
     state_after = host_state()

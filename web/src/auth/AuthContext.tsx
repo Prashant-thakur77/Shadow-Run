@@ -38,6 +38,8 @@ interface AuthValue {
   version: number;
   knownUsers: string[];
   signIn: (username: string, password: string, also?: { username: string; password: string } | null) => Promise<void>;
+  /** The open demo: signs in as judge and keeps the reviewer token, so every switch is one click. */
+  enterAsGuest: () => Promise<void>;
   signOut: () => Promise<void>;
   /** One click when the token is already known. Otherwise asks for the password once. */
   switchTo: (username: string) => Promise<boolean>;
@@ -148,6 +150,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [activate],
   );
 
+  const enterAsGuest = useCallback(async () => {
+    const res = await api.demoEnter();
+    for (const [name, token] of Object.entries(res.others ?? {})) store.current.tokens[name] = token;
+    const me = await api.me(res.token);
+    activate(me, res.token);
+  }, [activate]);
+
   const signOut = useCallback(async () => {
     try {
       await api.logout();
@@ -171,6 +180,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         delete store.current.tokens[username];
       }
     }
+    // On the open demo the server hands out both identities, so nobody has to type anything.
+    try {
+      const res = await api.demoEnter();
+      const tokens: Record<string, string> = { [res.username]: res.token, ...(res.others ?? {}) };
+      Object.assign(store.current.tokens, tokens);
+      save(store.current);
+      setKnown(Object.keys(store.current.tokens));
+      if (tokens[username]) return tokens[username];
+    } catch {
+      // No open demo on this deployment. Ask for the password.
+    }
     return new Promise<string | null>((resolve) => setPrompt({ username, resolve }));
   }, []);
 
@@ -186,8 +206,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<AuthValue>(
-    () => ({ user, ready, version, knownUsers: known, signIn, signOut, switchTo, tokenFor }),
-    [user, ready, version, known, signIn, signOut, switchTo, tokenFor],
+    () => ({ user, ready, version, knownUsers: known, signIn, enterAsGuest, signOut, switchTo, tokenFor }),
+    [user, ready, version, known, signIn, enterAsGuest, signOut, switchTo, tokenFor],
   );
 
   return (
@@ -237,7 +257,7 @@ function PasswordDialog({ username, onDone }: { username: string; onDone: (token
     <dialog ref={ref} className="dialog" onCancel={() => onDone(null)}>
       <form onSubmit={submit}>
         <h2 className="dialog-title">Password for {username}</h2>
-        <p className="muted">The README lists it. You only type it once in this tab.</p>
+        <p className="muted">Passwords are for deployments that set them. On the public demo, use Continue as guest. You only type it once in this tab.</p>
         <label className="field">
           <span className="field-label">Password</span>
           <input

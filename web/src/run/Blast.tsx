@@ -1,5 +1,6 @@
 import type { Attempt, Report, ReportTable } from '../api/types';
 import { isNum, num, pct } from '../lib/format';
+import { dollarsLost, hasMoved, metricDelta, metricValue } from './metrics';
 import { Notice } from '../ui/bits';
 import { HostBlast } from './HostBlast';
 import { CascadeGraph, LazyFold, SampleDiff } from './lazy';
@@ -28,6 +29,7 @@ function Hero({ report }: { report: Report }) {
         <div className="blast-big mono">{num(t.rows_changed)}</div>
         <div className="blast-big-label">
           {t.rows_changed === 1 ? 'row' : 'rows'} changed across {num(t.tables_touched)} {t.tables_touched === 1 ? 'table' : 'tables'}, measured by Postgres on the clone
+          {(report.unlogged_changes?.length ?? 0) > 0 && '. The warning above says what this number misses.'}
         </div>
       </div>
       <dl className="blast-parts">
@@ -55,7 +57,85 @@ function Hero({ report }: { report: Report }) {
         <p className="blast-ddl mono">
           {(t.tables_dropped ?? 0) > 0 && <span>{num(t.tables_dropped)} tables dropped. </span>}
           {(t.tables_truncated ?? 0) > 0 && <span>{num(t.tables_truncated)} tables truncated. </span>}
-          {(t.ddl_commands ?? 0) > 0 && <span>{num(t.ddl_commands)} DDL commands.</span>}
+          {(t.ddl_commands ?? 0) > 0 && <span>{num(t.ddl_commands)} DDL {t.ddl_commands === 1 ? 'command' : 'commands'}.</span>}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The measurement itself is in doubt, or something changed where the row log can't see. */
+function Warnings({ report }: { report: Report }) {
+  const gaps = report.capture_gaps ?? [];
+  const unlogged = report.unlogged_changes ?? [];
+  if (!gaps.length && !unlogged.length) return null;
+  return (
+    <>
+      {gaps.length > 0 && (
+        <Notice tone="bad" title="The row log missed changes Postgres counted. Don't trust this measurement.">
+          <ul className="plainlist mono">
+            {gaps.map((g, i) => (
+              <li key={i}>
+                {g.table} {g.op}: Postgres counted {num(g.postgres_counted)}, the log has {num(g.log_has)}
+              </li>
+            ))}
+          </ul>
+        </Notice>
+      )}
+      {unlogged.length > 0 && (
+        <Notice tone="caution" title="Rows changed where the row log can't see them.">
+          <ul className="plainlist">
+            {unlogged.map((u, i) => (
+              <li key={i}>
+                <code className="mono">{u.table}</code> {u.detail}
+              </li>
+            ))}
+          </ul>
+        </Notice>
+      )}
+    </>
+  );
+}
+
+function Metrics({ report }: { report: Report }) {
+  const metrics = report.metrics ?? [];
+  if (!metrics.length) return null;
+  const moved = metrics.filter(hasMoved);
+  const still = metrics.filter((m) => !hasMoved(m));
+  return (
+    <div className="bizmetrics">
+      <h3 className="subhead">What it is worth</h3>
+      {moved.length > 0 ? (
+        <ul className="bizmetric-list">
+          {moved.map((m) => {
+            const lost = dollarsLost(m) !== null || m.lost_entirely;
+            return (
+              <li className={lost ? 'bizmetric is-lost' : 'bizmetric'} key={m.id ?? m.name}>
+                <span className="bizmetric-name">
+                  {m.name}
+                  {m.lost_entirely && <span className="flagword"> lost entirely</span>}
+                </span>
+                <span className="bizmetric-range mono">
+                  {metricValue(m.before, m.unit)} <span className="arrow">→</span> {m.lost_entirely ? 'gone' : metricValue(m.after, m.unit)}
+                </span>
+                <span className="bizmetric-delta mono">{metricDelta(m)}</span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="muted">No business number moved.</p>
+      )}
+      {moved.length > 0 && still.length > 0 && (
+        <p className="bizmetric-still">
+          Did not move:{' '}
+          {still.map((m, i) => (
+            <span key={m.id ?? m.name}>
+              {i > 0 && ', '}
+              {m.name} <span className="mono">{metricValue(m.after, m.unit)}</span>
+            </span>
+          ))}
+          .
         </p>
       )}
     </div>
@@ -86,14 +166,21 @@ function Sentences({ report }: { report: Report }) {
   );
 }
 
-function TableRow({ t }: { t: ReportTable }) {
+function TableRow({ t, columns }: { t: ReportTable; columns?: Record<string, number> }) {
   const p = t.pct_of_table;
+  const changed = Object.entries(columns ?? {});
   return (
     <tr>
       <th scope="row" className="mono">
         {t.table}
         {t.dropped && <span className="flagword"> dropped</span>}
         {t.truncated && <span className="flagword"> truncated</span>}
+        {changed.length > 0 && (
+          <span className="changed-cols">
+            {changed.slice(0, 6).map(([c, n]) => `${c} ${num(n)}`).join(', ')}
+            {changed.length > 6 ? `, and ${num(changed.length - 6)} more` : ''}
+          </span>
+        )}
       </th>
       <td className="mono num nowrap">
         {num(t.rows_before)} <span className="arrow">→</span> {t.dropped ? 'gone' : num(t.rows_after)}
@@ -127,9 +214,19 @@ export function BlastSection({ attempt }: { attempt: Attempt | null }) {
       </>
     );
   }
+  const gateRefused = attempt?.gate?.verdict === 'block' ? (
+    <Notice tone="caution" title="The gate refused this.">
+      It was measured anyway on a clone, to show what it would have done.
+    </Notice>
+  ) : null;
+
   if (report.kind === 'host') {
     return (
-      <HostBlast report={report} sentences={<Sentences report={report} />} />
+      <>
+        <Warnings report={report} />
+        {gateRefused}
+        <HostBlast report={report} sentences={<Sentences report={report} />} />
+      </>
     );
   }
   const graph = report.cascade_graph;
@@ -140,7 +237,10 @@ export function BlastSection({ attempt }: { attempt: Attempt | null }) {
 
   return (
     <>
+      <Warnings report={report} />
+      {gateRefused}
       <Hero report={report} />
+      <Metrics report={report} />
       <Sentences report={report} />
 
       {hasGraph && (
@@ -176,7 +276,7 @@ export function BlastSection({ attempt }: { attempt: Attempt | null }) {
                 </tr>
               </thead>
               <tbody>
-                {report.tables?.map((t) => <TableRow key={t.table} t={t} />)}
+                {report.tables?.map((t) => <TableRow key={t.table} t={t} columns={t.table ? report.changed_columns?.[t.table] : undefined} />)}
               </tbody>
             </table>
           </div>

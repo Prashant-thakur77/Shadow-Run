@@ -16,6 +16,17 @@ const SEG = Number(args.find((a) => a.startsWith('--seg='))?.split('=')[1] ?? 13
 
 const PAGES = [
   ['signin', '/?fixture=signin'],
+  ['landing-headline', '/?fixture=landing-headline&signedout=1'],
+  ['run-trap', '/runs/x?fixture=run-trap'],
+  ['run-incident-saastr', '/runs/x?fixture=run-incident-saastr'],
+  ['run-incident-home', '/runs/x?fixture=run-incident-home'],
+  ['run-warnings', '/runs/x?fixture=run-warnings'],
+  ['incidents', '/incidents?fixture=incidents'],
+  ['receipts', '/receipts?fixture=receipts'],
+  ['receipts-empty', '/receipts?fixture=receipts-empty'],
+  ['gauntlet', '/guardrails?fixture=gauntlet#gauntlet'],
+  ['gauntlet-running', '/guardrails?fixture=gauntlet-running#gauntlet'],
+  ['gauntlet-held', '/guardrails?fixture=gauntlet-held#gauntlet'],
   ['home', '/?fixture=home'],
   ['run-retry-requester', '/runs/x?fixture=run-agent-retry'],
   ['run-blocked-cascade', '/runs/x?fixture=run-blocked-cascade'],

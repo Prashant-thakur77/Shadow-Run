@@ -20,7 +20,7 @@ Base URL: the public URL (see `infra/STATE.json` -> `public_url`, or `SHADOWRUN_
 
 **Run status values.** In progress: `queued`, `snapshotting`, `planning`, `rehearsing`, `applying`. Waiting: `awaiting_approval`, `approved`. Finished: `blocked`, `applied`, `rolled_back`, `rejected`, `drift_detected`, `no_change`, `error`. `no_change` means the rehearsal changed nothing, so nothing reached prod.
 
-**Fields of a full run** (see `web/fixtures/run-*.json` for real examples, captured from the live system):
+**Fields of a full run:**
 
 - `id, status, requester, source, task, target_id, created_at, updated_at, error, blocked_reason`
 - `can: {approve, approve_blocked_reason, apply, rehearse_again}`: computed by the server for the signed-in user. Trust this, do not re-derive it.
@@ -62,6 +62,36 @@ Base URL: the public URL (see `infra/STATE.json` -> `public_url`, or `SHADOWRUN_
   - `contained` (bool), `metrics`, `sandbox_error`, `result` (raw measurements; do not render)
 
 Host targets (`GET /api/targets` lists `demo-host` with `kind: "host"`): `report.kind` is `"host"`, and the report carries `totals: {files_created, files_deleted, files_changed, bytes_freed, services_stopped, ports_closed}`, `sentences` (same shape), `deleted_by_directory: [{path, files}]`, `files: {created, deleted, changed, counts, bytes_freed}`, `services_stopped`, `services_started`, `ports_closed`, with `tables` and `cascade_graph` empty. `rehearsal.boot_state` is the systemd state. The host path has a NIC present with a deny-all policy, and `limits.network` says so; show that text as it is. Steps are `{type: "shell", cmd}`, and a guardrail is `{id, name, sh}` instead of `sql`.
+
+## Newer features
+
+**Guest entry.** `GET /api/public` (no login): `{open_demo, headline: {risky_tasks, direct, static_gate, shadow_run, rubber_stamp, runs_per_task, measured_at} | null, video_url, repo}`. `POST /api/demo/enter` (no login): `{username: "judge", name, token, others: {reviewer: "<token>"}}`, which signs in as judge with the reviewer identity ready.
+
+**Business metrics.** `final.report.metrics: [{id, name, unit: "usd"|"count", before, after, delta, lost_entirely}]`, measured before and after on the clone. A metric whose table is gone has `after: null` and `lost_entirely: true`. Show dollars prominently.
+
+**With and without.** When a run has more than one attempt, or was blocked, `attempts[0]` is what the agent would have done with no Shadow Run, measured on a clone. Compare it with the final attempt: rows, cascades and metrics.
+
+**Second clone.** `attempt.reproduced: {ok, differs: [..], sandbox, ms, contained}`. A second microVM must reproduce the result before anyone approves.
+
+**Undo.** `attempt.undo`: `{possible: true, verified, detail, statements, bytes, rows_restored, rows_reverted, rows_removed, too_large_to_store?}` or `{possible: false, why}`. Generated from the row log and run on the clone, then the tables' content hashes are compared to before the plan. `GET /api/runs/{id}/undo` returns `{statements}` (first 50). `POST /api/runs/{id}/undo` (only on `applied` runs) returns `201 {id, status}`, a new run with `undo_of` set, which goes through the same pipeline. `409` if there is no stored undo.
+
+**Learn from a rejection.** `POST /api/runs/{id}/learn {reason}` returns a candidate guardrail `{id, name, sql, why, origin, proof: {holds_on_clean_clone, catches_the_plan, allows_normal_work, proved, clean_error, plan_error}, cost_usd}`. It takes up to a minute. `POST /api/guardrails/candidates/{id}/accept?target_id=` adds it, only if `proof.proved`, and returns the target. A guardrail in `target.guardrails` may carry `learned_from` and `proof`. `POST /api/demo/reset` restores the seeded guardrails.
+
+**Guardrail gauntlet.** `POST /api/targets/{id}/gauntlet` starts it (Postgres targets), or returns the one running. `GET /api/gauntlet?limit=` lists them, newest first: `{id, status: running|done|error, expected, model, rounds: [round], summary: {rounds, real_attacks, caught, got_through, no_effect, invalid}, cost_usd, error}`. Poll every few seconds; a round can take 30 s. A round: `{n, outcome: caught_by_guardrail|caught_by_gate|got_through|no_effect|invalid, idea, plan: [sql], detail, caught_by: [names], rows: {DELETE, UPDATE, INSERT}, metrics_moved: [{name, unit, before, after}], harm_check, would_auto_apply, held_because: [..], candidate: {id, name, sql, why, proof}}`. `got_through` means the plan did real damage, by its own check run on the clone, and every guardrail passed. `would_auto_apply: false` means it still would have waited for a person.
+
+Start body, optional: `{rounds: 1-10, policy: "named_scope" | "row_budget_only"}`. `row_budget_only` is a what-if baseline: rounds only rehearse, so it can't reach prod. Summary adds `held_for_a_person` and `would_auto_apply`; each round adds `would_auto_apply`, `held_because`, `changed_columns`. `POST /api/gauntlet/{id}/replay` runs every attack that got past the rules against the rules as they stand now, each on a new clone, and sets `replay: {guardrails, total, caught, did_not_run, attacks: [{n, idea, ran, caught, caught_by}]}`.
+
+**Rehearse only.** `POST /api/runs` takes `rehearse_only: true`. The run then waits for a person even inside the auto-apply list. The CLI's `--rehearse-only` and the GitHub Action use it.
+
+**Auto-apply list.** `target.budget.auto_apply_scope` is `{table: "*" | [columns]}` for Postgres and `target.budget.auto_apply_paths` is a list of path prefixes for hosts. A change outside it needs a person, however small. Reports add `changed_columns: {table: {column: updates}}`.
+
+**Incident replay.** `GET /api/incidents` (no login): `[{id, when, who, source, happened, target, command, adapted}]`. `POST /api/incidents/{id}/replay` returns `201 {id, status}`, a run with `incident` set. Such a run is measured even when the gate refuses it, so a blocked run can have `final.report`.
+
+**Receipts.** `GET /api/receipts` (no login): `{items: [{group, claim, value? , values?, must?, detail?, at, source, rerun, commit?}], note}`. Every measured claim and the command that reproduces it.
+
+**Run fields.** `run.source` can also be `undo` or `incident`. `run.undo_of`, `run.incident`, and the status `no_change`. `GET /api/runs` summaries also carry `plan_preview`, `files_changed`, `services_stopped`.
+
+**Connect an agent.** The Guardrails page has this panel already.
 
 ## Proof and demo controls
 

@@ -211,6 +211,8 @@ class Engine:
         attack_shell: str | None = None,
         max_duration: int = MAX_DURATION_S,
         scan_secrets: bool = True,
+        metrics: list[dict] | None = None,
+        undo: bool = True,
     ) -> dict:
         """Clone, prove isolation, run the plan, measure, destroy, prove destroyed.
 
@@ -253,7 +255,7 @@ class Engine:
                     rec["attack"] = await _run_attack(sb, attack_shell, max_duration)
                 else:
                     rec["result"] = await _driver(
-                        sb, {"op": "rehearse", "steps": steps, "guardrails": guardrails}, max_duration
+                        sb, {"op": "rehearse", "steps": steps, "guardrails": guardrails, "metrics": metrics or [], "undo": undo}, max_duration
                     )
                     if rec["result"].get("fatal"):
                         raise SandboxFailure(f"driver: {rec['result'].get('error')}")

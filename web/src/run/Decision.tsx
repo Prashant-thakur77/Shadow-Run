@@ -4,7 +4,10 @@ import type { Counts, FileCounts, Run } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { bytes, clockTime, ms, num, when } from '../lib/format';
 import { Link, navigate } from '../lib/router';
-import { Hash, Mark, Notice } from '../ui/bits';
+import { Hash, Mark, Notice, Tag } from '../ui/bits';
+import { narrowedRows } from './derive';
+import { hashMovedSinceRehearsal, measureProdBeforeApply } from './ProdProof';
+import { UndoPanel } from './Undo';
 
 function HashRow({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -123,6 +126,7 @@ function ApplyPanel({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) => v
     setError(null);
     pollFast(true);
     try {
+      await measureProdBeforeApply(run);
       setRun(await api.apply(run.id));
       notifyProdChanged();
     } catch (e) {
@@ -256,7 +260,7 @@ function ProofOfApply({ run }: { run: Run }) {
           <dd className="mono proof-path">
             {b.error ?? (
               <>
-                {b.bucket}/{b.key}, {bytes(b.bytes)}, {b.store}
+                {[b.bucket, b.key].filter(Boolean).join('/') || b.path || 'stored'}, {bytes(b.bytes)}, {b.store}
               </>
             )}
           </dd>
@@ -297,6 +301,12 @@ function ProofOfApply({ run }: { run: Run }) {
   );
 }
 
+/** The header chip keeps showing the hash with the outside write in it. That is correct, so it gets explained here. */
+function HashNote({ run }: { run: Run }) {
+  if (!hashMovedSinceRehearsal(run) || run.apply?.restored === false) return null;
+  return <p>Prod's hash differs from the rehearsal's because of a write from outside this run, not because of this plan. The Prod chip at the top includes that write{run.target_id?.startsWith('demo') ? ' until the demo is reseeded' : ''}.</p>;
+}
+
 function Outcome({ run }: { run: Run }) {
   const a = run.apply ?? {};
   const outcome = a.outcome ?? run.status;
@@ -315,7 +325,7 @@ function Outcome({ run }: { run: Run }) {
         <p className="outcome-line">{a.reason ?? 'Counts matched the rehearsal.'}</p>
         {run.approval?.kind === 'auto_budget' && (
           <p>
-            Approved by <code className="mono">{run.approval.approver_id ?? 'budget policy'}</code>: the measured blast radius was within the budget, so no person was needed.
+            Approved by <code className="mono">{run.approval.approver_id ?? 'budget policy'}</code>: the measured change stayed on the auto-apply list and inside the budget, so no person was needed.
           </p>
         )}
         {run.approval?.kind === 'human' && (
@@ -366,6 +376,7 @@ function Outcome({ run }: { run: Run }) {
           Drift detected. Nothing was applied.
         </div>
         <p className="outcome-line">{a.reason}</p>
+        <HashNote run={run} />
         {a.fingerprint_at_rehearsal && (
           <dl className="hashrows">
             <div className="hashrow">
@@ -417,6 +428,7 @@ function Outcome({ run }: { run: Run }) {
         Rolled back
       </div>
       <p className="outcome-line">{a.reason}</p>
+      <HashNote run={run} />
       {a.restored !== undefined && <p>{a.restored ? 'The server was restored from the state archive.' : 'The server could not be restored from the state archive.'}</p>}
       {isHost && a.files && <FileCountsTable expected={a.expected_files} actual={a.files} actualLabel="Actual" />}
       {(a.count_mismatches?.length ?? 0) > 0 && (
@@ -474,7 +486,56 @@ function Outcome({ run }: { run: Run }) {
   );
 }
 
+/** The retry loop can narrow a request until it passes, so whoever decides is told when the plan shrank. */
+function NarrowedNotice({ run }: { run: Run }) {
+  const rows = narrowedRows(run);
+  if (!rows || !['awaiting_approval', 'approved', 'applied', 'no_change'].includes(run.status)) return null;
+  const done = run.status === 'applied';
+  const summary = (run.final ?? run.attempts?.[run.attempts.length - 1])?.plan?.summary;
+  return (
+    <Notice
+      tone="caution"
+      title={`This ${done ? 'changed' : 'changes'} fewer rows than the agent's first plan (${num(rows.final)}, was ${num(rows.first)}). Check it still ${done ? 'did' : 'does'} what you asked.`}
+    >
+      {run.task && (
+        <span className="narrowed-line">
+          <span className="label">You asked</span> {run.task}
+        </span>
+      )}
+      {summary && (
+        <span className="narrowed-line">
+          <span className="label">The agent's summary of this plan</span> {summary}
+        </span>
+      )}
+    </Notice>
+  );
+}
+
+function Badges({ run }: { run: Run }) {
+  const again = run.final?.reproduced;
+  if (!again) return null;
+  return (
+    <p className="decide-badges">
+      <Tag tone={again.ok ? 'good' : 'bad'}>{again.ok ? 'Reproduced on a second clone' : 'Did not reproduce on a second clone'}</Tag>
+      {!again.ok && (again.differs?.length ?? 0) > 0 && <span className="mono muted">{again.differs?.join(', ')}</span>}
+    </p>
+  );
+}
+
 export function DecisionSection({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) => void; pollFast: (on: boolean) => void }) {
+  // Undo is offered while a person decides, and after the change is on prod.
+  const showUndo = ['awaiting_approval', 'approved', 'applied'].includes(run.status);
+  return (
+    <>
+      <Badges run={run} />
+      <NarrowedNotice run={run} />
+      <DecisionPanel run={run} setRun={setRun} pollFast={pollFast} />
+      {showUndo && <UndoPanel run={run} />}
+    </>
+  );
+}
+
+function DecisionPanel({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) => void; pollFast: (on: boolean) => void }) {
   switch (run.status) {
     case 'awaiting_approval':
       return run.can?.approve ? <ApprovePanel run={run} setRun={setRun} /> : <RequesterPanel run={run} />;

@@ -1,6 +1,10 @@
 """Static gate and plan hashing. No VM or database needed."""
-import pytest
+from pathlib import Path
 
+import pytest
+import yaml
+
+from control import gate
 from control.gate import check_plan
 from control.plan import PlanError, guardrails_hash, normalize_plan, plan_hash, split_sql
 
@@ -135,3 +139,81 @@ def test_a_plan_cannot_touch_the_guardrail_baselines(sql):
 def test_wrapped_shell_is_flagged(cmd):
     r = check_plan(normalize_plan([{"type": "shell", "cmd": cmd}]), "host")
     assert r["flagged"], r
+
+
+def test_a_word_inside_data_is_not_read_as_a_command():
+    """An undo plan carries real rows, and a support ticket can say anything."""
+    r = verdict("""INSERT INTO support_tickets (body) VALUES ('please disable trigger and grant access; pg_temp; SET ROLE admin')""")
+    assert r["verdict"] == "pass", r["findings"]
+    dollar = verdict("""INSERT INTO t (b) SELECT b FROM jsonb_populate_recordset(NULL::t, $sr$[{"b":"DROP TABLE x; pg_temp"}]$sr$::jsonb)""")
+    assert dollar["verdict"] == "pass", dollar["findings"]
+
+
+def test_the_same_words_as_code_are_still_blocked():
+    assert verdict("ALTER TABLE users DISABLE TRIGGER ALL")["verdict"] == "block"
+    assert verdict("UPDATE pg_temp.before_x SET a = 1")["verdict"] == "block"
+
+
+def test_copy_to_a_server_path_is_still_blocked_though_the_path_is_a_string():
+    assert verdict("COPY users TO '/tmp/out.csv'")["verdict"] == "block"
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT 1 WHERE false",
+    "(SELECT id FROM users)",
+    "SELECT id FROM users UNION ALL SELECT id FROM accounts",
+    "WITH a AS (SELECT id FROM users) SELECT * FROM a",
+    "SELECT b.id FROM before.invoices b LEFT JOIN invoices i USING (id) WHERE i.id IS NULL",
+    "SELECT regexp_matches(name, 'x', 'g') FROM products",
+    "SELECT id FROM users WHERE note LIKE '%pg_sleep(1)%'",
+    "SELECT sum(amount_cents) FROM payments HAVING sum(amount_cents) < 0",
+])
+def test_a_guardrail_that_only_reads_is_allowed(sql):
+    assert gate.check_guardrail(sql) is None
+
+
+@pytest.mark.parametrize("sql", [
+    "UPDATE users SET email = 'x'; SELECT 1 WHERE false",
+    "SELECT 1 WHERE false; UPDATE users SET email = 'x'",
+    "COMMIT",
+    "COMMIT; SELECT 1 WHERE false",
+    "WITH d AS (DELETE FROM users RETURNING 1) SELECT * FROM d WHERE false",
+    "WITH d AS (UPDATE users SET email = 'x' RETURNING 1) SELECT 1 WHERE false",
+    "SELECT * FROM users FOR UPDATE",
+    "SELECT * INTO kept FROM users",
+    "SELECT pg_sleep(600)",
+    "SELECT pg_catalog.pg_sleep(600)",
+    'SELECT "pg_sleep"(600)',
+    "SELECT pg_advisory_lock(1)",
+    "SELECT pg_terminate_backend(1)",
+    "SELECT nextval('users_id_seq')",
+    "SELECT set_config('search_path', 'x', false)",
+    "SELECT lo_import('/etc/passwd')",
+    "DROP TABLE users",
+    "DO $$ BEGIN DELETE FROM users; END $$",
+    "not sql at all (",
+    "",
+])
+def test_a_guardrail_that_can_do_anything_else_is_refused(sql):
+    assert gate.check_guardrail(sql)
+
+
+@pytest.mark.parametrize("path", ["demo/guardrails.yaml", "bench/external_guardrails.yaml"])
+def test_every_seeded_guardrail_passes_the_read_only_check(path):
+    root = Path(__file__).resolve().parent.parent
+    doc = yaml.safe_load((root / path).read_text())
+    groups = doc.values() if isinstance(doc, dict) else [doc]
+    checked = 0
+    for group in groups:
+        for g in group:
+            if "sql" in g:  # host targets use shell checks, written by a person and accepted by an admin
+                assert gate.check_guardrail(g["sql"]) is None, g["name"]
+                checked += 1
+    assert checked >= 10
+
+
+def test_the_first_word_check_refuses_transaction_control_whatever_the_comments_say():
+    from runner.guest.txrun import reads_only_by_its_first_word as ok
+
+    assert ok("SELECT 1") and ok("  (select 1)") and ok("-- note\nWITH a AS (SELECT 1) SELECT * FROM a") and ok("/* x */ select 1")
+    assert not ok("COMMIT") and not ok("-- select\nCOMMIT") and not ok("/* select */ ROLLBACK") and not ok("selector") and not ok("")

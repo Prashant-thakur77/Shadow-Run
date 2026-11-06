@@ -266,3 +266,175 @@ def test_new_triggers_and_functions_appear_in_the_schema_state(db):
         c.rollback()
     added = {tuple(r[:2]) for r in after} - {tuple(r[:2]) for r in before}
     assert ("trigger", "parents.x") in added and any(k == "function" for k, _ in added)
+
+
+SCOPE = {"auto_apply_scope": {"job_logs": "*", "products": ["name"]}}
+
+
+def _table(name, **kw):
+    return {"table": name, "inserted": 0, "updated": 0, "deleted": 0, "dropped": False, "truncated": False, "rows_before": 10, **kw}
+
+
+def _report(tables, columns=None, schema=()):
+    return {"totals": {"rows_changed": 1}, "tables": tables, "schema_diff": list(schema), "changed_columns": columns}
+
+
+@pytest.mark.parametrize("report,within", [
+    (_report([_table("products", updated=1)], {"products": {"name": 1}}), True),
+    (_report([_table("products", updated=1)], {"products": {"name": 1, "price_cents": 1}}), False),
+    (_report([_table("products", inserted=1)], {}), False),
+    (_report([_table("products", updated=1)], None), False),  # columns not measured counts against the plan
+    (_report([_table("job_logs", inserted=5)], {}), True),
+    (_report([_table("invoices", updated=1)], {"invoices": {"amount_cents": 1}}), False),
+    (_report([], {}, [{"kind": "column", "name": "invoices.note", "change": "added"}]), False),
+    (_report([], {}, [{"kind": "column", "name": "job_logs.note", "change": "added"}]), True),
+    (_report([], {}, [{"kind": "column", "name": "products.note", "change": "added"}]), False),
+])
+def test_only_named_tables_and_columns_can_change_alone(report, within):
+    assert check_budget(report, {"verdict": "pass"}, [], SCOPE)["within"] is within
+
+
+def test_the_default_scope_is_nothing():
+    assert check_budget(_report([_table("products", updated=1)], {"products": {"name": 1}}), {"verdict": "pass"}, [])["within"] is False
+
+
+def test_a_row_budget_alone_is_the_baseline_the_gauntlet_measures():
+    report = _report([_table("invoices", updated=1)], {"invoices": {"amount_cents": 1}})
+    assert check_budget(report, {"verdict": "pass"}, [], {"auto_apply_scope": None})["within"] is True
+
+
+def test_a_moved_business_number_needs_a_person():
+    report = {**_report([_table("products", updated=1)], {"products": {"name": 1}}), "metrics": [{"name": "Paid revenue", "before": 2, "after": 1}]}
+    assert check_budget(report, {"verdict": "pass"}, [], SCOPE)["within"] is False
+
+
+def _host(files, **kw):
+    counts = {k: len(files.get(k, [])) for k in ("created", "changed", "deleted")}
+    return {"kind": "host", "totals": {"files_changed": counts["changed"]}, "files": {**files, "counts": counts}, **kw}
+
+
+@pytest.mark.parametrize("report,within", [
+    (_host({"changed": ["/var/app/logs/a"]}), True),
+    (_host({"changed": ["/etc/nginx/nginx.conf"]}), False),
+    (_host({"created": ["/usr/local/bin/x"]}), False),
+    (_host({"changed": ["/var/app/logs/a"]}, services_started=["backdoor"]), False),
+])
+def test_host_changes_stay_inside_the_named_paths(report, within):
+    budget = {"auto_apply_paths": ["/var/app/logs/"]}
+    assert check_budget(report, {"verdict": "pass"}, [], budget)["within"] is within
+
+
+def test_a_capped_file_list_cant_clear_a_longer_change():
+    report = _host({"changed": ["/var/app/logs/a"]})
+    report["files"]["counts"]["changed"] = 400
+    report["totals"]["files_changed"] = 2
+    assert check_budget(report, {"verdict": "pass"}, [], {"auto_apply_paths": ["/var/app/logs/"]})["within"] is False
+
+
+class TestReleaseWithinBudget:
+    """What an agent's apply call may do with a run it rehearsed through MCP."""
+
+    @pytest.fixture
+    def svc(self, tmp_path, monkeypatch):
+        from control import approvals, settings
+        from control.service import Service
+        from control.store import Store
+
+        monkeypatch.setattr(settings, "HMAC_SECRET", "test-secret")
+        s = Service.__new__(Service)
+        s.store = Store(tmp_path / "s.sqlite3")
+        s.store.save_target({"id": "t", "kind": "postgres", "guardrails": [], "auto_apply_within_budget": True})
+        self.approvals = approvals
+        return s
+
+    def _run(self, svc, within=True, source="mcp", rehearse_only=True, status="awaiting_approval"):
+        run = {
+            "id": "r1", "status": status, "requester": "agent", "target_id": "t", "source": source, "rehearse_only": rehearse_only, "created_at": 0, "events": [],
+            "plan_hash": "p" * 64, "guardrails_hash": "g" * 64, "report_hash": "h" * 64, "final_attempt": 1,
+            "attempts": [{"n": 1, "budget": {"within": within, "limits": {}}}],
+        }
+        self.approvals.open_challenge(run)
+        svc.store.save_run(run)
+        return run
+
+    def test_a_change_on_the_list_goes_ahead_when_the_agent_asks(self, svc):
+        self._run(svc)
+        released = svc.release_within_budget("r1")
+        assert released["status"] == "approved" and released["approval"]["kind"] == "auto_budget"
+        self.approvals.verify(released, released["approval"])
+
+    @pytest.mark.parametrize("kw", [{"within": False}, {"source": "cli"}, {"rehearse_only": False}, {"status": "blocked"}])
+    def test_anything_else_stays_with_a_person(self, svc, kw):
+        self._run(svc, **kw)
+        assert svc.release_within_budget("r1") is None
+        assert svc.store.get_run("r1")["status"] == kw.get("status", "awaiting_approval")
+
+
+def test_one_visitor_cant_use_up_everyones_limit():
+    """Every guest is the same identity on the demo, so limits go by address."""
+    from fastapi import HTTPException
+
+    from control import api
+
+    api._hits.clear()
+    api.client_ip.set("1.1.1.1")
+    api.limit("judge", "gauntlet runs", 2)
+    api.limit("judge", "gauntlet runs", 2)
+    with pytest.raises(HTTPException) as e:
+        api.limit("judge", "gauntlet runs", 2)
+    assert e.value.status_code == 429
+    api.client_ip.set("2.2.2.2")
+    api.limit("judge", "gauntlet runs", 2)
+
+
+class TestConfiguredTargets:
+    GOOD = "- id: mine\n  connection: {host: h, port: 5432, user: u, password_env: P, dbname: d}\n  guardrails:\n    - {id: g, name: G, sql: 'SELECT 1 WHERE false'}\n"
+
+    def _load(self, tmp_path, text):
+        from control.service import configured_targets
+
+        path = tmp_path / "targets.yaml"
+        path.write_text(text)
+        return configured_targets(path)
+
+    def test_a_new_target_waits_for_a_person_on_everything(self, tmp_path):
+        t = self._load(tmp_path, self.GOOD)[0]
+        assert t["auto_apply_within_budget"] is False and t["budget"]["auto_apply_scope"] == {} and t["demo_controls"] is False
+
+    def test_a_listed_scope_turns_auto_apply_on(self, tmp_path):
+        t = self._load(tmp_path, self.GOOD + "  budget: {auto_apply_scope: {flags: [note]}}\n")[0]
+        assert t["auto_apply_within_budget"] is True and t["budget"]["auto_apply_scope"] == {"flags": ["note"]}
+
+    def test_a_guardrail_that_writes_stops_the_file_from_loading(self, tmp_path):
+        with pytest.raises(ValueError, match="only read|one statement"):
+            self._load(tmp_path, self.GOOD.replace("SELECT 1 WHERE false", "WITH d AS (DELETE FROM t RETURNING 1) SELECT 1"))
+
+    def test_a_password_in_the_file_is_refused(self, tmp_path):
+        with pytest.raises(ValueError, match="password_env"):
+            self._load(tmp_path, self.GOOD.replace("password_env: P", "password: hunter2"))
+
+    def test_the_example_file_loads(self):
+        from pathlib import Path
+
+        from control.service import configured_targets
+
+        assert configured_targets(Path("examples/targets.yaml"))[0]["id"] == "my-app"
+
+
+@pytest.mark.parametrize("name", ["demo_reset", "make_drift"])
+async def test_demo_writes_refuse_anything_but_a_demo_target(monkeypatch, name):
+    """These write straight to the target's database. On a team's own database, reset would destroy it."""
+    from fastapi import HTTPException
+
+    from control import api
+
+    class Svc:
+        class store:
+            @staticmethod
+            def get_target(_):
+                return {"id": "mine", "kind": "postgres", "demo_controls": False, "connection": {"host": "real"}}
+
+    monkeypatch.setattr(api, "svc", lambda: Svc)
+    with pytest.raises(HTTPException) as e:
+        await getattr(api, name)("mine", user="judge")
+    assert e.value.status_code == 403

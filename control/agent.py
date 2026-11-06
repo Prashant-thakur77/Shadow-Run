@@ -194,6 +194,24 @@ def feedback_for(attempt: dict, guardrails: list[dict] | None = None) -> str:
     return "\n".join(lines)
 
 
+async def _rehearse(runner: Any, kind: str, target: dict, name: str, snapshot_id: str, steps: list[dict], guardrails: list[dict]) -> dict:
+    if kind == "host":
+        return await runner.host_rehearse(name, target["host_id"], [{"cmd": s["cmd"]} for s in steps], guardrails)
+    return await runner.rehearse(name, snapshot_id, [{"statements": s["statements"]} for s in steps], guardrails, metrics=target.get("metrics") or [])
+
+
+def compare_runs(first: dict, second: dict) -> dict:
+    """Did a second, independent clone measure the same thing?"""
+    a, b = first.get("result") or {}, second.get("result") or {}
+    if second.get("sandbox_error") or not b.get("ok"):
+        return {"ok": False, "differs": ["the second rehearsal did not complete"], "sandbox": second.get("sandbox"), "ms": (second.get("phases") or {}).get("total_ms")}
+    keys = ["xact_counts", "schema_fingerprint_after", "content_after", "services_stopped", "ports_closed"]
+    differs = [k for k in keys if a.get(k) != b.get(k)]
+    if (a.get("files") or {}).get("content_sha256") != (b.get("files") or {}).get("content_sha256"):
+        differs.append("files")
+    return {"ok": not differs, "differs": differs, "sandbox": second.get("sandbox"), "ms": (second.get("phases") or {}).get("total_ms"), "contained": second.get("contained")}
+
+
 def _changed_anything(report: dict) -> bool:
     t = report.get("totals", {})
     return any(t.get(k) for k in ("rows_changed", "ddl_commands", "files_created", "files_deleted", "files_changed", "services_stopped"))
@@ -223,6 +241,8 @@ async def run_loop(
     planner_model: str | None = None,
     explain_plan: bool = True,
     attempts: list[dict] | None = None,
+    measure_blocked: bool = False,
+    on_undo: Callable[[int, list[str]], None] | None = None,
 ) -> dict:
     """Returns the final attempt plus every earlier one. `fixed_steps` skips the planner (MCP, CLI, API)."""
     kind = target["kind"]
@@ -268,15 +288,23 @@ async def run_loop(
         if gate["verdict"] == "block":
             attempt["verdict"] = "blocked_by_gate"
             feedback.append(feedback_for(attempt))
+            if measure_blocked:
+                # Used to replay real incidents. The clone is disposable, so show what the refused plan
+                # would have done. It stays refused whatever this measures.
+                rec = await _rehearse(runner, kind, target, f"{run_id}a{n}", snapshot_id, steps, guardrails)
+                attempt["rehearsal"] = rec
+                result = rec.get("result") or {}
+                if rec.get("contained") and not result.get("fatal"):
+                    attempt["report"] = build_host_report(result) if kind == "host" else build_report(result)
+                    attempt["guardrails"] = result.get("guardrails", [])
+                    result.pop("undo_statements", None)
             continue
 
         on_event("rehearsal_started", {"attempt": n, "plan_hash": attempt["plan_hash"]})
-        if kind == "host":
-            rec = await runner.host_rehearse(f"{run_id}a{n}", target["host_id"], [{"cmd": s["cmd"]} for s in steps], guardrails)
-        else:
-            rec = await runner.rehearse(f"{run_id}a{n}", snapshot_id, [{"statements": s["statements"]} for s in steps], guardrails)
+        rec = await _rehearse(runner, kind, target, f"{run_id}a{n}", snapshot_id, steps, guardrails)
         attempt["rehearsal"] = rec
         result = rec.get("result") or {}
+        undo_statements = result.pop("undo_statements", None)
         on_event("rehearsal_finished", {"attempt": n, "ms": rec.get("phases", {}).get("total_ms"), "contained": rec.get("contained"), "sandbox": rec.get("sandbox")})
 
         if rec.get("sandbox_error") or not rec.get("contained"):
@@ -299,7 +327,21 @@ async def run_loop(
         })
         failed = [g for g in attempt["guardrails"] if not g["passed"]]
         on_event("guardrails_checked", {"attempt": n, "passed": len(attempt["guardrails"]) - len(failed), "failed": len(failed), "failed_names": [g["name"] for g in failed]})
+        attempt["undo"] = result.get("undo")
+        if undo_statements and on_undo:
+            on_undo(n, undo_statements)
+        if not failed and _changed_anything(report):
+            # A second microVM must reproduce the result. A plan that is not deterministic is caught here,
+            # before anyone approves it, instead of at apply. Adapted from Nusa's confirm step.
+            on_event("reproducing", {"attempt": n})
+            again = await _rehearse(runner, kind, target, f"{run_id}a{n}b", snapshot_id, steps, guardrails)
+            (again.get("result") or {}).pop("undo_statements", None)
+            attempt["reproduced"] = compare_runs(rec, again)
+            on_event("reproduced", {"attempt": n, "ok": attempt["reproduced"]["ok"]})
         attempt["budget"] = check_budget(report, gate, attempt["guardrails"], target.get("budget"))
+        if attempt.get("reproduced") and not attempt["reproduced"]["ok"]:
+            attempt["budget"]["within"] = False
+            attempt["budget"]["reasons"].append("a second clone did not reproduce this result, so it is likely to roll back at apply")
         if explain_plan:
             try:
                 attempt["explanation"] = explain(report, attempt["plan"]["summary"], attempt["guardrails"])

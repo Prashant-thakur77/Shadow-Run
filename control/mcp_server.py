@@ -127,6 +127,9 @@ def build(get_service: Callable[[], Any]) -> MCPServer:
             run = svc.new_run(target, user, None, steps, "mcp")
         except KeyError:
             return {"status": "error", "error": f"no such target: {target}"}
+        # This tool promises it never touches prod, so a change on the auto-apply list waits for apply as well.
+        run["rehearse_only"] = True
+        svc.store.save_run(run)
         svc.start(run)
         return describe(await settle(run["id"]))
 
@@ -143,7 +146,7 @@ def build(get_service: Callable[[], Any]) -> MCPServer:
     @server.tool(
         title="Apply a rehearsed plan to prod",
         description=(
-            "Ask to run a rehearsed plan on production. A person approves in the web app unless the run already fits the blast-radius budget. "
+            "Ask to run a rehearsed plan on production. A person approves in the web app, unless the change stays on the target's auto-apply list and inside its budget. "
             "The same hashed plan then runs in one transaction, and rolls back if its counts differ from the rehearsal. "
             "Pass the run_id from rehearse. plan_hash is optional and must match if given."
         ),
@@ -157,6 +160,8 @@ def build(get_service: Callable[[], Any]) -> MCPServer:
             return {"error": f"no such run: {run_id}"}
         if plan_hash and plan_hash != run.get("plan_hash"):
             return {"status": run["status"], "error": "plan_hash does not match this run. Rehearse the plan you want to apply."}
+        if run["status"] == "awaiting_approval":
+            run = svc.release_within_budget(run_id) or run
         if run["status"] == "awaiting_approval":
             # Ask the client to open the approval page. Not every client supports this, so fall through to polling.
             try:

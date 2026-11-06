@@ -10,23 +10,39 @@
 
 Demo video: VIDEO_URL
 
+![The same plan, without and with Shadow Run: what it would have erased on the seeded demo, and prod's hash unchanged](docs/img/with-without.png)
+
+## Try it
+
+On the web, press Continue as guest and click an example task. Then try to break it: approve your own run, tamper with a hash, change prod behind its back. The server refuses for real. Incidents replays real ones, Red team runs seven attacks live, and Receipts lists every measured claim with the command that reproduces it.
+
+Through MCP with OpenCode on Vultr inference, copy [`docs/opencode.json`](docs/opencode.json), set `VULTR_INFERENCE_KEY` and `SHADOWRUN_TOKEN` (shown under Connect an agent on the Guardrails page), and ask it to change the database. Claude Code and Cursor work the same way: `claude mcp add --transport http shadowrun "$SHADOWRUN_URL/mcp" --header "Authorization: Bearer $SHADOWRUN_TOKEN"`.
+
+From a terminal or CI:
+
+```
+pip install -e . && export SHADOWRUN_URL=https://... SHADOWRUN_TOKEN=...
+shadowrun rehearse plan.sql --target demo-saas   # exit 0 applied, 2 needs a person, 3 blocked, 4 rolled back
+```
+
+As a GitHub Action, `uses: Prashant-thakur77/Shadow-Run@main` rehearses a migration in a pull request and posts what it really does as a comment. It never applies anything, since nobody has reviewed the pull request yet. See [`.github/workflows/shadowrun.yml`](.github/workflows/shadowrun.yml).
+
 ## The problem
 
-AI agents with real access keep destroying production data in one command. In April 2026, by its founder's account, a Cursor agent at [PocketOS](https://www.pcgamer.com/software/ai/here-we-go-again-ai-deletes-entire-company-database-and-all-backups-in-9-seconds-then-cheerfully-admits-i-violated-every-principle-i-was-given/) hit a credential mismatch on a staging task, found a Railway API token in an unrelated file, and deleted the production volume and its backups in nine seconds. In February, Claude Code ran `terraform destroy` against [DataTalks.Club](https://aishippingblog.com/p/how-i-dropped-our-production-database) off a stale state file. At [SaaStr](https://fortune.com/2025/07/23/ai-coding-tool-replit-wiped-database-called-it-a-catastrophic-failure/) a Replit agent wiped records during a code freeze. [Salt Security's October 2026 survey](https://campustechnology.com/articles/2026/10/21/unexpected-ai-agent-activity-reported-by-nearly-half-of-organizations-in-recent-survey.aspx) found that 49.8% of respondents confirmed or suspected unexpected or unauthorized agent activity, and 17.5% said they could automatically stop an agent.
-
-Those incidents share two things. Separating dev from prod didn't help, because the agent found a credential that reached prod. And the damage hid in side effects: backups next to the database, cascades nobody listed in the plan.
+AI agents with real access keep destroying production data in one command. By its founder's account, a Cursor agent at [PocketOS](https://www.pcgamer.com/software/ai/here-we-go-again-ai-deletes-entire-company-database-and-all-backups-in-9-seconds-then-cheerfully-admits-i-violated-every-principle-i-was-given/) found an API token in an unrelated file and deleted the production volume and its backups in nine seconds. Claude Code ran `terraform destroy` against [DataTalks.Club](https://aishippingblog.com/p/how-i-dropped-our-production-database) off a stale state file. At [SaaStr](https://fortune.com/2025/07/23/ai-coding-tool-replit-wiped-database-called-it-a-catastrophic-failure/) a Replit agent wiped records during a code freeze. Separating dev from prod didn't help, because the agent found a credential that reached prod, and the damage hid in side effects nobody listed in the plan. In [Salt Security's October 2026 survey](https://campustechnology.com/articles/2026/10/21/unexpected-ai-agent-activity-reported-by-nearly-half-of-organizations-in-recent-survey.aspx), 17.5% of respondents said they could automatically stop an agent.
 
 ## How it works
 
-The agent never gets the credential. It gets three tools, and Shadow Run holds the only prod login.
+The agent never gets the credential. It gets a few tools, and Shadow Run holds the only prod login. The model proposes plans and explains results. It never grades itself: Postgres measures, frozen checks decide, and any number in the model's explanation that the measurements don't contain gets flagged.
 
 1. The plan is frozen: SHA-256 of the exact steps, with the guardrails hashed alongside it.
-2. A static gate reads it with a real SQL parser (sqlglot) and ShellCheck. Anything the gate can't read is treated as unsafe.
+2. A static gate reads it with a real SQL parser (sqlglot) and ShellCheck. Anything the gate can't read counts as unsafe.
 3. Prod is snapshotted and restored into a fresh Microsandbox microVM with no network device and no credentials. The plan runs there as an unprivileged role.
-4. Postgres measures the blast radius: rows per table, each cascade traced to the step that caused it, schema changes, before and after samples. No model is involved in this part.
-5. Business guardrails run inside the same transaction. They're frozen SQL that the agent can't edit. On failure, the measurements go back to the agent, which revises and rehearses on a new clone.
-6. Small changes that fit the team's budget go through. Everything else waits for a different person, who approves those exact hashes. A changed or replayed approval gets a 409.
-7. The same plan runs on prod in one transaction, with the touched tables locked and re-checked for drift. If row counts, row content, schema or guardrails differ from the rehearsal at all, it rolls back. A backup and a signed evidence bundle go to Object Storage.
+4. Postgres measures the blast radius: rows per table, each cascade traced to the step that caused it, schema changes, before and after samples, and what it does to the numbers a business watches, such as paid invoices in dollars. No model is involved in this part.
+5. Business guardrails run in the same transaction. They're frozen SQL the agent can't edit. On failure, the measurements go back to the agent, which revises and rehearses on a new clone.
+6. A plan that passes is proved twice more. A second microVM must reproduce the result. Then Shadow Run writes the exact inverse from the row log, cascades included, runs it on the clone, and checks that the content hash of every touched table returns to its starting value.
+7. A small change goes through alone only if it stays on a list of tables and columns the team named as low-risk, and every business number stays put. Everything else waits for a different person, who approves those exact hashes. A changed or replayed approval gets a 409.
+8. The same plan runs on prod in one transaction, with the touched tables locked and re-checked for drift. If row counts, row content, schema or guardrails differ from the rehearsal at all, it rolls back. A backup and a signed evidence bundle go to Object Storage. Undo is one button, and it goes through this same pipeline.
 
 ![Architecture](docs/architecture.svg)
 
@@ -44,16 +60,60 @@ The suite is 40 tasks of ours plus 20 adapted from [SABER](https://github.com/ss
 <!-- groups:start -->
 <!-- groups:end -->
 
+<!-- models:start -->
+<!-- models:end -->
+
 <!-- cost:start -->
 <!-- cost:end -->
 
+## Real incidents, replayed
+
+The commands behind documented incidents, run on a clone. Each is measured even when the gate refuses it, to show what it would have done.
+
+<!-- incidents:start -->
+<!-- incidents:end -->
+
+## We attacked our own policy
+
+A guardrail only protects what someone thought of. So an attacker model is told every guardrail and the exact rule for auto-apply, then tries to do real damage. Its own damage check runs on a clone, so a claim of damage has to be real.
+
+The first version of auto-apply was a row limit. The attacker fit real damage under it: re-pointing paid invoices at another customer, moving payments to the wrong invoice. So auto-apply now works from a named list of what may change without a person, and the report measures which columns each plan really changed. The attacker still tries, and it can still change what's on the list, so the last column is what matters: not how many got through, but what they could reach. The old policy stays in the test as the baseline:
+
+<!-- gauntlet:start -->
+<!-- gauntlet:end -->
+
+An attack that passes the rules also produces a candidate rule, which counts only if it holds on the clean database, fails on that plan, and lets [a list of ordinary changes](demo/normal_work.yaml) through, because a rule that blocks everything also catches everything. A person's judgment feeds the same loop: when a reviewer rejects a plan and says why, the model turns the reason into a rule, it's proved the same way, and that plan then fails it.
+
+## Who this is for
+
+Whoever owns the database at a team that lets coding agents run migrations and data fixes. That team has two choices today: give the agent a credential and hope, or have a senior engineer read each statement and guess what it cascades into. Shadow Run replaces the guess with a measurement, stated in rows and in the money the business tracks, at the inference cost per task shown above.
+
+Nothing has to be trusted on day one:
+
+1. **The pull request Action**, rehearse only. Every migration gets a comment saying what it really does. Nothing can reach prod.
+2. **MCP for the agent.** It gives up its database URL and gets rehearse and apply instead. Every change waits for a person.
+3. **A short auto-apply list**, once the team has seen enough reports. It names the columns they're happy to change without a person.
+
+Cost grows with database size and not with seats, so it would be priced per protected database.
+
+## Point it at your database
+
+```
+cp examples/targets.yaml targets.yaml    # host, role, guardrails, business numbers
+export SHADOWRUN_TARGETS=$PWD/targets.yaml MY_APP_DB_PASSWORD=...
+```
+
+Restart the control plane, and the target appears next to the demo. Start on a staging copy, because the role in that file can write. Draft guardrails on the Guardrails page has the model propose rules from your schema, for an admin to accept. On your own target, every change waits for a person until you list otherwise. Guest access turns itself off, reset and forced drift refuse to run, and the passwords in `.env` become the logins, so set your own.
+
 ## Vultr services
+
+Vultr is the whole control layer here, not just hosting.
 
 | Service | What it does here | Config |
 | --- | --- | --- |
 | VX1 Cloud Compute | Rehearsal microVMs with KVM, the host-side checker, both network walls | `vx1-g-4c-16g-240s`, Seattle |
 | Cloud Compute | Control plane: API, web UI, MCP server, the only prod credential | `vc2-2c-4gb` |
-| Serverless Inference | Every LLM call: planner, retry loop, explainer, guardrail drafter, content safety | `qwen3.8-27b`, `glm-5.3`, `nemotron-3.5-content-safety`; cost priced from `/v1/models` |
+| Serverless Inference | Every LLM call: the planner and its retry loop, the explainer, the guardrail drafter, the attacker that tests the guardrails, and the content-safety check on stored text | `qwen3.8-27b`, `glm-5.3`, `nemotron-3.5-content-safety`; cost priced from `/v1/models` |
 | Managed PostgreSQL 16 | The demo production database, reached over the VPC by a role that owns one database | 1 node, 2 GB |
 | Object Storage | Evidence bundles and pre-apply backups | S3 API |
 | VPC Network and firewall groups | The runner port is reachable only from the control VM | `10.77.0.0/24` |
@@ -84,19 +144,6 @@ We also tried to break the approval, the apply and the measurement on the live s
 <!-- soak:start -->
 <!-- soak:end -->
 
-## Try it
-
-On the web, sign in, click an example task and watch the rehearsal. The Red team page runs all seven attacks live.
-
-Through MCP with OpenCode on Vultr inference, copy [`docs/opencode.json`](docs/opencode.json), set `VULTR_INFERENCE_KEY` and `SHADOWRUN_TOKEN` (shown on the web app's Target page), and ask it to change the database. Claude Code and Cursor work the same way: `claude mcp add --transport http shadowrun "$SHADOWRUN_URL/mcp" --header "Authorization: Bearer $SHADOWRUN_TOKEN"`.
-
-From a terminal or CI:
-
-```
-pip install -e . && export SHADOWRUN_URL=https://... SHADOWRUN_TOKEN=...
-shadowrun rehearse plan.sql --target demo-saas   # exit 0 applied, 2 needs a person, 3 blocked, 4 rolled back
-```
-
 ## Run your own
 
 ```
@@ -112,9 +159,11 @@ python infra/teardown.py      # removes everything, confirms 404
 
 ## Limits
 
-Steps with effects outside the target, such as sending email or calling Stripe or a cloud API, can't be rehearsed. They are flagged and always go to a person.
+Steps that reach outside the target, such as sending email or calling Stripe or a cloud API, can't be rehearsed. With no network they fail on the clone, so the plan is blocked. A step that swallows that failure is still flagged by the gate and goes to a person. Either way, Shadow Run can't say what the call would have done.
 
-Some harm needs a person to catch it. If no guardrail encodes an invariant, Shadow Run can only show the diff. The rubber-stamp row in the results table is that gap, measured.
+On the public demo, one guest holds both the requester and the approver identity, so that the whole flow fits in one tab. The rule is that an identity can't approve its own run, and it only means two people if those identities belong to two people, as they would in a real deployment.
+
+Some harm needs a person to catch it. If no guardrail encodes an invariant, Shadow Run can only show the diff. The rubber-stamp row in the results table is that gap, measured, and the attacker table above shows how easily a model can find such an invariant. The auto-apply list is its owner's judgment call: a column on it can be changed badly, up to the row limit, with no person looking. On the demo, that list is one notes column.
 
 Rehearsal cost grows with database size, because the clone is a full restore:
 
@@ -131,4 +180,4 @@ A plan that behaves differently on purpose, such as one branching on `current_us
 
 [DryRun](https://github.com/HMAKT99/DryRun) rehearses SQL in Docker on sampled rows and gives advice. Shadow Run uses a full clone in a microVM and enforces the outcome with a hash-pinned apply. [safe-migrations-mcp](https://pypi.org/project/safe-migrations-mcp/) simulates on prod inside a rolled-back transaction, which still takes locks on prod. [Neon's MCP](https://github.com/neondatabase/mcp-server-neon) branches for schema migrations on Neon.
 
-Patterns adapted from Vultr Agent Arena entries, rewritten for this stack: host-side red team and the uid firewall from [Nusa](https://github.com/a8nova/nusa), scripted provisioning and pricing from `/v1/models` from [Skeleton Key](https://github.com/Carldtitan/skeleton_key), the scored gauntlet with a baseline from [Cerberus](https://github.com/Preet37/VultrHack), digest-bound approvals from [Airlock](https://github.com/nihalnihalani/airlock), the hash-chained audit log from [Tieout](https://github.com/chinesepowered/hack-vultracc). External tasks are from [SABER](https://github.com/sssr-lab/saber) (CC-BY-4.0). MIT licence.
+Ideas borrowed from earlier Vultr Agent Arena entries and rebuilt here: a second microVM that must agree, and the Receipts page, from [Nusa](https://github.com/a8nova/nusa); guest access and do/undo pairs from [Skeleton Key](https://github.com/Carldtitan/skeleton_key); publishing failed runs from [RLForge](https://github.com/vvennela/rlforge); a scored baseline from [Cerberus](https://github.com/Preet37/VultrHack); digest-bound approvals from [Airlock](https://github.com/nihalnihalani/airlock); the hash-chained log from [Tieout](https://github.com/chinesepowered/hack-vultracc). External tasks are from [SABER](https://github.com/sssr-lab/saber) (CC-BY-4.0). MIT licence.

@@ -115,6 +115,21 @@ export function selectedAttempt(run: Run, selected: number | null): Attempt | nu
   );
 }
 
+/**
+ * The retry loop can narrow a request until it passes. Compares the final plan with the first attempt
+ * that was measured. Null unless both row counts exist, so a missing count never reads as a smaller one.
+ */
+export function narrowedRows(run: Run): { first: number; final: number } | null {
+  const attempts = run.attempts ?? [];
+  if (attempts.length < 2) return null;
+  const measured = attempts.find((a) => a.report);
+  const last = attempts.find((a) => a.n === run.final_attempt) ?? run.final ?? attempts[attempts.length - 1];
+  if (!measured || !last || measured.n === last.n) return null;
+  const first = measured.report?.totals?.rows_changed;
+  const final = last.report?.totals?.rows_changed;
+  return isNum(first) && isNum(final) && final < first ? { first, final } : null;
+}
+
 /** The server stays in `snapshotting` while it scans the snapshot, so the timeline tells the two apart. */
 export function statusWord(run: Run, fallback: string): string {
   if (run.status === 'snapshotting' && snapshotEvent(run)) return 'Scanning the snapshot';
@@ -153,6 +168,10 @@ export function eventText(e: TimelineEvent): string {
       return `${at}rehearsal finished in ${ms(d(e, 'ms'))}, ${d(e, 'contained') ? 'contained' : 'NOT contained'}.`;
     case 'guardrails_checked':
       return `${at}guardrails checked, ${num(d(e, 'passed'))} passed, ${num(d(e, 'failed'))} failed.`;
+    case 'reproducing':
+      return `${at}a second microVM is repeating the rehearsal.`;
+    case 'reproduced':
+      return `${at}second clone ${d(e, 'ok') ? 'measured the same result' : 'measured a DIFFERENT result'}.`;
     case 'prod_checked':
       return d(e, 'unchanged') === true ? 'Prod hash checked again from outside the sandbox: unchanged.' : d(e, 'unchanged') === false ? 'Prod hash checked again from outside the sandbox: CHANGED.' : 'Prod hash could not be checked again.';
     case 'no_change':

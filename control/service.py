@@ -12,6 +12,7 @@ from typing import Any
 import yaml
 
 from control import approvals, evidence, llm, settings
+from control import gate as static_gate
 from control.agent import describe_schema, draft_guardrails, draft_host_guardrails, run_loop
 from control.apply import apply_host_plan, apply_plan
 from control.approvals import ApprovalError
@@ -31,6 +32,7 @@ TERMINAL = {"blocked", "applied", "rolled_back", "rejected", "drift_detected", "
 def demo_target() -> dict:
     guardrails = yaml.safe_load((ROOT / "demo" / "guardrails.yaml").read_text())
     return {
+        "metrics": yaml.safe_load((ROOT / "demo" / "metrics.yaml").read_text()),
         "id": DEMO_TARGET_ID,
         "name": "Demo SaaS billing database",
         "kind": "postgres",
@@ -39,7 +41,11 @@ def demo_target() -> dict:
             "password_env": "SHADOWRUN_PROD_PASSWORD", "dbname": settings.PROD_DB, "sslmode": settings.PROD_SSLMODE,
         },
         "guardrails": [{**g, "sql": g["sql"].strip(), "accepted_by": "project owner"} for g in guardrails],
-        "budget": {"max_rows_changed": 100, "max_table_pct": 10.0, "max_cascade_rows": 0, "allow_drop": False, "allow_truncate": False, "allow_ddl": True},
+        "normal_work": yaml.safe_load((ROOT / "demo" / "normal_work.yaml").read_text()),
+        "budget": {
+            "max_rows_changed": 100, "max_table_pct": 10.0, "max_cascade_rows": 0, "allow_drop": False, "allow_truncate": False, "allow_ddl": False,
+            "auto_apply_scope": {"feature_flags": ["note"]},
+        },
         "auto_apply_within_budget": True,
         "demo_controls": True,
     }
@@ -53,10 +59,36 @@ def demo_host_target() -> dict:
         "kind": "host",
         "host_id": "demo",
         "guardrails": [{**g, "sh": g["sh"].strip(), "accepted_by": "project owner"} for g in guardrails],
-        "budget": {"max_files_deleted": 20, "max_files_changed": 5, "max_services_stopped": 0},
+        "budget": {"max_files_deleted": 20, "max_files_changed": 5, "max_services_stopped": 0, "auto_apply_paths": ["/var/app/cache/", "/var/app/logs/"]},
         "auto_apply_within_budget": True,
         "demo_controls": True,
     }
+
+
+def configured_targets(path: Path) -> list[dict]:
+    """A team's own databases, from the file SHADOWRUN_TARGETS names. Passwords stay in the environment.
+    Nothing applies alone unless the file names it, and there's no reset or forced drift on these."""
+    targets = []
+    for t in yaml.safe_load(path.read_text()) or []:
+        guardrails = t.get("guardrails")
+        if guardrails is None:
+            guardrails = yaml.safe_load((path.parent / t["guardrails_file"]).read_text())
+        for g in guardrails:
+            unsafe = static_gate.check_guardrail(g["sql"])
+            if unsafe:
+                raise ValueError(f"target {t['id']}, guardrail {g.get('name', g.get('id'))}: {unsafe}")
+        if "password" in t["connection"]:
+            raise ValueError(f"target {t['id']}: use password_env, so the password stays out of this file")
+        budget = t.get("budget") or {}
+        targets.append({
+            "id": t["id"], "name": t.get("name", t["id"]), "kind": "postgres", "connection": t["connection"],
+            "guardrails": [{**g, "sql": g["sql"].strip(), "accepted_by": "targets file"} for g in guardrails],
+            "metrics": t.get("metrics") or [], "normal_work": t.get("normal_work") or [],
+            "budget": {**budget, "auto_apply_scope": budget.get("auto_apply_scope") or {}},
+            "auto_apply_within_budget": bool(budget.get("auto_apply_scope")),
+            "demo_controls": False,
+        })
+    return targets
 
 
 def public_target(target: dict) -> dict:
@@ -75,15 +107,18 @@ class Service:
             t = demo_target()
             old = self.store.get_target(DEMO_TARGET_ID)
             if old:
-                t["budget"] = old.get("budget", t["budget"])
+                t["budget"] = {**t["budget"], **old.get("budget", {}), "auto_apply_scope": t["budget"]["auto_apply_scope"], "allow_ddl": t["budget"]["allow_ddl"]}
             self.store.save_target(t)
         self.ensure_host_target()
+        if settings.TARGETS_FILE:
+            for t in configured_targets(Path(settings.TARGETS_FILE)):
+                self.store.save_target(t)
 
     def ensure_host_target(self) -> None:
         old = self.store.get_target(DEMO_HOST_ID)
         t = demo_host_target()
         if old:
-            t["budget"] = old.get("budget", t["budget"])
+            t["budget"] = {**t["budget"], **old.get("budget", {}), "auto_apply_paths": t["budget"]["auto_apply_paths"]}
         self.store.save_target(t)
 
     # ---------------------------------------------------------------- snapshots
@@ -217,7 +252,8 @@ class Service:
             result = await run_loop(
                 task=run["task"], fixed_steps=run.get("submitted_steps"), target=target, guardrails=run["guardrails"],
                 run_id=run["id"], snapshot_id=snap["snapshot_id"], runner=self.runner, inspection=inspection, on_event=on_event,
-                attempts=run["attempts"],
+                attempts=run["attempts"], measure_blocked=bool(run.get("measure_blocked")),
+                on_undo=lambda n, statements: self.store.kv_set(f"undo:{run['id']}:{n}", statements),
             )
             final = result["final"]
             run["final_attempt"] = final["n"]
@@ -272,7 +308,8 @@ class Service:
             return
         approvals.open_challenge(run)
         within = final["budget"]["within"]
-        if within and target.get("auto_apply_within_budget"):
+        # A rehearse-only run, such as a pull request nobody has reviewed yet, never reaches prod by itself.
+        if within and target.get("auto_apply_within_budget") and not run.get("rehearse_only"):
             run["status"] = "approved"
             run["approval"] = approvals.grant_auto(run)
             self.event(run, "auto_approved_within_budget", {"limits": final["budget"]["limits"]})
@@ -280,10 +317,28 @@ class Service:
             await self.apply(run["id"], actor="budget-policy")
             return
         run["status"] = "awaiting_approval"
-        self.event(run, "awaiting_approval", {"reasons": final["budget"]["reasons"]})
+        self.event(run, "awaiting_approval", {"reasons": final["budget"]["reasons"] or ["this run was asked to rehearse only"]})
         self.store.save_run(run)
 
     # ---------------------------------------------------------------- approve, reject
+
+    def release_within_budget(self, run_id: str) -> dict | None:
+        """An agent rehearsed through MCP, then asked to apply. Inside the auto-apply list, that needs no person.
+        Rehearsing never applies by itself, and a pull request's rehearsal can't be released this way."""
+        run = self.store.get_run(run_id)
+        if run is None or run.get("source") != "mcp" or not run.get("rehearse_only"):
+            return None
+        final = next((a for a in run.get("attempts", []) if a["n"] == run.get("final_attempt")), None) or {}
+        target = self.store.get_target(run["target_id"]) or {}
+        if not (final.get("budget") or {}).get("within") or not target.get("auto_apply_within_budget"):
+            return None
+        claimed = self.store.set_status_if(run_id, "awaiting_approval", "approved")
+        if claimed is None:
+            return None
+        claimed["approval"] = approvals.grant_auto(claimed)
+        self.event(claimed, "auto_approved_within_budget", {"limits": final["budget"].get("limits"), "asked_by": "agent through MCP"})
+        self.store.save_run(claimed)
+        return claimed
 
     def approve(self, run_id: str, approver: str, presented: dict) -> dict:
         run = self.store.get_run(run_id)
@@ -337,6 +392,8 @@ class Service:
         steps = [{"statements": s["statements"]} for s in final["plan"]["steps"]]
         async with self._apply_lock:
             try:
+                # So a stopped apply can show prod's hash didn't move, even when something else moved it since the rehearsal.
+                run["prod_before_apply"] = (await asyncio.to_thread(fingerprint, conn))["digest"]
                 run["backup"] = await asyncio.to_thread(evidence.backup_prod, conn, run_id)
                 self.event(run, "backup_written", {k: run["backup"].get(k) for k in ("store", "bytes", "ms")})
                 out = await asyncio.to_thread(
@@ -385,6 +442,34 @@ class Service:
         self.store.save_run(run)
         return run
 
+    def undo_run(self, run_id: str, requester: str) -> dict:
+        """The inverse of an applied plan, as a new plan. It goes through the same pipeline as any other."""
+        old = self.store.get_run(run_id)
+        if old is None:
+            raise KeyError(run_id)
+        if old["status"] != "applied":
+            raise ValueError("only an applied run can be undone")
+        statements = self.store.kv_get(f"undo:{run_id}:{old.get('final_attempt')}")
+        if not statements:
+            raise ValueError("this run has no stored undo plan; use the pre-apply backup")
+        steps = [{"type": "sql", "cmd": stmt, "why": "Reverses the applied plan."} for stmt in statements]
+        run = self.new_run(old["target_id"], requester, f"Undo run {run_id}", steps, "undo")
+        run["undo_of"] = run_id
+        self.store.save_run(run)
+        self.start(run)
+        return run
+
+    def replay_incident(self, incident: dict, requester: str) -> dict:
+        target = self.store.get_target(incident["target"])
+        kind = "shell" if target["kind"] == "host" else "sql"
+        steps = [{"type": kind, "cmd": incident["command"].strip(), "why": f"Replay of {incident['who']}, {incident['when']}."}]
+        run = self.new_run(incident["target"], requester, f"Replay: {incident['who']}, {incident['when']}", steps, "incident")
+        run["incident"] = {k: incident.get(k) for k in ("id", "when", "who", "source", "happened", "adapted")}
+        run["measure_blocked"] = True
+        self.store.save_run(run)
+        self.start(run)
+        return run
+
     def rehearse_again(self, run_id: str, requester: str) -> dict:
         """Prod drifted: same plan, new snapshot, new rehearsal. Nothing carries over from the old one."""
         old = self.store.get_run(run_id)
@@ -429,6 +514,10 @@ class Service:
         target = self.store.get_target(target_id)
         if target is None:
             raise KeyError(target_id)
+        for g in guardrails:
+            unsafe = static_gate.check_guardrail(g["sql"])
+            if unsafe:
+                raise ValueError(f"{g['name']}: {unsafe}")
         target["guardrails"] = [{"id": g["id"], "name": g["name"], "sql": g["sql"], "why": g.get("why", ""), "accepted_by": who} for g in guardrails]
         self.store.save_target(target)
         self.store.append_event(None, who, "guardrails_accepted", {"target": target_id, "hash": guardrails_hash(target["guardrails"])})

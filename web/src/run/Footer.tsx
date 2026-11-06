@@ -1,10 +1,26 @@
-import type { Run } from '../api/types';
+import type { Run, Usage } from '../api/types';
 import { num, usd } from '../lib/format';
 import { Link } from '../lib/router';
-import { CopyButton, Fold, Hash } from '../ui/bits';
+import { CopyButton, Hash } from '../ui/bits';
+
+function byPhase(usage: Usage[]) {
+  const out = new Map<string, { phase: string; models: string[]; calls: number; tokensIn: number; tokensOut: number; seconds: number; cost: number }>();
+  for (const u of usage) {
+    const phase = u.phase ?? 'other';
+    const row = out.get(phase) ?? { phase, models: [], calls: 0, tokensIn: 0, tokensOut: 0, seconds: 0, cost: 0 };
+    if (u.model && !row.models.includes(u.model)) row.models.push(u.model);
+    row.calls += 1;
+    row.tokensIn += u.prompt_tokens ?? 0;
+    row.tokensOut += u.completion_tokens ?? 0;
+    row.seconds += u.seconds ?? 0;
+    row.cost += u.cost_usd ?? 0;
+    out.set(phase, row);
+  }
+  return [...out.values()];
+}
 
 export function FooterSection({ run }: { run: Run }) {
-  const usage = run.usage ?? [];
+  const phases = byPhase(run.usage ?? []);
   return (
     <>
       {run.rerun && (
@@ -38,14 +54,16 @@ export function FooterSection({ run }: { run: Run }) {
           </li>
         )}
       </ul>
-      {usage.length > 0 && (
-        <Fold summary={`Model calls and cost, ${usd(run.cost_usd)}`}>
+      {phases.length > 0 && (
+        <div>
+          <h3 className="subhead">Cost by phase</h3>
           <div className="scroll-x">
             <table className="data data-tight">
               <thead>
                 <tr>
                   <th scope="col">Phase</th>
                   <th scope="col">Model</th>
+                  <th scope="col" className="num">Calls</th>
                   <th scope="col" className="num">Tokens in</th>
                   <th scope="col" className="num">Tokens out</th>
                   <th scope="col" className="num">Seconds</th>
@@ -53,20 +71,26 @@ export function FooterSection({ run }: { run: Run }) {
                 </tr>
               </thead>
               <tbody>
-                {usage.map((u, i) => (
-                  <tr key={i}>
-                    <th scope="row">{u.phase?.replace(/_/g, ' ')}</th>
-                    <td className="mono">{u.model}</td>
-                    <td className="mono num">{num(u.prompt_tokens)}</td>
-                    <td className="mono num">{num(u.completion_tokens)}</td>
-                    <td className="mono num">{num(u.seconds)}</td>
-                    <td className="mono num">{usd(u.cost_usd)}</td>
+                {phases.map((p) => (
+                  <tr key={p.phase}>
+                    <th scope="row">{p.phase.replace(/_/g, ' ')}</th>
+                    <td className="mono">{p.models.join(', ')}</td>
+                    <td className="mono num">{num(p.calls)}</td>
+                    <td className="mono num">{num(p.tokensIn)}</td>
+                    <td className="mono num">{num(p.tokensOut)}</td>
+                    <td className="mono num">{p.seconds.toFixed(1)}</td>
+                    <td className="mono num">{usd(p.cost)}</td>
                   </tr>
                 ))}
+                <tr className="data-total">
+                  <th scope="row">Total</th>
+                  <td colSpan={5}></td>
+                  <td className="mono num">{usd(run.cost_usd)}</td>
+                </tr>
               </tbody>
             </table>
           </div>
-        </Fold>
+        </div>
       )}
     </>
   );

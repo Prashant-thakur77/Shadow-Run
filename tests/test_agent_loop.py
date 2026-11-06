@@ -5,19 +5,24 @@ from control import agent
 
 
 class FakeRunner:
-    def __init__(self, results):
+    def __init__(self, results, second=None):
         self.results = list(results)
         self.calls = 0
+        self.second = second
 
-    async def rehearse(self, run_id, snapshot_id, steps, guardrails):
+    async def rehearse(self, run_id, snapshot_id, steps, guardrails, metrics=None, undo=True):
+        if run_id.endswith("b"):  # the second-clone check sees the same world unless a test says otherwise
+            return self.second if self.second is not None else self.last
         self.calls += 1
-        return self.results.pop(0)
+        self.last = self.results.pop(0)
+        return self.last
 
     async def query(self, snapshot_id, queries):
         return {"results": [{"sql": q, "rows": [[1]]} for q in queries]}
 
 
 def rec(guard_passed=True, ok=True, contained=True, error=None):
+    # The second clone must agree, so it is the same record unless a test builds a different one.
     return {
         "contained": contained, "sandbox_error": None, "phases": {"total_ms": 1},
         "result": {
@@ -29,7 +34,7 @@ def rec(guard_passed=True, ok=True, contained=True, error=None):
     }
 
 
-TARGET = {"id": "t1", "kind": "postgres", "budget": {}}
+TARGET = {"id": "t1", "kind": "postgres", "budget": {"auto_apply_scope": {"t": "*"}}}
 GUARDS = [{"id": "g", "name": "guard", "sql": "SELECT 1 WHERE false"}]
 
 
@@ -188,3 +193,28 @@ async def test_the_callers_attempt_list_fills_in_as_the_loop_runs(monkeypatch):
     mine = []
     await loop(FakeRunner([rec()]), attempts=mine)
     assert len(mine) == 1 and mine[0]["verdict"] == "passed"
+
+
+async def test_a_second_clone_must_reproduce_the_result(monkeypatch):
+    scripted(monkeypatch, [plan("UPDATE t SET a=1 WHERE id=1")])
+    first = rec()
+    out, events = await loop(FakeRunner([first], second=first))
+    assert out["final"]["reproduced"]["ok"] is True and "reproducing" in events
+    assert out["final"]["budget"]["within"] is True
+
+
+async def test_a_plan_two_clones_disagree_on_needs_a_person(monkeypatch):
+    scripted(monkeypatch, [plan("UPDATE t SET a = random() WHERE id = 1")])
+    other = rec()
+    other["result"]["xact_counts"] = {"t": {"ins": 0, "upd": 2, "del": 0}}
+    out, _ = await loop(FakeRunner([rec()], second=other))
+    assert out["final"]["reproduced"]["ok"] is False and "xact_counts" in out["final"]["reproduced"]["differs"]
+    assert out["final"]["budget"]["within"] is False
+
+
+async def test_a_blocked_plan_is_measured_only_when_asked_and_stays_blocked(monkeypatch):
+    scripted(monkeypatch, [plan("SET ROLE postgres")])
+    runner = FakeRunner([rec()])
+    out, _ = await loop(runner, task=None, fixed_steps=[{"type": "sql", "cmd": "COMMIT"}], measure_blocked=True)
+    assert out["final"]["verdict"] == "blocked_by_gate"
+    assert "report" in out["final"], "a replay shows what the refused plan would have done"

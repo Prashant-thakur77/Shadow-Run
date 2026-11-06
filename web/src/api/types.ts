@@ -69,12 +69,25 @@ export interface GuardrailResult {
   ms?: number;
 }
 
+export interface Proof {
+  holds_on_clean_clone?: boolean;
+  catches_the_plan?: boolean;
+  allows_normal_work?: boolean | null;
+  normal_error?: string | null;
+  proved?: boolean;
+  clean_error?: string | null;
+  plan_error?: string | null;
+}
+
 export interface Guardrail {
   id?: string;
   name?: string;
   sql?: string;
   /** Host targets: a shell check instead of SQL. */
   sh?: string;
+  /** Where a guardrail came from, when it was learned rather than written by a person. */
+  learned_from?: { kind?: string; run?: string; reason?: string; rejected_by?: string; gauntlet?: string; round?: number } | null;
+  proof?: Proof | null;
   why?: string;
   accepted_by?: string;
   drafted_by?: string;
@@ -167,7 +180,20 @@ export interface FileCounts {
   changed?: number;
 }
 
+export interface Metric {
+  id?: string;
+  name?: string;
+  unit?: string;
+  before?: number | null;
+  after?: number | null;
+  delta?: number | null;
+  lost_entirely?: boolean;
+}
+
 export interface Report {
+  metrics?: Metric[];
+  capture_gaps?: { table?: string; op?: string; postgres_counted?: number; log_has?: number }[];
+  unlogged_changes?: { table?: string; detail?: string }[];
   /** "host" for a Linux host. Absent for a database. */
   kind?: string;
   files?: { created?: string[]; deleted?: string[]; changed?: string[]; counts?: FileCounts; bytes_freed?: number };
@@ -183,6 +209,7 @@ export interface Report {
   samples?: Record<string, Record<string, SampleRow[]>>;
   ddl?: { step?: number; tag?: string; object_type?: string; identity?: string }[];
   schema_diff?: { kind?: string; name?: string; change?: string }[];
+  changed_columns?: Record<string, Record<string, number>> | null;
 }
 
 export interface StatementResult {
@@ -237,7 +264,30 @@ export interface Rehearsal {
   } | null;
 }
 
+export interface Reproduced {
+  ok?: boolean;
+  differs?: string[];
+  sandbox?: string;
+  ms?: number;
+  contained?: boolean;
+}
+
+export interface UndoInfo {
+  possible?: boolean;
+  verified?: boolean;
+  detail?: string;
+  why?: string;
+  statements?: number;
+  bytes?: number;
+  rows_restored?: number;
+  rows_reverted?: number;
+  rows_removed?: number;
+  too_large_to_store?: boolean;
+}
+
 export interface Attempt {
+  reproduced?: Reproduced;
+  undo?: UndoInfo | null;
   n: number;
   verdict?: string;
   error?: string | null;
@@ -293,6 +343,7 @@ export interface Approval {
 }
 
 export interface StoredObject {
+  path?: string;
   store?: string;
   bucket?: string;
   key?: string;
@@ -320,7 +371,20 @@ export interface Usage {
   seconds?: number;
 }
 
+export interface IncidentRef {
+  id?: string;
+  when?: string;
+  who?: string;
+  source?: string;
+  happened?: string;
+  adapted?: string;
+}
+
 export interface Run {
+  prod_before_apply?: string | null;
+  rehearse_only?: boolean;
+  undo_of?: string;
+  incident?: IncidentRef | null;
   id: string;
   status: string;
   requester?: string;
@@ -420,6 +484,7 @@ export interface AttackCheck {
 }
 
 export interface AttackResult {
+  time_cap_s?: number;
   attack: string;
   title?: string;
   expected?: string;
@@ -512,4 +577,108 @@ export interface AuditEvent {
 export interface Audit {
   events?: AuditEvent[];
   chain?: { ok?: boolean; events?: number; head?: string; broken_at?: number };
+}
+
+export interface Candidate {
+  id: string;
+  name?: string;
+  sql?: string;
+  why?: string;
+  origin?: Guardrail['learned_from'];
+  proof?: Proof;
+  cost_usd?: number;
+}
+
+export interface GauntletRound {
+  n: number;
+  outcome?: string;
+  idea?: string;
+  plan?: string[];
+  detail?: string;
+  caught_by?: string[];
+  rows?: { DELETE?: number; UPDATE?: number; INSERT?: number };
+  metrics_moved?: { name?: string; unit?: string; before?: number | null; after?: number | null }[];
+  harm_check?: string;
+  would_auto_apply?: boolean;
+  held_because?: string[];
+  candidate?: Candidate;
+}
+
+export interface GauntletPublished {
+  measured?: boolean;
+  at?: string;
+  model?: string;
+  baseline_summary?: Gauntlet['summary'];
+  first_summary?: Gauntlet['summary'];
+  summary?: Gauntlet['summary'];
+  replay?: GauntletReplay;
+  adopted?: string[];
+  guardrails_before?: number;
+  guardrails_after?: number;
+  cost_usd?: number;
+  rerun?: string;
+}
+
+export interface GauntletReplay {
+  at?: number;
+  guardrails?: number;
+  total?: number;
+  caught?: number;
+  did_not_run?: number;
+  attacks?: { n: number; idea?: string; ran?: boolean; caught?: boolean; caught_by?: string[] }[];
+}
+
+export interface Gauntlet {
+  id: string;
+  target_id?: string;
+  status?: string;
+  expected?: number;
+  model?: string;
+  rounds?: GauntletRound[];
+  summary?: { rounds?: number; real_attacks?: number; caught?: number; got_through?: number; held_for_a_person?: number; would_auto_apply?: number; no_effect?: number; invalid?: number; reach_alone?: string[] };
+  policy?: string;
+  replay?: GauntletReplay;
+  cost_usd?: number;
+  created_at?: number;
+  requester?: string;
+  error?: string;
+}
+
+export interface PublicInfo {
+  open_demo?: boolean;
+  headline?: {
+    risky_tasks?: number;
+    direct?: number;
+    static_gate?: number;
+    shadow_run?: number;
+    rubber_stamp?: number;
+    runs_per_task?: number;
+    measured_at?: string | number;
+  } | null;
+  video_url?: string | null;
+  repo?: string | null;
+}
+
+export interface Incident {
+  id: string;
+  when?: string;
+  who?: string;
+  source?: string;
+  happened?: string;
+  target?: string;
+  command?: string;
+  adapted?: string;
+}
+
+export interface Receipt {
+  group?: string;
+  claim?: string;
+  value?: unknown;
+  values?: unknown;
+  must?: unknown;
+  detail?: unknown;
+  at?: string | number;
+  source?: string;
+  rerun?: string;
+  commit?: string;
 }

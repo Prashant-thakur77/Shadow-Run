@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BlastSection } from '../run/Blast';
 import { BreakItPanel, type BreakResult } from '../run/BreakIt';
 import { DecisionSection } from '../run/Decision';
@@ -6,9 +6,13 @@ import { ExplanationSection } from '../run/Explanation';
 import { FlagsSection } from '../run/Flags';
 import { FooterSection } from '../run/Footer';
 import { GuardrailsSection } from '../run/Guardrails';
+import { IncidentBanner } from '../run/IncidentBanner';
+import { LearnSection } from '../run/Learn';
+import { showsComparison, WithWithout } from '../run/WithWithout';
 import { RunHeader } from '../run/Header';
 import { AttemptsSection } from '../run/Attempts';
 import { PlanSection } from '../run/Plan';
+import { StoppedProof, UndoRoundTrip } from '../run/ProdProof';
 import { RehearsalSection } from '../run/Rehearsal';
 import { RunRecordSection } from '../run/RunRecord';
 import { notifyProdChanged } from '../api/client';
@@ -45,6 +49,25 @@ export function RunPage({ id }: { id: string }) {
   // An apply can finish while the request that started it is still writing evidence, or in another tab.
   useEffect(() => {
     if (run?.status === 'applied' || run?.status === 'rolled_back' || run?.status === 'drift_detected') notifyProdChanged();
+  }, [run?.status]);
+
+  // A stopped apply can come from far down the page, and the sections shift when it does. The answer is at the top.
+  const lastStatus = useRef(run?.status);
+  useEffect(() => {
+    const was = lastStatus.current;
+    lastStatus.current = run?.status;
+    const fromApply = was === 'approved' || was === 'applying';
+    if (fromApply && (run?.status === 'rolled_back' || run?.status === 'drift_detected')) window.scrollTo({ top: 0 });
+  }, [run?.status]);
+
+  // Arriving at a section link, such as "Try to break it" on the home page. Sections appear as the run moves.
+  const jumped = useRef(false);
+  useEffect(() => {
+    if (jumped.current || !location.hash) return;
+    const el = document.getElementById(location.hash.slice(1));
+    if (!el) return;
+    jumped.current = true;
+    el.scrollIntoView();
   }, [run?.status]);
 
   // Highlight the section in view in the rail.
@@ -91,14 +114,22 @@ export function RunPage({ id }: { id: string }) {
   const flags = run.data_flags ?? [];
   const waitingForAttempts = inProgress && !(run.attempts?.length);
 
-  const items: Item[] = [
+  const items: Item[] = [];
+  if (showsComparison(run)) {
+    items.push({
+      id: 'compare',
+      title: 'Without and with Shadow Run',
+      body: <WithWithout run={run} />,
+    });
+  }
+  items.push(
     {
       id: 'rehearsal',
       title: 'Rehearsal',
       aside: <span className="muted">Disposable clone, microVM, network: {attempt?.rehearsal?.limits?.network ?? 'none'}</span>,
       body: <RehearsalSection run={run} attempt={attempt} inProgress={inProgress} />,
     },
-  ];
+  );
   if (steps.length > 1) {
     items.push({
       id: 'attempts',
@@ -142,6 +173,15 @@ export function RunPage({ id }: { id: string }) {
       body: <BreakItPanel run={run} setRun={setRun} pollFast={pollFast} results={breakResults} setResults={setBreakResults} />,
     });
   }
+  // Learning needs a plan of SQL statements, so a Linux host has nothing to offer here.
+  if (['rejected', 'applied', 'awaiting_approval'].includes(run.status) && run.final?.report?.kind !== 'host' && run.final?.plan) {
+    items.push({
+      id: 'learn',
+      title: 'Turn this into a guardrail',
+      aside: <span className="muted">Learn from a rejection</span>,
+      body: <LearnSection run={run} />,
+    });
+  }
   if (flags.length > 0) {
     items.push({
       id: 'flags',
@@ -175,6 +215,9 @@ export function RunPage({ id }: { id: string }) {
       <div className="runcol">
         <Boundary label="header">
           <RunHeader run={run} />
+          {run.incident && <IncidentBanner incident={run.incident} />}
+          <UndoRoundTrip run={run} />
+          <StoppedProof run={run} />
         </Boundary>
         {error && (
           <Notice tone="caution" title="Lost contact with the server. Still trying.">

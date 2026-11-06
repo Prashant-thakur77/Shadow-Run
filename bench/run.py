@@ -416,7 +416,7 @@ def make_table(s: dict) -> dict:
         [f"Harmful outcomes on prod (of {ed.get('risky_tasks', 0)} risky, SABER-derived)", _fmt(ed.get("harm_on_prod")), _fmt(eg.get("harm_on_prod")), _fmt(er.get("harm_on_prod"))],
         ["...and if the approver rubber-stamps everything held", "n/a", "n/a", _fmt(er.get("harm_if_rubber_stamped"))],
         [f"Safe tasks wrongly blocked (of {d['safe_tasks']})", "0 by definition", _fmt(g["safe_wrongly_blocked"]), _fmt(r["safe_wrongly_blocked"])],
-        ["Safe tasks auto-approved under budget", "n/a", "n/a", _fmt(r.get("safe_auto_applied"))],
+        ["Safe tasks that applied with no person", "n/a", "n/a", _fmt(r.get("safe_auto_applied"))],
         ["Safe tasks held for a person", "n/a", "n/a", _fmt(r.get("safe_held"))],
         ["Plans fixed by the retry loop", "n/a", "n/a", _fmt(r.get("fixed_by_retry"))],
         ["Rehearsal time per attempt, p50 / p95 (s)", "n/a", "~0", f"{r['rehearsal_s']['p50']} / {r['rehearsal_s']['p95']}"],
@@ -447,10 +447,18 @@ def load_config() -> tuple[dict, dict, list[dict], dict, dict]:
     return admin, guardrails, host["guardrails"], demo_target()["budget"], host["budget"]
 
 
-def write_results(runs: list[dict], meta: dict) -> dict:
+def write_results(runs: list[dict], meta: dict, final: bool = False) -> dict:
+    """Only a finished run with every task accounted for says measured. Anything else can't reach a headline."""
     summary = summarise(runs, meta)
-    RESULTS_PATH.write_text(json.dumps(summary, indent=1) + "\n")
+    complete = summary["runs"] == meta["expected_runs"] and summary["harness_errors"] == 0
+    summary["status"] = ("measured" if complete else "incomplete") if final else "running"
+    results_path(meta["model"], meta["primary_model"]).write_text(json.dumps(summary, indent=1) + "\n")
     return summary
+
+
+def results_path(model: str, primary: str) -> Path:
+    """The primary model's run is the headline. Others are a robustness check, kept in their own files."""
+    return RESULTS_PATH if model == primary else ROOT / "bench" / f"results.{model}.json"
 
 
 async def main_async(args: argparse.Namespace) -> int:
@@ -467,9 +475,11 @@ async def main_async(args: argparse.Namespace) -> int:
         tasks = [t for t in tasks if t["group"] in args.group]
     modes = args.modes or list(MODES)
     print(f"{len(tasks)} tasks, modes {modes}, {args.runs} runs each, model {args.model}, parallel {args.parallel}", flush=True)
+    primary = settings.PLANNER_MODEL
+    runs_path = RUNS_PATH if args.model == primary else ROOT / "bench" / f"runs.{args.model}.jsonl"
     done: list[dict] = []
-    if args.resume and RUNS_PATH.exists():
-        done = [json.loads(line) for line in RUNS_PATH.read_text().splitlines() if line.strip()]
+    if args.resume and runs_path.exists():
+        done = [json.loads(line) for line in runs_path.read_text().splitlines() if line.strip()]
     finished = {(r["task"], r["mode"], r["k"]) for r in done if r.get("outcome") != "harness_error"}
     done = [r for r in done if (r["task"], r["mode"], r["k"]) in finished]
     slots = asyncio.Semaphore(args.parallel)
@@ -478,16 +488,18 @@ async def main_async(args: argparse.Namespace) -> int:
     meta = {
         "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "model": args.model,
+        "primary_model": primary,
         "inference_base": settings.INFERENCE_BASE,
         "suite_sha256": suite_hash(),
         "git_commit": os.environ.get("SHADOWRUN_GIT_COMMIT") or subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=ROOT).stdout.strip() or None,
         "runs_per_task": args.runs,
-        "rerun": "python -m bench.run --runs 3 --parallel 4",
+        "expected_runs": len(tasks) * len(modes) * args.runs,
+        "rerun": f"python -m bench.run --runs {args.runs} --parallel 4" + ("" if args.model == primary else f" --model {args.model}"),
         "scope": "partial" if (args.only or args.split or args.group or args.modes) else "full",
     }
     mode_open = "a" if args.resume else "w"
     runs = list(done)
-    with open(RUNS_PATH, mode_open) as f:
+    with open(runs_path, mode_open) as f:
         for coro in asyncio.as_completed([run_one(ctx, t, m, k, slots) for t, m, k in todo]):
             rec = await coro
             runs.append(rec)
@@ -499,10 +511,12 @@ async def main_async(args: argparse.Namespace) -> int:
         await asyncio.to_thread(drop_db, ctx.admin, t, True)
     for snap in ctx.snapshots.values():
         pass
-    summary = write_results(runs, meta)
+    summary = write_results(runs, meta, final=True)
     print(json.dumps(summary["table"], indent=1))
-    print(f"harness errors: {summary['harness_errors']}")
-    return 0 if summary["harness_errors"] == 0 else 1
+    print(f"status {summary['status']}: {summary['runs']} of {summary['expected_runs']} runs, {summary['harness_errors']} harness errors")
+    if summary["status"] != "measured":
+        print("Not publishable. Finish it with --resume, which retries what failed.")
+    return 0 if summary["status"] == "measured" else 1
 
 
 def main() -> None:

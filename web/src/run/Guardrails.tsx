@@ -83,7 +83,7 @@ export function GuardrailsSection({ run, attempt }: { run: Run; attempt: Attempt
         <div className="budgetbox">
           <h3 className="subhead">Blast-radius budget</h3>
           <p>
-            <Tag tone={budget.within ? 'good' : 'caution'}>{budget.within ? 'Within budget' : 'Over budget'}</Tag>{' '}
+            <Tag tone={budget.within ? 'good' : 'caution'}>{budget.within ? 'Within budget' : 'Needs a person'}</Tag>{' '}
             {budget.within ? 'No person has to approve this one.' : 'A person has to approve this, if nothing else stopped it.'}
           </p>
           {(budget.reasons?.length ?? 0) > 0 && (

@@ -2,6 +2,7 @@
 import asyncio
 import time
 import uuid
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -293,3 +294,130 @@ async def test_rewriting_the_baseline_fails_the_rehearsal(golden):
     plan = ["DELETE FROM invoices WHERE id = 79", "DELETE FROM pg_temp.before_invoices WHERE id = 79"]
     rec = await eng.rehearse(rid(), sid, [{"statements": plan}], guard)
     assert rec["result"]["ok"] is False and "baseline" in rec["result"]["error"]
+
+
+async def test_the_undo_restores_a_cascade_and_is_verified(golden):
+    """The inverse of what Postgres logged, cascades included, proved by hashing the tables afterwards."""
+    eng, sid = golden
+    rec = await eng.rehearse(rid(), sid, [{"statements": ["DELETE FROM users WHERE id IN (SELECT id FROM users ORDER BY id LIMIT 40)"]}], [])
+    result = rec["result"]
+    undo = result["undo"]
+    assert undo["possible"] is True and undo["verified"] is True, undo
+    assert undo["rows_restored"] > 40, "the cascaded rows must come back too"
+    assert result["undo_statements"]
+
+
+async def test_the_undo_handles_updates_inserts_and_set_null(golden):
+    eng, sid = golden
+    plan = [
+        "UPDATE products SET price_cents = price_cents + 1 WHERE id <= 5",
+        "INSERT INTO feature_flags (key, enabled) VALUES ('new_flag', true)",
+        "DELETE FROM invoices WHERE id IN (SELECT id FROM invoices ORDER BY id LIMIT 10)",
+    ]
+    rec = await eng.rehearse(rid(), sid, [{"statements": plan}], [])
+    undo = rec["result"]["undo"]
+    assert undo["verified"] is True, undo
+    assert undo["rows_removed"] == 1 and undo["rows_reverted"] >= 5
+
+
+async def test_a_schema_change_or_truncate_says_why_it_has_no_undo(golden):
+    eng, sid = golden
+    for stmt in ["TRUNCATE job_logs_archive, job_logs", "ALTER TABLE users ALTER COLUMN full_name DROP NOT NULL", "ALTER TABLE users DROP COLUMN email"]:
+        rec = await eng.rehearse(rid(), sid, [{"statements": [stmt]}], [])
+        undo = rec["result"]["undo"]
+        assert undo["possible"] is False and undo["why"], (stmt, undo)
+
+
+async def test_a_plan_that_fails_a_guardrail_gets_no_undo(golden):
+    eng, sid = golden
+    rec = await eng.rehearse(rid(), sid, [{"statements": [TRAP]}], [GUARD])
+    assert rec["result"]["undo"]["possible"] is False
+
+
+async def test_business_metrics_are_measured_before_and_after(golden):
+    eng, sid = golden
+    metrics = [{"id": "paid", "name": "Paid", "unit": "usd", "sql": "SELECT coalesce(sum(amount_cents), 0) / 100.0 FROM invoices WHERE status = 'paid'"}]
+    rec = await eng.rehearse(rid(), sid, [{"statements": [TRAP]}], [], metrics=metrics)
+    m = rec["result"]["metrics"][0]
+    assert m["before"] > m["after"] > 0
+    report = build_report(rec["result"])
+    assert report["metrics"][0]["delta"] < 0
+
+
+async def test_a_metric_on_a_dropped_table_reads_as_lost(golden):
+    eng, sid = golden
+    metrics = [{"id": "orders", "name": "Orders", "unit": "count", "sql": "SELECT count(*) FROM orders"}]
+    rec = await eng.rehearse(rid(), sid, [{"statements": ["DROP TABLE orders CASCADE"]}], [], metrics=metrics)
+    report = build_report(rec["result"])
+    assert report["metrics"][0]["lost_entirely"] is True
+
+
+async def test_additive_schema_changes_have_a_verified_undo(golden):
+    """The agent often archives into a new table. Adding is reversible, and the proof includes the schema."""
+    eng, sid = golden
+    plan = [
+        "CREATE TABLE users_archive AS SELECT id, email FROM users WHERE id <= 20",
+        "ALTER TABLE users ADD COLUMN archived_at timestamptz",
+        "CREATE INDEX users_archived_idx ON users (archived_at)",
+        "UPDATE users SET archived_at = now() WHERE id <= 20",
+    ]
+    rec = await eng.rehearse(rid(), sid, [{"statements": plan}], [])
+    undo = rec["result"]["undo"]
+    assert undo["possible"] is True and undo["verified"] is True, undo
+    assert undo["schema_steps"] == 3 and undo["rows_reverted"] == 20
+    assert any(s.startswith("DROP TABLE") for s in rec["result"]["undo_statements"])
+
+
+async def test_removing_part_of_the_schema_says_why_it_cannot_be_undone(golden):
+    eng, sid = golden
+    rec = await eng.rehearse(rid(), sid, [{"statements": ["ALTER TABLE users DROP COLUMN full_name"]}], [])
+    undo = rec["result"]["undo"]
+    assert undo["possible"] is False and "removes" in undo["why"]
+
+
+async def test_the_report_names_the_columns_a_plan_really_changed(golden):
+    """A row count can't tell a typo fix from a rewritten price. A no-op assignment isn't a change."""
+    eng, sid = golden
+    plan = ["UPDATE products SET price_cents = price_cents + 1, name = name WHERE id <= 3", "UPDATE feature_flags SET note = 'x' WHERE key = 'sso'"]
+    rec = await eng.rehearse(rid(), sid, [{"statements": plan}], [])
+    assert rec["result"]["changed_columns"] == {"feature_flags": {"note": 1}, "products": {"price_cents": 3}}
+
+
+async def test_the_normal_work_list_really_runs_and_passes_the_seeded_guardrails(golden):
+    """Learned rules are tested against this list, so it has to be valid on the demo data, and normal."""
+    import yaml
+    root = Path(__file__).resolve().parent.parent
+    work = yaml.safe_load((root / "demo" / "normal_work.yaml").read_text())
+    guardrails = yaml.safe_load((root / "demo" / "guardrails.yaml").read_text())
+    eng, sid = golden
+    rec = await eng.rehearse(rid(), sid, [{"statements": work}], guardrails)
+    result = rec["result"]
+    assert result["ok"], result.get("error")
+    failed = [g["name"] for g in result["guardrails"] if not g["passed"]]
+    assert not failed, failed
+
+
+@pytest.mark.parametrize("sql,why", [
+    ("UPDATE users SET full_name = 'x'; SELECT 1 WHERE false", "more than one statement"),
+    ("WITH d AS (DELETE FROM users RETURNING 1) SELECT 1 FROM d WHERE false", "a write inside a query"),
+    ("COMMIT", "transaction control"),
+    ("SELECT nextval('users_id_seq') FROM users LIMIT 1", "a sequence write"),
+])
+async def test_postgres_itself_refuses_a_guardrail_that_is_not_read_only(golden, sql, why):
+    """The runtime layers, with the parser check out of the way: they have to hold on their own."""
+    eng, sid = golden
+    rec = await eng.rehearse(rid(), sid, [{"statements": ["UPDATE feature_flags SET note = 'x' WHERE key = 'sso'"]}], [{"id": "g", "name": "g", "sql": sql}])
+    result = rec["result"]
+    assert result["ok"], result.get("error")
+    g = result["guardrails"][0]
+    assert g["passed"] is False and g.get("error"), (why, g)
+    assert {c["table"] for c in result["changes"]} == {"feature_flags"}, why
+
+
+async def test_a_plan_keeps_running_normally_after_the_read_only_guardrails(golden):
+    """Read-only applies to each guardrail's savepoint, not to what follows it in the transaction."""
+    eng, sid = golden
+    rec = await eng.rehearse(rid(), sid, [{"statements": ["UPDATE products SET name = 'x' WHERE id = 12"]}], [{"id": "g", "name": "g", "sql": "SELECT 1 WHERE false"}])
+    result = rec["result"]
+    assert result["ok"] and result["guardrails"][0]["passed"] is True
+    assert result["undo"]["verified"] is True, result["undo"]

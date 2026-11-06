@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, errorText, notifyProdChanged } from '../api/client';
-import type { GuardrailDraft, Inspect, Target } from '../api/types';
+import type { Guardrail, GuardrailDraft, Inspect, Target } from '../api/types';
 import { asText, num } from '../lib/format';
 import { orderTargets, showTarget, targetLabel } from '../lib/target';
+import { Link, useLocation } from '../lib/router';
 import { useAsync } from '../lib/useAsync';
 import { Fold, Hash, Loading, Mark, Notice, Section, Sql, Tag } from '../ui/bits';
+import { ProofRows } from '../run/ProofRows';
+import { GauntletSection } from './Gauntlet';
 
 const BUDGET_LABELS: Record<string, string> = {
   max_rows_changed: 'Rows changed, most',
   max_table_pct: 'Share of any table, most',
   max_cascade_rows: 'Rows via cascade, most',
-  allow_drop: 'DROP allowed',
-  allow_truncate: 'TRUNCATE allowed',
-  allow_ddl: 'Schema changes allowed',
+  allow_drop: 'DROP allowed alone',
+  allow_truncate: 'TRUNCATE allowed alone',
+  allow_ddl: 'Schema changes allowed alone',
   max_files_deleted: 'Files deleted, most',
   max_files_changed: 'Files changed, most',
   max_services_stopped: 'Services stopped, most',
@@ -24,12 +27,29 @@ function budgetValue(k: string, v: unknown): string {
   return typeof v === 'number' ? num(v) : asText(v);
 }
 
+function AutoApplyList({ target }: { target: Target }) {
+  const budget = (target.budget ?? {}) as Record<string, unknown>;
+  const scope = budget.auto_apply_scope as Record<string, string | string[]> | null | undefined;
+  const paths = budget.auto_apply_paths as string[] | undefined;
+  const items = scope
+    ? Object.entries(scope).flatMap(([t, c]) => (c === '*' ? [`${t}, any column`] : (c as string[]).map((col) => `${t}.${col}`)))
+    : (paths ?? []).map((p) => `${p}…`);
+  return (
+    <div className="auto-list">
+      <h3 className="subhead">What can change with no person looking</h3>
+      <p>Only what is named here. A small change to anything else waits for a person, however few rows it touches. We added this after an attacker model, told only a row limit, damaged billing data inside that limit and passed every guardrail. A short list means safe work waits for a person too. That is the trade.</p>
+      {items.length === 0 ? <p className="notmeasured">Nothing. Every change waits for a person.</p> : <ul className="plainlist mono">{items.map((i) => <li key={i}>{i}</li>)}</ul>}
+    </div>
+  );
+}
+
 function BudgetTable({ target }: { target: Target }) {
-  const entries = Object.entries(target.budget ?? {});
+  const entries = Object.entries(target.budget ?? {}).filter(([k]) => k !== 'auto_apply_scope' && k !== 'auto_apply_paths');
   return (
     <>
+      <AutoApplyList target={target} />
       <p>
-        Inside these limits, a plan that passes every guardrail {target.auto_apply_within_budget ? 'applies without a person.' : 'still waits for a person.'} Outside them, a different person has to approve it.
+        Inside these limits, a plan that passes every guardrail and stays on the list {target.auto_apply_within_budget ? 'applies without a person.' : 'still waits for a person.'} Outside them, a different person has to approve it.
       </p>
       {entries.length === 0 && <p className="notmeasured">This target has no budget set.</p>}
       <dl className="budget">
@@ -40,6 +60,60 @@ function BudgetTable({ target }: { target: Target }) {
           </div>
         ))}
       </dl>
+    </>
+  );
+}
+
+function ConnectAgent() {
+  const [token, setToken] = useState<string | null>(null);
+  const origin = window.location.origin;
+  useEffect(() => {
+    api.me().then((m) => setToken(m.token ?? null)).catch(() => setToken(null));
+  }, []);
+  const opencode = JSON.stringify(
+    {
+      provider: {
+        vultr: {
+          npm: '@ai-sdk/openai-compatible',
+          options: { apiKey: '{env:VULTR_INFERENCE_KEY}', baseURL: 'https://api.vultrinference.com/v1' },
+          models: { 'qwen3.8-27b': { name: 'Qwen 3.8 27B', tool_call: true } },
+        },
+      },
+      model: 'vultr/qwen3.8-27b',
+      mcp: { shadowrun: { type: 'remote', url: `${origin}/mcp`, enabled: true, headers: { Authorization: 'Bearer {env:SHADOWRUN_TOKEN}' } } },
+      tools: { bash: false, write: false, edit: false },
+    },
+    null,
+    2,
+  );
+  const claude = `claude mcp add --transport http shadowrun ${origin}/mcp --header "Authorization: Bearer $SHADOWRUN_TOKEN"`;
+  return (
+    <>
+      <p>
+        Agents connect over MCP and never get a database URL or an SSH key. They get five tools: inspect a clone, query a clone, rehearse a
+        plan, read its report, and ask to apply it. A different person approves here, unless the change stays on the auto-apply list.
+      </p>
+      <dl className="budget">
+        <div>
+          <dt>MCP endpoint</dt>
+          <dd className="mono">{origin}/mcp</dd>
+        </div>
+      </dl>
+      {token ? (
+        <p>
+          Your token, for SHADOWRUN_TOKEN: <Hash value={token} chars={16} />
+        </p>
+      ) : (
+        <p className="notmeasured">Sign in to see your token.</p>
+      )}
+      <h3 className="subhead">OpenCode on Vultr inference</h3>
+      <p>Save this as opencode.json, then set VULTR_INFERENCE_KEY and SHADOWRUN_TOKEN.</p>
+      <pre className="sql scroll-x">{opencode}</pre>
+      <h3 className="subhead">Claude Code</h3>
+      <pre className="sql scroll-x">{claude}</pre>
+      <h3 className="subhead">CI</h3>
+      <pre className="sql scroll-x">{`shadowrun rehearse plan.sql --target demo-saas
+# exit 0 applied or nothing to do, 2 needs a person, 3 blocked, 4 rolled back or drifted`}</pre>
     </>
   );
 }
@@ -225,12 +299,76 @@ function DemoControls({ target }: { target: Target }) {
   );
 }
 
-function TargetDetail({ target }: { target: Target }) {
+function Learned({ from, proof }: { from: NonNullable<Guardrail['learned_from']>; proof?: Guardrail['proof'] }) {
+  return (
+    <div className="learned">
+      <p className="learned-from">
+        <Tag tone="neutral">Learned</Tag>{' '}
+        {from.kind === 'gauntlet' ? (
+          <>From the gauntlet, round <span className="mono">{num(from.round)}</span>. An attack got through, and this rule closes the gap.</>
+        ) : from.kind === 'rejection' ? (
+          <>
+            From a rejected plan
+            {from.run && (
+              <>
+                , <Link href={`/runs/${encodeURIComponent(from.run)}`} className="mono">{from.run}</Link>
+              </>
+            )}
+            {from.rejected_by && <>, by <span className="mono">{from.rejected_by}</span></>}
+            {from.reason && <>. Their reason: {from.reason}</>}
+          </>
+        ) : (
+          <>Learned, not written by hand.</>
+        )}
+      </p>
+      {proof && <ProofRows proof={proof} />}
+    </div>
+  );
+}
+
+const SUBNAV = [
+  { id: 'frozen', label: 'Frozen guardrails' },
+  { id: 'gauntlet', label: 'Attack the guardrails', database: true },
+  { id: 'budget', label: 'Blast-radius budget' },
+  { id: 'schema', label: 'Schema', database: true },
+  { id: 'connect', label: 'Connect an agent' },
+  { id: 'demo', label: 'Demo controls' },
+];
+
+/** This page is long, so its sections get links at the top. Same idea as the rail on a run page. */
+function SubNav({ isHost }: { isHost: boolean }) {
+  const [active, setActive] = useState('frozen');
+  const items = SUBNAV.filter((s) => !isHost || !s.database);
+  useEffect(() => {
+    const els = SUBNAV.flatMap((s) => document.getElementById(s.id) ?? []);
+    const io = new IntersectionObserver(
+      (entries) => {
+        const hit = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (hit) setActive(hit.target.id);
+      },
+      { rootMargin: '-35% 0px -55% 0px' },
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [isHost]);
+  return (
+    <nav className="subnav" aria-label="Sections of this page">
+      {items.map((s) => (
+        <a key={s.id} href={`#${s.id}`} className={active === s.id ? 'is-on' : undefined} aria-current={active === s.id ? 'true' : undefined}>
+          {s.label}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+function TargetDetail({ target, onChanged }: { target: Target; onChanged: () => void }) {
   const isHost = target.kind === 'host';
   // Schema inspection and model drafts are database features. The API answers 502 for a host.
   const inspect = useAsync<Inspect | null>(() => (isHost ? Promise.resolve(null) : api.inspect(target.id)), [target.id]);
   return (
     <>
+      <SubNav isHost={isHost} />
       <Section id="frozen" title="Frozen guardrails" aside={<span className="target-hash"><span className="label">Guardrails hash</span> <Hash value={target.guardrails_hash} chars={20} /></span>}>
         <p>
           {isHost ? 'Shell checks a plan may not break, whoever wrote it.' : 'Business rules a plan may not break, whoever wrote it.'} The agent can't edit them, and a failed one can't be approved past. Every run records this hash.
@@ -242,6 +380,7 @@ function TargetDetail({ target }: { target: Target }) {
                 <div className="guardrail-name">{g.name ?? g.id}</div>
                 {g.why && <p className="guardrail-why">{g.why}</p>}
                 <Sql text={g.sql ?? g.sh} plain={!g.sql} />
+                {g.learned_from && <Learned from={g.learned_from} proof={g.proof} />}
                 <p className="muted guardrail-who">
                   Accepted by {g.accepted_by ?? 'unknown'}
                   {g.drafted_by ? `. Drafted by ${g.drafted_by}.` : '.'}
@@ -252,6 +391,12 @@ function TargetDetail({ target }: { target: Target }) {
         </ul>
         {!isHost && <Drafts target={target} />}
       </Section>
+
+      {!isHost && (
+        <Section id="gauntlet" title="Attack the guardrails" aside={<span className="muted">Published whichever way it goes</span>}>
+          <GauntletSection target={target} onAccepted={onChanged} />
+        </Section>
+      )}
 
       <Section id="budget" title="Blast-radius budget">
         <BudgetTable target={target} />
@@ -264,6 +409,10 @@ function TargetDetail({ target }: { target: Target }) {
           {inspect.data && <Schema data={inspect.data} />}
         </Section>
       )}
+
+      <Section id="connect" title="Connect an agent">
+        <ConnectAgent />
+      </Section>
 
       <Section id="demo" title="Demo controls">
         <DemoControls target={target} />
@@ -281,6 +430,14 @@ export function TargetPage() {
   useEffect(() => {
     if (target) showTarget(target.id);
   }, [target?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Arriving at a section link, such as "Attack the guardrails" on the home page. The section only
+  // exists once the target has loaded, so this has to wait for it.
+  const { search } = useLocation();
+  useEffect(() => {
+    if (!target || !location.hash) return;
+    document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  }, [target?.id, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="page target">
@@ -304,7 +461,7 @@ export function TargetPage() {
               {target.name ?? target.id} <span className="muted mono">{target.kind}</span>
             </p>
           </div>
-          <TargetDetail key={target.id} target={target} />
+          <TargetDetail key={target.id} target={target} onChanged={targets.reload} />
         </>
       )}
     </div>

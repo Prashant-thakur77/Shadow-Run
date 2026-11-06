@@ -1,12 +1,18 @@
 import type {
   AttackDef,
   Audit,
+  Candidate,
   Challenge,
+  Gauntlet,
+  GauntletPublished,
   GuardrailDraft,
   Health,
+  Incident,
   Inspect,
   Me,
   ProdChecksum,
+  PublicInfo,
+  Receipt,
   RedTeamRun,
   Run,
   RunSummary,
@@ -119,6 +125,8 @@ export const api = {
   login: (username: string, password: string) =>
     call<{ username: string; name?: string; token: string }>('POST', '/api/login', { username, password }, null),
   logout: () => call<unknown>('POST', '/api/logout', {}, null),
+  publicInfo: () => call<PublicInfo>('GET', '/api/public', undefined, null),
+  demoEnter: () => call<{ username: string; name?: string; token: string; others?: Record<string, string> }>('POST', '/api/demo/enter', {}, null),
   me: (token?: string | null) => call<Me>('GET', '/api/me', undefined, token === undefined ? undefined : token),
 
   health: () => call<Health>('GET', '/api/health'),
@@ -140,6 +148,21 @@ export const api = {
     call<Run>('POST', `/api/runs/${encodeURIComponent(id)}/apply`, { drift_check: driftCheck }),
   rehearseAgain: (id: string) =>
     call<{ id: string; status: string }>('POST', `/api/runs/${encodeURIComponent(id)}/rehearse-again`),
+
+  undoStatements: (id: string) => call<{ statements?: string[] }>('GET', `/api/runs/${encodeURIComponent(id)}/undo`),
+  undo: (id: string) => call<{ id: string; status: string }>('POST', `/api/runs/${encodeURIComponent(id)}/undo`),
+  learn: (id: string, reason: string) => call<Candidate>('POST', `/api/runs/${encodeURIComponent(id)}/learn`, { reason }),
+  acceptCandidate: (id: string, targetId: string) =>
+    call<Target>('POST', `/api/guardrails/candidates/${encodeURIComponent(id)}/accept?target_id=${encodeURIComponent(targetId)}`),
+
+  gauntletStart: (targetId: string) => call<Gauntlet>('POST', `/api/targets/${encodeURIComponent(targetId)}/gauntlet`),
+  gauntletPublished: () => call<GauntletPublished>('GET', '/api/gauntlet/published'),
+  gauntletReplay: (id: string) => call<Gauntlet>('POST', `/api/gauntlet/${encodeURIComponent(id)}/replay`),
+  gauntletList: (limit = 1) => call<Gauntlet[]>('GET', `/api/gauntlet?limit=${limit}`),
+
+  incidents: () => call<Incident[]>('GET', '/api/incidents'),
+  replayIncident: (id: string) => call<{ id: string; status: string }>('POST', `/api/incidents/${encodeURIComponent(id)}/replay`),
+  receipts: () => call<{ items?: Receipt[]; note?: string }>('GET', '/api/receipts'),
 
   demoReset: (targetId: string) => call<{ ok?: boolean }>('POST', `/api/demo/reset?target_id=${encodeURIComponent(targetId)}`),
 

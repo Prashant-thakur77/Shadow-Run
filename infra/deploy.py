@@ -21,17 +21,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from provision import ENV_PATH, ROOT, SSH_KEY, load_env, load_state, set_env  # noqa: E402
 
 SSH = ["ssh", "-i", str(SSH_KEY), "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=20", "-o", "BatchMode=yes"]
-EXCLUDES = [".git", ".venv", "/var", ".env", ".env.*", "node_modules", "__pycache__", "docs/PLAN.md", "infra/STATE.json", "infra/.ssh", ".superpowers", ".claude", "web/src", "web/node_modules", "web/fixtures", "web/.shots", "*.pyc", ".pytest_cache", "PROGRESS.md", "SCORECARD.md"]
+EXCLUDES = [".git", ".venv", "/var", ".env", ".env.*", "PROGRESS.md", "SCORECARD.md", "node_modules", "__pycache__", "docs/PLAN.md", "infra/STATE.json", "infra/.ssh", ".superpowers", ".claude", "web/src", "web/node_modules", "web/fixtures", "web/.shots", "*.pyc", ".pytest_cache", "PROGRESS.md", "SCORECARD.md"]
 CONTROL_ENV_KEYS = [
     "VULTR_INFERENCE_BASE", "VULTR_INFERENCE_KEY", "SHADOWRUN_MODEL", "SHADOWRUN_GUARDRAIL_MODEL", "SHADOWRUN_EXPLAINER_MODEL",
     "SHADOWRUN_S3_ENDPOINT", "SHADOWRUN_S3_ACCESS_KEY", "SHADOWRUN_S3_SECRET_KEY", "SHADOWRUN_S3_BUCKET",
     "SHADOWRUN_PROD_HOST", "SHADOWRUN_PROD_PORT", "SHADOWRUN_PROD_USER", "SHADOWRUN_PROD_PASSWORD", "SHADOWRUN_PROD_DB",
     "SHADOWRUN_HMAC_SECRET", "RUNNER_TOKEN", "SHADOWRUN_JUDGE_PASSWORD", "SHADOWRUN_REVIEWER_PASSWORD", "SHADOWRUN_ADMIN_PASSWORD",
+    "SHADOWRUN_VIDEO_URL", "SHADOWRUN_TARGETS",
 ]
 
 
 def ssh(ip: str, command: str, check: bool = True, input_text: str | None = None) -> subprocess.CompletedProcess:
     return subprocess.run([*SSH, f"root@{ip}", command], input=input_text, text=True, check=check)
+
+
+def pull_results(ip: str) -> None:
+    """Results written on the VM come home first, because the sync below deletes what's missing locally."""
+    e = " ".join(shlex.quote(str(x)) for x in SSH)
+    subprocess.run(["rsync", "-rtz", "-u", "--include=*.json", "--include=*.jsonl", "--exclude=*", "-e", e, f"root@{ip}:/opt/shadowrun/bench/", f"{ROOT}/bench/"], check=False)
 
 
 def rsync(ip: str) -> None:
@@ -87,6 +94,7 @@ def deploy_control(state: dict) -> None:
     node = state["instances"]["control"]
     ip = node["main_ip"]
     build_web()
+    pull_results(ip)
     rsync(ip)
     host = f"{ip.replace('.', '-')}.sslip.io"
     lines = [f"{k}={os.environ[k]}" for k in CONTROL_ENV_KEYS if os.environ.get(k) and k != "SHADOWRUN_PROD_HOST"]
@@ -114,6 +122,8 @@ def main() -> None:
             ip = state["instances"][what]["main_ip"]
             if what == "control" and args.web:
                 build_web()
+            if what == "control":
+                pull_results(ip)
             rsync(ip)
             unit = "shadowrun-runner" if what == "vx1" else "shadowrun-control"
             ssh(ip, f"systemctl restart {unit} && sleep 3 && systemctl is-active {unit}")

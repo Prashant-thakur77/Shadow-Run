@@ -12,6 +12,7 @@ from typing import Any
 
 import psycopg
 
+from control import gate as static_gate
 from control.snapshot import ProdConn
 from runner.guest import txrun
 
@@ -34,6 +35,13 @@ def apply_plan(
     expected_schema = rehearsal.get("schema_fingerprint_after")
     touched = [t for t in rehearsal.get("touched_tables", []) if t in snapshot_tables]
     out: dict[str, Any] = {"outcome": None, "touched_tables": touched, "expected_counts": expected_counts}
+
+    # Guardrails are checked when they're accepted. This is the last look before one runs on prod.
+    for g in guardrails:
+        unsafe = static_gate.check_guardrail(g["sql"])
+        if unsafe:
+            out.update(outcome="rolled_back", reason=f"guardrail {g.get('name', g.get('id'))} can't run on prod: {unsafe}. Nothing was applied.", guardrails=[])
+            return out
 
     conn = psycopg.connect(**conn_info.kwargs())
     try:

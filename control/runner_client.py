@@ -51,8 +51,8 @@ class RunnerClient:
             raise RunnerError(f"runner put_snapshot -> {r.status_code}: {r.text[:300]}")
         return r.json()
 
-    async def rehearse(self, run_id: str, snapshot_id: str, steps: list[dict], guardrails: list[dict], max_duration: int = 120) -> dict:
-        return await self._post("/rehearse", {"run_id": run_id, "snapshot_id": snapshot_id, "steps": steps, "guardrails": guardrails, "max_duration": max_duration}, max_duration + 60)
+    async def rehearse(self, run_id: str, snapshot_id: str, steps: list[dict], guardrails: list[dict], max_duration: int = 120, metrics: list[dict] | None = None, undo: bool = True) -> dict:
+        return await self._post("/rehearse", {"run_id": run_id, "snapshot_id": snapshot_id, "steps": steps, "guardrails": guardrails, "max_duration": max_duration, "metrics": metrics or [], "undo": undo}, max_duration + 60)
 
     async def inspect(self, snapshot_id: str, sample_rows: int = 3) -> dict:
         return await self._post("/inspect", {"snapshot_id": snapshot_id, "sample_rows": sample_rows}, 120)

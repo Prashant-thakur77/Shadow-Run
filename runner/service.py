@@ -38,6 +38,8 @@ class RehearseBody(BaseModel):
     snapshot_id: str
     steps: list[dict]
     guardrails: list[dict] = []
+    metrics: list[dict] = []
+    undo: bool = True
     max_duration: int = 120
 
 
@@ -104,7 +106,7 @@ async def delete_snapshot(snapshot_id: str) -> dict:
 
 @app.post("/rehearse", dependencies=[Depends(auth)])
 async def rehearse(body: RehearseBody) -> dict:
-    return await engine.rehearse(body.run_id, body.snapshot_id, body.steps, body.guardrails, max_duration=body.max_duration)
+    return await engine.rehearse(body.run_id, body.snapshot_id, body.steps, body.guardrails, max_duration=body.max_duration, metrics=body.metrics, undo=body.undo)
 
 
 @app.post("/inspect", dependencies=[Depends(auth)])

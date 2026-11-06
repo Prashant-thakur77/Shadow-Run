@@ -53,7 +53,7 @@ export function RunRecordSection({ attempt }: { attempt: Attempt | null }) {
   return (
     <>
       <p className="record-sum">
-        <Tag tone={r.contained ? 'good' : 'bad'}>{r.contained ? 'Contained' : 'NOT contained'}</Tag> Five checkpoints, written by the host, not by the agent.
+        <Tag tone={r.contained ? 'good' : 'bad'}>{r.contained ? 'Contained' : 'NOT contained'}</Tag> {attempt?.reproduced ? 'Six' : 'Five'} checkpoints, written by the host, not by the agent.
       </p>
       <ol className="cps">
         <Checkpoint n={1} title="Host ready" ok={hostReady}>
@@ -186,6 +186,37 @@ export function RunRecordSection({ attempt }: { attempt: Attempt | null }) {
             <Kv k="Leftover processes">{num(teardown.leftover_processes)}</Kv>
           </dl>
         </Checkpoint>
+
+        {attempt?.reproduced ? (
+          <Checkpoint n={6} title={attempt.reproduced.ok ? 'Reproduced on a second clone' : 'Did not reproduce on a second clone'} ok={attempt.reproduced.ok === true}>
+            {attempt.reproduced.ok ? (
+              <p>A second microVM ran the same plan on a new clone and measured the same counts, schema and content.</p>
+            ) : (
+              <>
+                <p>A second microVM ran the same plan and got a different result, so this plan is likely to roll back at apply.</p>
+                <dl className="kvs">
+                  <Kv k="What differed">{(attempt.reproduced.differs ?? []).join(', ') || 'not listed'}</Kv>
+                </dl>
+              </>
+            )}
+            <dl className="kvs">
+              <Kv k="Sandbox">{attempt.reproduced.sandbox ?? 'unknown'}</Kv>
+              <Kv k="Took">{ms(attempt.reproduced.ms)}</Kv>
+              <Kv k="Contained">{yn(attempt.reproduced.contained)}</Kv>
+            </dl>
+          </Checkpoint>
+        ) : (
+          <li className="cp is-neutral cp-skipped">
+            <div className="cp-head">
+              <span className="mono cp-n">6</span>
+              <h3 className="cp-title">Second clone</h3>
+              <span className="cp-word">Not run</span>
+            </div>
+            <div className="cp-body">
+              <p className="muted">It only runs when a plan passes every guardrail and changed something.</p>
+            </div>
+          </li>
+        )}
       </ol>
 
       <dl className="kvs kvs-inline record-extra">

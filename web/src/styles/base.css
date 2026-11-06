@@ -496,6 +496,8 @@ textarea {
   font-weight: 600;
 }
 .sql {
+  max-height: 28em;
+  overflow: auto;
   color: var(--ink-2);
 }
 .sql-str {

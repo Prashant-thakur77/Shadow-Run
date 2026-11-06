@@ -9,6 +9,8 @@ import { useTheme } from './lib/theme';
 import { useAsync } from './lib/useAsync';
 import { AuditPage } from './pages/Audit';
 import { HomePage } from './pages/Home';
+import { IncidentsPage } from './pages/Incidents';
+import { ReceiptsPage } from './pages/Receipts';
 import { RedTeamPage } from './pages/RedTeam';
 import { ResultsPage } from './pages/Results';
 import { RunPage } from './pages/RunPage';
@@ -25,6 +27,8 @@ export function App() {
     </RouterProvider>
   );
 }
+
+const PUBLIC_PATHS = ['/results', '/incidents', '/receipts'];
 
 function Shell() {
   const { user, ready } = useAuth();
@@ -44,14 +48,16 @@ function Shell() {
     );
   }
 
-  // Results are public, like the README table. Everything else needs an account.
-  if (!user && path !== '/results') return <SignInPage />;
+  // Evidence is public, like the README. Everything else starts at the landing page.
+  if (!user && !PUBLIC_PATHS.includes(path)) return <SignInPage />;
 
   let page = <NotFound />;
   if (path === '/') page = <HomePage />;
   else if (runMatch) page = <RunPage key={runMatch[1]} id={decodeURIComponent(runMatch[1])} />;
   else if (path === '/redteam') page = <RedTeamPage />;
   else if (path === '/guardrails') page = <TargetPage />;
+  else if (path === '/incidents') page = <IncidentsPage />;
+  else if (path === '/receipts') page = <ReceiptsPage />;
   else if (path === '/results') page = <ResultsPage />;
   else if (path === '/audit') page = <AuditPage />;
 
@@ -83,6 +89,8 @@ const NAV = [
   { href: '/', label: 'New task' },
   { href: '/redteam', label: 'Red team' },
   { href: '/guardrails', label: 'Guardrails' },
+  { href: '/incidents', label: 'Incidents' },
+  { href: '/receipts', label: 'Receipts' },
   { href: '/results', label: 'Results' },
   { href: '/audit', label: 'Audit' },
 ];
@@ -116,7 +124,7 @@ function Header() {
         </nav>
         <div className="topbar-right">
           {user && <ProdIndicator />}
-          {user ? <IdentitySwitch /> : <Link href="/" className="btn btn-small">Sign in</Link>}
+          {user ? <IdentitySwitch /> : <Link href="/" className="btn btn-small">Enter the demo</Link>}
           <button type="button" className="textbtn" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
             {theme === 'dark' ? 'Light' : 'Dark'}
           </button>

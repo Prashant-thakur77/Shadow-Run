@@ -51,9 +51,10 @@ PROD_DB = os.environ.get("SHADOWRUN_PROD_DB", "")
 PROD_SSLMODE = os.environ.get("SHADOWRUN_PROD_SSLMODE", "require")
 
 # Stops a public demo from burning credits; LLM runs started per user per hour.
+TARGETS_FILE = os.environ.get("SHADOWRUN_TARGETS", "")
 RUNS_PER_HOUR = int(os.environ.get("SHADOWRUN_RUNS_PER_HOUR", "40"))
 MAX_RUNNING = int(os.environ.get("SHADOWRUN_MAX_RUNNING", "8"))
-DAILY_USD_CAP = float(os.environ.get("SHADOWRUN_DAILY_USD_CAP", "5"))
+DAILY_USD_CAP = float(os.environ.get("SHADOWRUN_DAILY_USD_CAP", "15"))
 
 
 def require_secret(name: str, value: str) -> str:

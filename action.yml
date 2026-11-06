@@ -1,0 +1,63 @@
+name: Shadow Run rehearse
+description: Rehearse a database migration on a disposable clone of prod in a microVM, and comment what it really does on the pull request. It never applies anything.
+branding:
+  icon: shield
+  color: green
+inputs:
+  plan:
+    description: Path to the .sql file to rehearse
+    required: true
+  target:
+    description: Shadow Run target id
+    default: demo-saas
+  url:
+    description: Shadow Run URL
+    required: true
+  token:
+    description: Shadow Run token
+    required: true
+  fail-on:
+    description: Exit codes that fail the check. 3 is blocked, 4 is rolled back or drifted, 2 is needs a person.
+    default: "3 4"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - shell: bash
+      run: pip install --quiet httpx
+    - id: rehearse
+      shell: bash
+      env:
+        SHADOWRUN_URL: ${{ inputs.url }}
+        SHADOWRUN_TOKEN: ${{ inputs.token }}
+        # Passed through the environment: a file name in a pull request must never become part of a script.
+        PLAN: ${{ inputs.plan }}
+        TARGET: ${{ inputs.target }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set +e
+        python "$ACTION_PATH/control/cli.py" rehearse "$PLAN" --target "$TARGET" --rehearse-only --markdown > shadowrun-report.md
+        code=$?
+        set -e
+        cat shadowrun-report.md >> "$GITHUB_STEP_SUMMARY"
+        echo "code=$code" >> "$GITHUB_OUTPUT"
+    - if: github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file shadowrun-report.md
+    - shell: bash
+      env:
+        FAIL_ON: ${{ inputs.fail-on }}
+        CODE: ${{ steps.rehearse.outputs.code }}
+      run: |
+        for bad in $FAIL_ON; do
+          if [ "$CODE" = "$bad" ]; then
+            echo "Shadow Run stopped this change (exit $bad)."
+            exit 1
+          fi
+        done

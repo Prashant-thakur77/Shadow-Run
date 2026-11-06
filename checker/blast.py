@@ -37,6 +37,14 @@ def cascade_path(source_tables: set[str], target: str, children: dict[str, list[
     return None
 
 
+def _metric_deltas(metrics: list[dict]) -> list[dict]:
+    out = []
+    for m in metrics:
+        before, after = m.get("before"), m.get("after")
+        out.append({**m, "delta": None if before is None or after is None else round(after - before, 2), "lost_entirely": before is not None and after is None})
+    return out
+
+
 def build_report(result: dict, thresholds: dict | None = None) -> dict[str, Any]:
     changes = result.get("changes", [])
     before = result.get("table_rows_before", {})
@@ -139,9 +147,11 @@ def build_report(result: dict, thresholds: dict | None = None) -> dict[str, Any]
         "samples": result.get("samples", {}),
         "ddl": result.get("ddl", []),
         "schema_diff": result.get("schema_diff", []),
+        "changed_columns": result.get("changed_columns"),
         "xact_counts": result.get("xact_counts", {}),
         "capture_gaps": result.get("capture_gaps", []),
         "unlogged_changes": result.get("unlogged_changes", []),
+        "metrics": _metric_deltas(result.get("metrics", [])),
     }
 
 

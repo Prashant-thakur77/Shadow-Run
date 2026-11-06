@@ -4,6 +4,7 @@ import type { Run } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { asText } from '../lib/format';
 import { Mark } from '../ui/bits';
+import { measureProdBeforeApply } from './ProdProof';
 
 export interface BreakResult {
   request: string;
@@ -89,6 +90,10 @@ export function BreakItPanel({
   const challenge = run.challenge;
   const approval = run.approval;
 
+  // Past the window the server answers 410 before it compares any hash.
+  const windowClosed = !!challenge?.expires_at && challenge.expires_at * 1000 <= Date.now();
+  const refusedTampered = windowClosed ? 410 : 409;
+
   const controls: Control[] = [];
   if (run.status === 'awaiting_approval' && challenge) {
     controls.push(
@@ -106,20 +111,20 @@ export function BreakItPanel({
         key: 'plan',
         title: 'Approve with a tampered plan hash',
         what: `Signed in as ${checker}. One digit of plan_hash is changed.`,
-        expect: '409',
+        expect: String(refusedTampered),
         run: async () => {
           const r = await send(checker, 'POST', `${path}/approve`, { ...challenge, plan_hash: tamper(challenge.plan_hash) });
-          return [{ ...r, outcome: null, matched: r.status === 409 }];
+          return [{ ...r, outcome: null, matched: r.status === refusedTampered }];
         },
       },
       {
         key: 'report',
         title: 'Approve with a tampered report',
         what: `Signed in as ${checker}. One digit of report_hash is changed.`,
-        expect: '409',
+        expect: String(refusedTampered),
         run: async () => {
           const r = await send(checker, 'POST', `${path}/approve`, { ...challenge, report_hash: tamper(challenge.report_hash) });
-          return [{ ...r, outcome: null, matched: r.status === 409 }];
+          return [{ ...r, outcome: null, matched: r.status === refusedTampered }];
         },
       },
     );
@@ -129,6 +134,7 @@ export function BreakItPanel({
     const applyWith = async (driftCheck: boolean, want: string): Promise<BreakResult[]> => {
       pollFast(true);
       try {
+        await measureProdBeforeApply(run);
         const r = await send(user?.username ?? requester, 'POST', `${path}/apply`, { drift_check: driftCheck });
         const body = r.body as Run | null;
         if (r.status >= 200 && r.status < 300 && body?.id) {
@@ -226,6 +232,9 @@ export function BreakItPanel({
           The write adds a row to <code className="mono">users</code>. This plan touches <code className="mono">{touched.join(', ')}</code>, so neither check will see it and the apply will commit. Use a plan that touches users to see the refusals.
         </p>
       )}
+      {run.status === 'awaiting_approval' && windowClosed && (
+        <p className="break-note">The approval window on this run has closed, so a tampered approval gets 410 here. A newer run gets 409.</p>
+      )}
       <ul className="breaks">
         {controls.map((c) => (
           <li className="break" key={c.key}>
@@ -249,6 +258,11 @@ export function BreakItPanel({
           </li>
         ))}
       </ul>
+      {run.status === 'awaiting_approval' && !windowClosed && (
+        <p className="muted">
+          Once a different person approves this run in <a href="#decision">Decision</a>, more appear here: replay the approval, and change prod behind its back.
+        </p>
+      )}
       {earlier.length > 0 && (
         <div className="break-earlier">
           <h3 className="subhead">Already tried on this run</h3>

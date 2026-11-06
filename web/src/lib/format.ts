@@ -72,3 +72,33 @@ export function asText(v: unknown): string {
     return String(v);
   }
 }
+
+/** Dollars from a measurement. Cents only when there are cents. */
+export function money(v: unknown): string {
+  if (!isNum(v)) return MISSING;
+  const abs = Math.abs(v);
+  const whole = Number.isInteger(abs);
+  const text = abs.toLocaleString('en-US', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
+  return `${v < 0 ? '\u2212' : ''}$${text}`;
+}
+
+export function signedMoney(v: unknown): string {
+  if (!isNum(v)) return MISSING;
+  return v > 0 ? `+${money(v)}` : money(v);
+}
+
+export function signedNum(v: unknown): string {
+  if (!isNum(v)) return MISSING;
+  if (v > 0) return `+${v.toLocaleString('en-US')}`;
+  return v < 0 ? `\u2212${Math.abs(v).toLocaleString('en-US')}` : '0';
+}
+
+/** A time from the API, which is either epoch seconds or an ISO string. */
+export function whenAny(v: unknown): string {
+  if (isNum(v)) return when(v);
+  if (typeof v === 'string' && v) {
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? v : when(t / 1000);
+  }
+  return MISSING;
+}

@@ -1,5 +1,7 @@
 // Drives the real UI against the live API through the dev proxy.
 // Passwords come from the environment, are typed into the page, and are never logged or written.
+//   node scripts/live.mjs landing trap learn undo incidents gauntlet phone reset
+// The older steps sign in with passwords, from the environment if set:
 //   set -a; source <(grep -E '^SHADOWRUN_(JUDGE|REVIEWER)_PASSWORD=' ../.env); set +a; node scripts/live.mjs flow
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +12,6 @@ const OUT = fileURLToPath(new URL('../.shots/', import.meta.url));
 mkdirSync(OUT, { recursive: true });
 const JUDGE = process.env.SHADOWRUN_JUDGE_PASSWORD;
 const REVIEWER = process.env.SHADOWRUN_REVIEWER_PASSWORD;
-if (!JUDGE || !REVIEWER) throw new Error('Set SHADOWRUN_JUDGE_PASSWORD and SHADOWRUN_REVIEWER_PASSWORD.');
 
 const which = new Set(process.argv.slice(2));
 const all = which.size === 0;
@@ -34,9 +35,16 @@ async function shot(page, name, { full = false } = {}) {
   await page.screenshot({ path: `${OUT}live-${name}.png`, fullPage: full });
 }
 
-async function signIn(page) {
+async function guest(page) {
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
-  await page.getByText('Sign in', { exact: true }).first().waitFor();
+  await page.getByRole('button', { name: 'Continue as guest' }).click();
+  await page.getByRole('heading', { name: 'Give the agent a task' }).waitFor();
+}
+
+async function signIn(page) {
+  if (!JUDGE || !REVIEWER) return guest(page);
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+  await page.getByText('Sign in with a password').click();
   await page.getByLabel('Password for judge').fill(JUDGE);
   await page.getByLabel('Password for reviewer').fill(REVIEWER);
   await page.getByRole('button', { name: 'Sign in as judge' }).click();
@@ -248,6 +256,273 @@ if (want('host')) {
   await ctx.close();
 }
 
+async function learnOn(page) {
+  await page.getByRole('button', { name: 'Turn this into a guardrail' }).click();
+  await page.waitForTimeout(800);
+  await shot(page, 'learn-busy-d');
+  await page.locator('.candidate, .learn .notice').first().waitFor({ timeout: 180000 });
+  await page.locator('.candidate').scrollIntoViewIfNeeded().catch(() => {});
+  await shot(page, 'learn-candidate-d');
+  log('  candidate:', (await page.locator('.candidate-name').innerText().catch(() => 'none')));
+  log('  proofs:', (await page.locator('.candidate .proofrows').innerText().catch(() => '')).replace(/\s+/g, ' '));
+  const accept = page.getByRole('button', { name: 'Accept this guardrail' });
+  if (await accept.count()) {
+    await accept.click();
+    await page.getByRole('button', { name: 'Rehearse this plan again' }).waitFor({ timeout: 30000 });
+    await page.locator('.candidate').scrollIntoViewIfNeeded();
+    await shot(page, 'learn-accepted-d');
+    await page.getByRole('button', { name: 'Rehearse this plan again' }).click();
+    await page.waitForTimeout(1000);
+    await waitStatus(page, ['Awaiting approval', 'Blocked', 'Applied', 'No change', 'Error'], 200000);
+    log('  rehearsed again:', page.url().split('/').pop());
+    await page.waitForTimeout(600);
+    await shot(page, 'learn-rehearsed-d');
+    await page.goto(BASE + '/guardrails', { waitUntil: 'domcontentloaded' });
+    await page.locator('.learned').first().waitFor({ timeout: 20000 });
+    await page.locator('.learned').first().scrollIntoViewIfNeeded();
+    await shot(page, 'learn-frozen-mark-d');
+  } else {
+    log('  not proved, so no accept was offered');
+  }
+}
+
+const shared = { trapRun: null };
+
+if (want('landing')) {
+  log('LANDING');
+  for (const [name, vp, mobile] of [['d', { width: 1440, height: 900 }, false], ['m', { width: 390, height: 844 }, true]]) {
+    const { ctx, page } = await open(vp, { mobile });
+    await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+    await shot(page, `landing-${name}`, { full: true });
+    await page.getByRole('button', { name: 'Continue as guest' }).click();
+    await page.getByRole('heading', { name: 'Give the agent a task' }).waitFor();
+    await page.waitForLoadState('networkidle');
+    const tokens = await page.evaluate(() => Object.keys(JSON.parse(sessionStorage.getItem('sr.session')).tokens));
+    log(`  ${name}: signed in, tokens for ${tokens.join(', ')}, identity ${await page.locator('.seg-btn.is-on').first().innerText()}`);
+    await shot(page, `home-${name}`);
+    await page.getByRole('button', { name: 'reviewer', exact: true }).click();
+    await page.waitForTimeout(600);
+    log(`  ${name}: one click later, identity ${await page.locator('.identity .seg-btn.is-on').innerText()}`);
+    await ctx.close();
+  }
+}
+
+if (want('trap')) {
+  log('TRAP: Start here, then read the panel');
+  const { ctx, page } = await open({ width: 1440, height: 900 });
+  await guest(page);
+  if (process.env.TRAP_RUN) {
+    await page.goto(`${BASE}/runs/${process.env.TRAP_RUN}`, { waitUntil: 'domcontentloaded' });
+  } else {
+    await page.getByRole('button', { name: /Run the trap task/ }).click();
+  }
+  await page.locator('.runhead-word').waitFor();
+  log(`  run ${page.url().split('/').pop()}`);
+  await waitStatus(page, ['Awaiting approval', 'Blocked', 'Applied', 'No change', 'Error'], 240000);
+  shared.trapRun = page.url();
+  await page.waitForTimeout(600);
+  await shot(page, 'trap-top-d');
+  log('  hero:', (await page.locator('.ww-hero').innerText().catch(() => 'no panel')).replace(/\n/g, ' | '));
+  log('  table:', (await page.locator('.ww-table').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 400));
+  await page.locator('#compare').scrollIntoViewIfNeeded();
+  await shot(page, 'trap-compare-d');
+  await page.locator('.bizmetrics').scrollIntoViewIfNeeded();
+  await shot(page, 'trap-metrics-d');
+  await page.locator('.cps').scrollIntoViewIfNeeded();
+  await page.locator('.cp').last().scrollIntoViewIfNeeded();
+  await shot(page, 'trap-record-d');
+  await page.locator('#decision').scrollIntoViewIfNeeded();
+  await shot(page, 'trap-decision-d');
+  if (await page.getByText('The undo statements').count()) {
+    await page.getByText('The undo statements').click();
+    await page.locator('.undo .undo-sql, .undo .fold-body .muted').first().waitFor({ timeout: 20000 });
+    log('  undo statements shown:', await page.locator('.undo-sql').count());
+    await page.locator('.undo').scrollIntoViewIfNeeded();
+    await shot(page, 'trap-undo-d');
+  } else {
+    log('  no undo plan:', (await page.locator('.undo').innerText()).replace(/\n/g, ' '));
+  }
+  await page.locator('#commands').scrollIntoViewIfNeeded();
+  await page.getByRole('heading', { name: 'Cost by phase' }).scrollIntoViewIfNeeded();
+  await shot(page, 'trap-cost-d');
+
+  // Learn from a rejection, on this same run.
+  log('LEARN: reject as the reviewer, then turn the reason into a rule');
+  await page.locator('#decision').scrollIntoViewIfNeeded();
+  await page.getByRole('button', { name: 'Switch to reviewer' }).click();
+  await page.getByRole('button', { name: 'Reject', exact: true }).click();
+  const reason = process.env.LEARN_REASON ?? 'Users with an open support ticket are still customers. Never retire them.';
+  await page.getByLabel('Reason for rejecting').fill(reason);
+  await page.getByRole('button', { name: 'Reject this run' }).click();
+  await waitStatus(page, 'Rejected');
+  await page.locator('#learn').scrollIntoViewIfNeeded();
+  log('  prefilled:', (await page.locator('.learn-reason').inputValue()).slice(0, 80));
+  await learnOn(page);
+  await ctx.close();
+}
+
+if (want('learn')) {
+  log('LEARN: a reason that should prove');
+  const { ctx, page } = await open({ width: 1440, height: 900 });
+  await guest(page);
+  await page.goto(`${BASE}/runs/${process.env.LEARN_RUN}`, { waitUntil: 'domcontentloaded' });
+  await page.locator('#learn').waitFor();
+  await page.locator('#learn').scrollIntoViewIfNeeded();
+  await page.locator('.learn-reason').fill(process.env.LEARN_REASON ?? 'Retiring more than five percent of live users in one change is never routine. Keep the count of live users within five percent of what it was.');
+  await learnOn(page);
+  await ctx.close();
+}
+
+if (want('undo')) {
+  log('UNDO: apply a plan, then undo it');
+  const { ctx, page } = await open({ width: 1440, height: 900 });
+  await guest(page);
+  await page.getByRole('button', { name: 'SQL plan' }).click();
+  await page.getByRole('button', { name: /Suspend long-gone users/ }).click();
+  await page.getByRole('button', { name: 'Rehearse on a clone' }).click();
+  await page.locator('.runhead-word').waitFor();
+  await waitStatus(page, ['Awaiting approval', 'Blocked', 'Applied', 'Error'], 200000);
+  const original = page.url().split('/').pop();
+  await page.getByRole('button', { name: 'Switch to reviewer' }).click();
+  await page.getByRole('button', { name: 'Approve', exact: true }).click();
+  await waitStatus(page, 'Approved');
+  await page.getByRole('button', { name: 'Apply to prod' }).click();
+  await waitStatus(page, 'Applied');
+  await page.locator('.undo').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(800);
+  await shot(page, 'undo-applied-d');
+  await page.getByRole('button', { name: 'Undo this change' }).click();
+  await page.waitForTimeout(1200);
+  log(`  undo run ${page.url().split('/').pop()} of ${original}`);
+  await waitStatus(page, ['Awaiting approval', 'Blocked', 'Applied', 'No change', 'Error'], 200000);
+  await page.waitForTimeout(600);
+  await shot(page, 'undo-run-d');
+  log('  back link:', await page.locator('.runhead-again').first().innerText().catch(() => 'none'));
+  await ctx.close();
+}
+
+if (want('incidents')) {
+  log('INCIDENTS: replay two more');
+  const { ctx, page } = await open({ width: 1440, height: 900 });
+  await guest(page);
+  for (const who of (process.env.INCIDENTS ?? 'Supabase MCP,Google Antigravity').split(',')) {
+    await page.getByRole('link', { name: 'Incidents', exact: true }).click();
+    await page.locator('.incident', { hasText: who }).getByRole('button', { name: 'Replay on a clone' }).click();
+    await page.locator('.runhead-word').waitFor();
+    log(`  ${who}: ${page.url().split('/').pop()}`);
+    const s = await waitStatus(page, ['Awaiting approval', 'Blocked', 'Applied', 'No change', 'Error'], 200000);
+    await page.waitForTimeout(600);
+    const tag = who.split(' ')[0].toLowerCase();
+    await shot(page, `incident-${tag}-top-d`);
+    log('    hero:', (await page.locator('.ww-hero').innerText().catch(() => 'no panel')).replace(/\n/g, ' | '));
+    log('    gate note:', await page.getByText('The gate refused this.').count());
+    if (await page.locator('#blast').count()) {
+      await page.locator('#blast').scrollIntoViewIfNeeded();
+      await shot(page, `incident-${tag}-blast-d`);
+    }
+    log('    status', s);
+  }
+  await ctx.close();
+}
+
+if (want('gauntlet')) {
+  log('GAUNTLET: one real run');
+  const { ctx, page } = await open({ width: 1440, height: 900 });
+  await guest(page);
+  await page.getByRole('link', { name: /Attack the guardrails/ }).click();
+  await page.locator('#gauntlet').waitFor();
+  await page.waitForTimeout(800);
+  log('  scrolled to section, y =', await page.evaluate(() => Math.round(window.scrollY)));
+  await shot(page, 'gauntlet-before-d');
+  await page.getByRole('button', { name: 'Attack the guardrails' }).click();
+  await page.waitForTimeout(1500);
+  await page.locator('#gauntlet').scrollIntoViewIfNeeded();
+  await shot(page, 'gauntlet-start-d');
+  let last = -1;
+  const start = Date.now();
+  while (Date.now() - start < 420000) {
+    const rounds = await page.locator('.gt-round:not(.is-pending)').count();
+    if (rounds !== last) {
+      last = rounds;
+      log(`  rounds finished: ${rounds}`);
+      if (rounds === 2) {
+        await page.locator('#gauntlet').scrollIntoViewIfNeeded();
+        await shot(page, 'gauntlet-progress-d');
+      }
+    }
+    if (!(await page.getByRole('button', { name: 'Attacking' }).count()) && Date.now() - start > 5000) break;
+    await page.waitForTimeout(1500);
+  }
+  await page.locator('#gauntlet').scrollIntoViewIfNeeded();
+  await shot(page, 'gauntlet-done-d');
+  log('  summary:', (await page.locator('.gt-summary').innerText().catch(() => 'none')).replace(/\n/g, ' | '));
+  for (const r of await page.locator('.gt-round').all()) log('   ', (await r.locator('.gt-round-head').innerText()).replace(/\n/g, ' '));
+  const accept = page.getByRole('button', { name: 'Accept this guardrail' }).first();
+  if (await accept.count()) {
+    await accept.scrollIntoViewIfNeeded();
+    await shot(page, 'gauntlet-candidate-d');
+    await accept.click();
+    await page.getByText('Accepted. It is in the frozen guardrails above.').first().waitFor({ timeout: 30000 });
+    await page.waitForTimeout(500);
+    await page.getByText('Accepted. It is in the frozen guardrails above.').first().scrollIntoViewIfNeeded();
+    await shot(page, 'gauntlet-accepted-d');
+    log('  learned marks now:', await page.locator('.learned').count());
+    await page.locator('.learned').last().scrollIntoViewIfNeeded();
+    await shot(page, 'gauntlet-learned-mark-d');
+  }
+  await ctx.close();
+}
+
+if (want('phone')) {
+  log('PHONE: the new pages at 390');
+  const { ctx, page } = await open({ width: 390, height: 844 }, { mobile: true });
+  await guest(page);
+  const over = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  await shot(page, 'phone-home', { full: true });
+  log('  home overflow', await over());
+  for (const [name, link] of [['incidents', 'Incidents'], ['receipts', 'Receipts'], ['guardrails', 'Guardrails']]) {
+    await page.getByRole('link', { name: link, exact: true }).click();
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(600);
+    log(`  ${name} overflow`, await over());
+    await shot(page, `phone-${name}`);
+    if (name === 'guardrails') {
+      await page.locator('#gauntlet').scrollIntoViewIfNeeded();
+      await shot(page, 'phone-gauntlet');
+      await page.locator('.gt-round').first().scrollIntoViewIfNeeded().catch(() => {});
+      await shot(page, 'phone-gauntlet-round');
+    }
+  }
+  const token = await page.evaluate(() => JSON.parse(sessionStorage.getItem('sr.session')).tokens.judge);
+  const runs = await page.evaluate(async (t) => (await fetch('/api/runs?limit=40', { headers: { Authorization: `Bearer ${t}` } })).json(), token);
+  const picks = {
+    multi: runs.find((r) => (r.attempts ?? 0) > 1),
+    applied: runs.find((r) => r.status === 'applied' && r.source !== 'undo'),
+    incident: runs.find((r) => r.source === 'incident' && r.status === 'blocked'),
+    rejected: runs.find((r) => r.status === 'rejected'),
+  };
+  for (const [name, r] of Object.entries(picks)) {
+    if (!r) continue;
+    await page.goto(`${BASE}/runs/${r.id}`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(500);
+    log(`  run ${name} ${r.id} overflow`, await over());
+    await shot(page, `phone-run-${name}`);
+    if (await page.locator('#compare').count()) {
+      await page.locator('#compare').scrollIntoViewIfNeeded();
+      await shot(page, `phone-run-${name}-compare`);
+    }
+    if (await page.locator('.undo').count()) {
+      await page.locator('.undo').scrollIntoViewIfNeeded();
+      await shot(page, `phone-run-${name}-undo`);
+    }
+    if (await page.locator('#learn').count()) {
+      await page.locator('#learn').scrollIntoViewIfNeeded();
+      await shot(page, `phone-run-${name}-learn`);
+    }
+  }
+  await ctx.close();
+}
+
 if (want('redteam')) {
   log('RED TEAM');
   const { ctx, page } = await open({ width: 1440, height: 900 });
@@ -281,7 +556,7 @@ if (want('pages')) {
   log('PAGES: drafts, audit, results, both sizes');
   const { ctx, page } = await open({ width: 1440, height: 900 });
   await signIn(page);
-  await page.getByRole('link', { name: 'Guardrails' }).click();
+  await page.getByRole('link', { name: 'Guardrails', exact: true }).click();
   await page.getByRole('button', { name: 'Draft with the model' }).waitFor();
   await page.getByRole('button', { name: 'Draft with the model' }).click();
   await page.locator('.drafts .guardrail, .drafts .notice, .drafts .notmeasured').first().waitFor({ timeout: 180000 });
@@ -339,13 +614,43 @@ if (want('smoke')) {
   await page.locator('.emptystate, .data, .notmeasured').first().waitFor();
   log('  results page ok');
   await ctx.close();
+  // Signed out, reading is public and replaying signs you in as a guest.
+  const out = await open({ width: 1440, height: 900 });
+  await out.page.goto(`${BASE}/incidents`, { waitUntil: 'networkidle' });
+  log('  signed out, incidents listed:', await out.page.locator('.incident').count());
+  await out.page.goto(`${BASE}/receipts`, { waitUntil: 'networkidle' });
+  log('  signed out, receipts listed:', await out.page.locator('.receipt').count());
+  await out.page.goto(`${BASE}/incidents`, { waitUntil: 'networkidle' });
+  await out.page.locator('.incident', { hasText: 'Supabase MCP' }).getByRole('button', { name: 'Replay on a clone' }).click();
+  await out.page.locator('.runhead-word').waitFor({ timeout: 30000 });
+  log('  signed out, replay reached run', out.page.url().split('/').pop(), 'as', await out.page.locator('.identity .seg-btn.is-on').innerText());
+  await out.ctx.close();
+}
+
+if (want('look')) {
+  log('LOOK: named runs at both sizes');
+  for (const [name, vp, mobile] of [['d', { width: 1440, height: 900 }, false], ['m', { width: 390, height: 844 }, true]]) {
+    const { ctx, page } = await open(vp, { mobile });
+    await guest(page);
+    for (const id of (process.env.RUNS ?? '').split(',').filter(Boolean)) {
+      await page.goto(`${BASE}/runs/${id}`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(500);
+      const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      log(`  ${name} ${id}: ${await page.locator('.runhead-word').innerText()}, overflow ${over}`);
+      if (await page.locator('#compare').count()) {
+        await page.locator('#compare').scrollIntoViewIfNeeded();
+        await shot(page, `look-${id}-${name}`);
+      }
+    }
+    await ctx.close();
+  }
 }
 
 if (want('reset')) {
-  log('RESET: reseeding demo prod through the page');
+  log('RESET: reseeding both targets through the page');
   const { ctx, page } = await open({ width: 1440, height: 900 });
-  await signIn(page);
-  await page.getByRole('link', { name: 'Guardrails' }).click();
+  await guest(page);
+  await page.getByRole('link', { name: 'Guardrails', exact: true }).click();
   for (const [tab, button] of [['Linux server', 'Reseed demo server'], ['Database', 'Reseed demo prod']]) {
     await page.getByRole('button', { name: tab }).click();
     await page.getByRole('button', { name: button }).waitFor();

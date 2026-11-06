@@ -68,6 +68,10 @@ class Store:
         with self._lock:
             return self._db.execute("SELECT count(*) FROM runs WHERE requester=? AND created_at>=?", (requester, since)).fetchone()[0]
 
+    def cost_since(self, since: float) -> float:
+        with self._lock:
+            return self._db.execute("SELECT COALESCE(SUM(json_extract(doc, '$.cost_usd')), 0) FROM runs WHERE created_at>=?", (since,)).fetchone()[0]
+
     def set_status_if(self, run_id: str, expected: str | tuple[str, ...], new: str) -> dict | None:
         """Compare-and-swap on status, so two approvals racing cannot both win."""
         allowed = (expected,) if isinstance(expected, str) else expected

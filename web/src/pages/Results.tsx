@@ -1,7 +1,7 @@
 import { api } from '../api/client';
-import { asText } from '../lib/format';
+import { asText, whenAny } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
-import { Fold, Loading, Notice } from '../ui/bits';
+import { CopyButton, Fold, Loading, Notice } from '../ui/bits';
 
 interface ResultsTable {
   columns?: unknown[];
@@ -15,6 +15,17 @@ export function ResultsPage() {
   const table = data?.table as ResultsTable | undefined;
   const hasTable = !!table && Array.isArray(table.columns) && Array.isArray(table.rows);
   const notes = data?.notes;
+  const rerun = typeof data?.rerun === 'string' ? data.rerun : null;
+  const facts: [string, unknown][] = [
+    ['Measured', data?.at ? whenAny(data.at) : undefined],
+    ['Model', data?.model],
+    ['Runs per task', data?.runs_per_task],
+    ['Runs', data?.runs],
+    ['Harness errors', data?.harness_errors],
+    ['Commit', data?.git_commit],
+    ['Scope', data?.scope],
+  ];
+  const shownFacts = facts.filter(([, v]) => v !== undefined && v !== null);
 
   return (
     <div className="page results">
@@ -46,7 +57,7 @@ export function ResultsPage() {
                   {table?.rows?.map((r, i) => (
                     <tr key={i}>
                       {(Array.isArray(r) ? r : [r]).map((c, j) => (
-                        <td className="mono" key={j}>
+                        <td className={j === 0 ? undefined : 'mono'} key={j}>
                           {asText(c)}
                         </td>
                       ))}
@@ -57,6 +68,25 @@ export function ResultsPage() {
             </div>
           ) : (
             <p className="notmeasured">The response has no table to show yet. It is below as it arrived.</p>
+          )}
+          {shownFacts.length > 0 && (
+            <dl className="kvs results-facts">
+              {shownFacts.map(([k, v]) => (
+                <div className="kv" key={k}>
+                  <dt>{k}</dt>
+                  <dd className="mono">{asText(v)}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {rerun && (
+            <div className="rerun">
+              <div className="rerun-head">
+                <h2 className="subhead">Re-run it</h2>
+                <CopyButton value={rerun} />
+              </div>
+              <pre className="sql rerun-cmd">{rerun}</pre>
+            </div>
           )}
           {notes !== undefined && notes !== null && (
             <div className="results-notes">

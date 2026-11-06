@@ -15,6 +15,8 @@ from typing import Any
 import bashlex
 import sqlglot
 from sqlglot import exp
+from sqlglot.dialects.postgres import Postgres
+from sqlglot.tokens import TokenType
 
 logging.getLogger("sqlglot").setLevel(logging.ERROR)
 
@@ -51,6 +53,40 @@ BLOCK_FUNCTIONS = {
 SIDE_EFFECT_FUNCTIONS = {"http_get", "http_post", "http", "pg_notify", "net.http_post", "send_email", "sendmail"}
 
 
+# A guardrail reads as a rule to a person, and runs on prod inside the apply transaction, so it must only read.
+GUARDRAIL_REFUSED_NODES = tuple(
+    getattr(exp, name)
+    for name in ("Insert", "Update", "Delete", "Merge", "Create", "Drop", "Alter", "TruncateTable", "Command", "Copy", "Into", "Lock", "Set", "Transaction", "Commit", "Rollback")
+    if hasattr(exp, name)
+)
+GUARDRAIL_REFUSED_FUNCTIONS = re.compile(
+    r"\b(pg_sleep\w*|pg_advisory\w*|pg_try_advisory\w*|pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_rotate_logfile|pg_switch_wal|pg_promote"
+    r"|pg_read\w*|pg_ls\w*|pg_stat_file|pg_stat_reset\w*|pg_notify|pg_logical\w*|pg_replication\w*|pg_create\w*|pg_drop\w*|pg_export\w*"
+    r"|lo_\w+|dblink\w*|set_config|setval|nextval|query_to_xml\w*|table_to_xml\w*|schema_to_xml\w*|database_to_xml\w*|cursor_to_xml|http\w*|send_?email|sendmail)\"?\s*\(",
+    re.I,
+)
+
+
+def check_guardrail(sql: str) -> str | None:
+    """None if this is exactly one query that only reads. Otherwise the reason it can't be a guardrail."""
+    try:
+        statements = [s for s in sqlglot.parse(sql, read="postgres") if s is not None]
+    except Exception as e:
+        return f"a guardrail has to parse as SQL: {str(e)[:160]}"
+    if len(statements) != 1:
+        return f"a guardrail has to be exactly one statement, and this is {len(statements)}"
+    root = statements[0]
+    if not isinstance(root, exp.Query):
+        return "a guardrail has to be a SELECT"
+    for node in root.walk():
+        if isinstance(node, GUARDRAIL_REFUSED_NODES):
+            return f"a guardrail may only read, and this contains {type(node).__name__.upper()}"
+    found = GUARDRAIL_REFUSED_FUNCTIONS.search(code_only(sql))
+    if found:
+        return f"a guardrail may not call {found.group(1)}"
+    return None
+
+
 def _finding(step: int, stmt: str, rule: str, severity: str, reason: str) -> dict:
     return {"step": step, "statement": stmt[:300], "rule": rule, "severity": severity, "reason": reason}
 
@@ -74,10 +110,25 @@ def _is_tautology(where: exp.Expression | None) -> bool:
     return False
 
 
+def code_only(stmt: str) -> str:
+    """The statement with its string contents blanked, so a word inside data is not read as a command."""
+    try:
+        tokens = Postgres().tokenize(stmt)
+    except Exception:
+        return stmt  # cannot tell code from data, so check everything
+    out = stmt
+    for tok in reversed(tokens):
+        if tok.token_type in (TokenType.STRING, TokenType.HEREDOC_STRING, TokenType.NATIONAL_STRING, TokenType.RAW_STRING, TokenType.UNICODE_STRING):
+            out = out[: tok.start] + "''" + out[tok.end + 1 :]
+    return out
+
+
 def check_sql_statement(step: int, stmt: str) -> tuple[list[dict], str]:
     findings: list[dict] = []
+    code = code_only(stmt)
     for pattern, rule, reason in BLOCK_COMMANDS:
-        if pattern.search(stmt):
+        # server_file_access has to see the literal: the path is what makes COPY dangerous.
+        if pattern.search(stmt if rule == "server_file_access" else code):
             findings.append(_finding(step, stmt, rule, "block", reason))
     if re.match(r"^\s*(copy|notify|listen)\b", stmt, re.I) and not any(f["severity"] == "block" for f in findings):
         findings.append(_finding(step, stmt, "side_effect", "review", "this statement has an effect outside the rehearsed tables"))
@@ -95,9 +146,9 @@ def check_sql_statement(step: int, stmt: str) -> tuple[list[dict], str]:
         elif name in SIDE_EFFECT_FUNCTIONS:
             findings.append(_finding(step, stmt, "side_effect", "review", f"{name}() has an effect outside the database that cannot be rehearsed"))
 
-    if re.match(r"^\s*(create\s+(or\s+replace\s+)?(constraint\s+)?(function|procedure|trigger|rule|event\s+trigger)\b|do\b|call\b)", stmt, re.I):
+    if re.match(r"^\s*(create\s+(or\s+replace\s+)?(constraint\s+)?(function|procedure|trigger|rule|event\s+trigger)\b|do\b|call\b)", code, re.I):
         findings.append(_finding(step, stmt, "executable_code", "high", "this adds or runs code the parser cannot follow, so it always goes to a person"))
-    if re.search(r"\balter\s+column\b[\s\S]*\btype\b", stmt, re.I) or re.search(r"\bset\s+data\s+type\b", stmt, re.I):
+    if re.search(r"\balter\s+column\b[\s\S]*\btype\b", code, re.I) or re.search(r"\bset\s+data\s+type\b", code, re.I):
         findings.append(_finding(step, stmt, "column_rewrite", "high", "changing a column's type can rewrite every row without firing a row trigger"))
 
     kind = READ
@@ -126,7 +177,7 @@ def check_sql_statement(step: int, stmt: str) -> tuple[list[dict], str]:
         if any(isinstance(a, exp.Drop) for a in actions) or re.search(r"\bdrop\s+(column|constraint)\b", stmt, re.I):
             kind = IRREVERSIBLE
             findings.append(_finding(step, stmt, "alter_drop", "high", "ALTER ... DROP removes a column or constraint"))
-        if re.search(r"\brename\b", stmt, re.I):
+        if re.search(r"\brename\b", code, re.I):
             findings.append(_finding(step, stmt, "alter_rename", "review", "a rename breaks anything that still uses the old name"))
     elif isinstance(tree, exp.Merge):
         kind = IRREVERSIBLE

@@ -1,0 +1,36 @@
+# Point Shadow Run at your own database. Set SHADOWRUN_TARGETS to this file's path and restart the control plane.
+# Start on a staging copy. The role below can write, and approved plans run as it.
+- id: my-app
+  name: My app, staging
+  connection:
+    host: db.example.internal
+    port: 5432
+    user: shadowrun          # owns the tables, or holds the rights your migrations need
+    password_env: MY_APP_DB_PASSWORD   # the password stays in the environment, never here
+    dbname: app
+    sslmode: require
+
+  # Each one returns rows only when the rule is broken. Pre-change data is readable as before.<table>.
+  # Leave this empty and press Draft guardrails on the Guardrails page to have the model propose some for an admin to accept.
+  guardrails:
+    - id: no_paid_invoice_lost
+      name: No paid invoice is lost
+      sql: |
+        SELECT b.id FROM before.invoices b LEFT JOIN invoices a ON a.id = b.id
+        WHERE b.status = 'paid' AND a.id IS NULL
+
+  # What a report should state in money or customers, before and after.
+  metrics:
+    - id: paid_invoices
+      name: Paid invoices on record
+      unit: usd
+      sql: SELECT coalesce(sum(amount_cents), 0) / 100.0 FROM invoices WHERE status = 'paid'
+
+  # Ordinary changes a learned rule has to let through, so a rule that stops normal work can't be adopted.
+  normal_work:
+    - UPDATE invoices SET note = 'checked' WHERE id = 1
+
+  # Leave auto_apply_scope out and every change waits for a person. That's the place to start.
+  budget:
+    max_rows_changed: 100
+    # auto_apply_scope: {feature_flags: [note]}

@@ -8,8 +8,10 @@ infra/.ssh/
 *.key
 var/
 
-# internal planning docs (competitive strategy; repo is public)
+# internal working notes
 docs/PLAN.md
+PROGRESS.md
+SCORECARD.md
 
 # python
 .venv/

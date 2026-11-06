@@ -1,0 +1,22 @@
+# Business numbers measured before and after every rehearsal. They decide nothing; they say what a
+# change is worth in the units a business cares about. Each is one SELECT returning one number.
+- id: paid_invoices
+  name: Paid invoices on record
+  unit: usd
+  sql: SELECT coalesce(sum(amount_cents), 0) / 100.0 FROM invoices WHERE status = 'paid'
+- id: order_value
+  name: Customer order history
+  unit: usd
+  sql: SELECT coalesce(sum(total_cents), 0) / 100.0 FROM orders
+- id: active_mrr
+  name: Active monthly recurring revenue
+  unit: usd
+  sql: SELECT coalesce(sum(mrr_cents), 0) / 100.0 FROM subscriptions WHERE status = 'active'
+- id: active_accounts
+  name: Active customer accounts
+  unit: count
+  sql: SELECT count(*) FROM accounts WHERE status = 'active'
+- id: live_users
+  name: Live users
+  unit: count
+  sql: SELECT count(*) FROM users WHERE deleted_at IS NULL

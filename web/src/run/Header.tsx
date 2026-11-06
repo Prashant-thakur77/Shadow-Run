@@ -5,6 +5,13 @@ import { isInProgress, statusInfo } from '../lib/status';
 import { Hash, Mark } from '../ui/bits';
 import { currentPlanHash, eventText, statusWord } from './derive';
 
+/** What a stopped apply left behind. Only said when the run shows it. */
+function afterRollback(run: Run): string {
+  if (run.apply?.restored === true) return 'The server was restored from its state archive.';
+  if (run.apply?.restored === false) return 'The server could not be restored from its state archive.';
+  return run.final?.report?.kind === 'host' ? '' : 'The transaction rolled back, so nothing from this plan is on prod.';
+}
+
 function statusLine(run: Run): string | null {
   switch (run.status) {
     case 'blocked':
@@ -12,16 +19,20 @@ function statusLine(run: Run): string | null {
     case 'error':
       return run.error ?? 'The run failed and gave no detail.';
     case 'awaiting_approval':
+      if (run.rehearse_only && run.final?.budget?.within) return "The rehearsal passed. This run was asked to rehearse only, so nothing reaches prod until someone approves it.";
       return run.can?.approve
-        ? 'The rehearsal passed. It is outside the budget, so your approval is needed.'
-        : 'The rehearsal passed. It is outside the budget, so a different person has to approve it.';
+        ? "The rehearsal passed. It can't apply alone, so your approval is needed."
+        : "The rehearsal passed. It can't apply alone, so a different person has to approve it.";
     case 'approved':
       return `Approved by ${run.approval?.approver_id ?? 'unknown'}. Not applied yet.`;
     case 'applied':
       return run.approval?.kind === 'auto_budget'
-        ? `Within the budget, so it was approved automatically. ${run.apply?.reason ?? ''}`.trim()
+        ? `On the auto-apply list and inside the budget, so it was approved automatically. ${run.apply?.reason ?? ''}`.trim()
         : (run.apply?.reason ?? null);
-    case 'rolled_back':
+    case 'rolled_back': {
+      const reason = (run.apply?.reason ?? '').replace(/\.$/, '');
+      return `${reason ? `${reason[0].toUpperCase()}${reason.slice(1)}. ` : ''}${afterRollback(run)}`.trim() || null;
+    }
     case 'drift_detected':
       return run.apply?.reason ?? null;
     case 'no_change':
@@ -87,6 +98,11 @@ export function RunHeader({ run }: { run: Run }) {
           </dd>
         </div>
       </dl>
+      {run.undo_of && (
+        <p className="muted runhead-again">
+          This run undoes <Link href={`/runs/${encodeURIComponent(run.undo_of)}`}>run {run.undo_of}</Link>. It goes through the same pipeline as any other plan.
+        </p>
+      )}
       {run.rehearses_again && (
         <p className="muted runhead-again">
           Same plan as <Link href={`/runs/${encodeURIComponent(run.rehearses_again)}`}>run {run.rehearses_again}</Link>, rehearsed again on a new snapshot.

@@ -55,6 +55,36 @@ def summary(run: dict) -> None:
         print(f"apply     {run['apply'].get('outcome')}: {run['apply'].get('reason')}")
 
 
+def markdown(run: dict) -> str:
+    """A pull request comment: what this migration really does, measured on a clone of prod."""
+    final = run.get("final") or {}
+    report = final.get("report") or {}
+    icon = {"applied": "Applied", "awaiting_approval": "Needs a person", "blocked": "Blocked", "no_change": "No change", "rolled_back": "Rolled back", "drift_detected": "Prod drifted"}.get(run["status"], run["status"])
+    url = os.environ.get("SHADOWRUN_URL", "").rstrip("/")
+    lines = [f"### Shadow Run: {icon}", "", f"Rehearsed on a disposable clone of prod in a microVM. [Full report]({url}/runs/{run['id']}), plan `{str(run.get('plan_hash'))[:12]}`.", ""]
+    if run.get("rehearse_only") and run.get("status") != "applied":
+        lines += ["This was a rehearsal only. Nothing reached prod.", ""]
+    if run.get("blocked_reason"):
+        lines += [f"**{run['blocked_reason']}**", ""]
+    sentences = report.get("sentences", [])
+    if sentences:
+        lines += ["| Measured by Postgres |", "| --- |"] + [f"| {s['text']} |" for s in sentences[:12]] + [""]
+    moved = [m for m in report.get("metrics", []) if m.get("before") != m.get("after")]
+    if moved:
+        lines += ["| Business metric | Before | After |", "| --- | ---: | ---: |"] + [f"| {m['name']} | {m['before']} | {m['after']} |" for m in moved] + [""]
+    failed = [g for g in final.get("guardrails", []) if not g.get("passed")]
+    guardrails = final.get("guardrails", [])
+    if guardrails:
+        lines += [f"Guardrails: {len(guardrails) - len(failed)} of {len(guardrails)} passed."] + [f"- Failed: {g['name']}" for g in failed] + [""]
+    findings = (final.get("gate") or {}).get("findings", [])
+    if findings:
+        lines += ["Static gate:"] + [f"- `{f['rule']}`: {f['reason']}" for f in findings[:8]] + [""]
+    undo = final.get("undo") or {}
+    if undo.get("verified"):
+        lines += ["Undo plan generated and proved on the clone.", ""]
+    return "\n".join(lines)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="shadowrun", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -64,6 +94,8 @@ def main() -> int:
     r.add_argument("plan", help=".sql or .sh file, or - for stdin")
     r.add_argument("--target", default="demo-saas")
     r.add_argument("--json", action="store_true")
+    r.add_argument("--markdown", action="store_true", help="print a pull request comment")
+    r.add_argument("--rehearse-only", action="store_true", help="never apply by itself, even inside the auto-apply list. Use this in CI.")
     t = sub.add_parser("task", help="give the built-in agent a task in plain English")
     t.add_argument("text")
     t.add_argument("--target", default="demo-saas")
@@ -92,11 +124,13 @@ def main() -> int:
         return {"pass": 0, "review": 2, "block": 3}[out["gate"]["verdict"]]
     if args.cmd in ("rehearse", "task"):
         body = {"target_id": args.target, "source": "cli"}
-        body.update({"steps": steps_from(args.plan)} if args.cmd == "rehearse" else {"task": args.text})
+        body.update({"steps": steps_from(args.plan), "rehearse_only": args.rehearse_only} if args.cmd == "rehearse" else {"task": args.text})
         run_id = c.post("/api/runs", json=body).raise_for_status().json()["id"]
         run = wait(c, run_id)
         if getattr(args, "json", False):
             print(json.dumps(run, indent=1))
+        elif getattr(args, "markdown", False):
+            print(markdown(run))
         else:
             summary(run)
         return EXIT.get(run["status"], 1)

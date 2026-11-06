@@ -182,8 +182,15 @@ def verify_before(cur, digests: dict[str, tuple]) -> str | None:
     return None
 
 
+def reads_only_by_its_first_word(sql: str) -> bool:
+    """Runs before any text reaches the database, here and on prod. COMMIT is one statement, and read-only mode allows it."""
+    text = re.sub(r"--[^\n]*|/\*.*?\*/", " ", sql, flags=re.S).lstrip(" \t\r\n(")
+    return re.match(r"(select|with)\b", text, re.I) is not None
+
+
 def run_guardrails(cur, guardrails: list[dict]) -> list[dict]:
-    """A guardrail is frozen SQL that must return 0 rows. Runs inside the plan's transaction."""
+    """A guardrail is frozen SQL that must return 0 rows. Runs inside the plan's transaction, and can't change it:
+    Postgres enforces read-only for its savepoint, whatever its text says, and that savepoint is always rolled back."""
     results = []
     # pg_catalog first: a plan must not be able to shadow sum() or count() with its own function.
     cur.execute("SET LOCAL search_path = pg_catalog, public, pg_temp")
@@ -192,7 +199,11 @@ def run_guardrails(cur, guardrails: list[dict]) -> list[dict]:
         item: dict[str, Any] = {"id": g["id"], "name": g.get("name", g["id"])}
         cur.execute("SAVEPOINT sr_guardrail")
         try:
-            cur.execute(rewrite_before(g["sql"]))
+            if not reads_only_by_its_first_word(g["sql"]):
+                raise ValueError("a guardrail has to be a SELECT")
+            cur.execute("SET TRANSACTION READ ONLY")
+            # binary=True uses the extended protocol, which refuses more than one statement.
+            cur.execute(rewrite_before(g["sql"]), binary=True)
             rows = cur.fetchmany(6)
             cols = [d.name for d in cur.description] if cur.description else []
             item.update(
@@ -200,10 +211,11 @@ def run_guardrails(cur, guardrails: list[dict]) -> list[dict]:
                 violations=[dict(zip(cols, [_plain(v) for v in r])) for r in rows[:5]],
                 violation_count_capped=len(rows),
             )
-            cur.execute("RELEASE SAVEPOINT sr_guardrail")
         except Exception as e:  # a guardrail that cannot run counts as failed, never as passed
-            cur.execute("ROLLBACK TO SAVEPOINT sr_guardrail")
             item.update(passed=False, violations=[], error=_oneline(e))
+        finally:
+            cur.execute("ROLLBACK TO SAVEPOINT sr_guardrail")
+            cur.execute("RELEASE SAVEPOINT sr_guardrail")
         item["ms"] = round((time.perf_counter() - t0) * 1000, 1)
         results.append(item)
     return results

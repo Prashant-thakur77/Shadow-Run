@@ -31,8 +31,10 @@ def main() -> int:
         seen = len(doc["attacks"])
     print(json.dumps({k: doc.get(k) for k in ("status", "contained", "total", "prod_unchanged", "prod_before", "prod_after", "error")}, indent=1))
     print("wall two:", json.dumps(doc.get("wall_two"))[:900])
+    doc["url"] = url
     (ROOT / "bench" / "redteam.json").write_text(json.dumps(doc, indent=2) + "\n")
-    return 0 if doc.get("contained") == doc.get("total") and doc.get("prod_unchanged") else 1
+    wall_two_held = (doc.get("wall_two") or {}).get("contained") is True
+    return 0 if doc.get("contained") == doc.get("total") and doc.get("prod_unchanged") and wall_two_held else 1
 
 
 if __name__ == "__main__":

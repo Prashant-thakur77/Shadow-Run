@@ -32,12 +32,10 @@ async function withPage(id, user, fn) {
   let token = null;
   let trim = 0;
   if (user) {
-    // The real sign-in page, with both demo passwords, so switching identity is one click.
+    // The way a judge gets in: the guest button holds both demo identities, so switching is one click.
     await page.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => { document.documentElement.style.zoom = '1.25'; }); });
     await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
-    await page.getByLabel('Password for judge').fill(env.SHADOWRUN_JUDGE_PASSWORD);
-    await page.getByLabel('Password for reviewer').fill(env.SHADOWRUN_REVIEWER_PASSWORD);
-    await page.getByRole('button', { name: 'Sign in as judge' }).click();
+    await page.getByRole('button', { name: 'Continue as guest' }).click();
     await page.getByRole('heading', { name: 'Give the agent a task' }).waitFor();
     token = await apiLogin('judge');
     await page.waitForTimeout(300);
@@ -126,6 +124,7 @@ const stories = {
   async blast() {
     const id = fs.readFileSync(path.join(OUT, 'run-id.txt'), 'utf8').trim();
     await withPage('blast', 'judge', async (page, token) => {
+      const begun = Date.now();
       for (let i = 0; i < 240; i++) {
         const j = await api(page.request, 'get', `/api/runs/${id}`, token);
         if (DONE.includes(j.status)) break;
@@ -135,13 +134,15 @@ const stories = {
       await page.waitForTimeout(1500);
       await page.getByRole('button', { name: /^Attempt 1/ }).first().click();
       await page.waitForTimeout(600);
-      await goTo(page, page.locator('h2', { hasText: 'Blast radius' }).first());
-      await sleep(secs('blast') * 450);
+      const skip = (Date.now() - begun) / 1000 - 0.3;
+      await goTo(page, page.locator('h2', { hasText: 'Without and with' }).first()).catch(() => {});
+      await sleep(secs('blast') * 400);
       const graph = page.locator('.react-flow').first();
       if (await graph.count()) { await graph.waitFor({ timeout: 8000 }).catch(() => {}); await goTo(page, graph, -40); }
-      await sleep(secs('blast') * 450);
+      await sleep(secs('blast') * 300);
       await goTo(page, page.locator('h2', { hasText: 'Guardrails' }).first());
-      await sleep(secs('blast') * 500 + 400);
+      await sleep(secs('blast') * 300 + 400);
+      return skip;
     });
   },
   async retry() {
@@ -169,6 +170,8 @@ const stories = {
         await page.evaluate(([h, t]) => window.scrollTo({ top: ((t % 30000) / 30000) * h * 0.75, behavior: 'smooth' }), [n, Date.now() - started]);
       }
       await sleep(1200);
+      const latest = await page.evaluate(async () => (await (await fetch('/api/redteam?limit=1', { credentials: 'include' })).json())[0]);
+      if (!latest?.wall_two?.contained && !process.env.VIDEO_DRY_RUN) throw new Error('the second wall did not hold, so this scene cannot be recorded');
       await goTo(page, page.getByText(/Prod untouched/).locator('visible=true').first(), -120);
       await sleep(7000);
     });
@@ -222,10 +225,91 @@ const stories = {
       await tryBreak(page, 'Now apply, drift check off');
       const rolled = page.getByText('Rolled back', { exact: true }).locator('visible=true').first();
       await rolled.waitFor({ timeout: 60000 });
-      await rolled.scrollIntoViewIfNeeded();
-      await page.evaluate(() => window.scrollBy(0, 60));
-      await sleep(5000);
+      await page.waitForTimeout(600);
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+      await sleep(6000);
       return skip;
+    });
+  },
+  async undo() {
+    await withPage('undo', 'judge', async (page, token) => {
+      const begun = Date.now();
+      await api(page.request, 'post', '/api/demo/reset', token);
+      const before = (await api(page.request, 'get', '/api/prod-checksum', token)).digest;
+      const made = await api(page.request, 'post', '/api/runs', token, { steps: [{ type: 'sql', cmd: "UPDATE users SET status = 'suspended' WHERE last_login_at < now() - interval '700 days'" }], source: 'api' });
+      let run;
+      for (let i = 0; i < 120; i++) {
+        run = await api(page.request, 'get', `/api/runs/${made.id}`, token);
+        if (DONE.includes(run.status)) break;
+        await sleep(800);
+      }
+      const c = run.challenge;
+      await api(page.request, 'post', `/api/runs/${made.id}/approve`, await apiLogin('reviewer'), { plan_hash: c.plan_hash, guardrails_hash: c.guardrails_hash, report_hash: c.report_hash, nonce: c.nonce });
+      await api(page.request, 'post', `/api/runs/${made.id}/apply`, token);
+      for (let i = 0; i < 120; i++) {
+        run = await api(page.request, 'get', `/api/runs/${made.id}`, token);
+        if (DONE.includes(run.status) && run.status !== 'approved') break;
+        await sleep(800);
+      }
+      await page.goto(`${BASE}/runs/${made.id}`);
+      await page.waitForTimeout(1500);
+      const skip = (Date.now() - begun) / 1000 - 0.5;
+      const undo = page.getByRole('button', { name: 'Undo this change' });
+      await undo.waitFor({ timeout: 15000 });
+      await undo.scrollIntoViewIfNeeded();
+      await page.evaluate(() => window.scrollBy(0, 200));
+      await page.waitForTimeout(2500);
+      await undo.click();
+      await page.waitForURL(u => !u.toString().includes(made.id), { timeout: 30000 }).catch(() => {});
+      const undoId = page.url().split('/runs/')[1];
+      for (let i = 0; i < 180; i++) {
+        const j = await api(page.request, 'get', `/api/runs/${undoId}`, token);
+        if (j.status === 'awaiting_approval') {
+          const ch = j.challenge;
+          await api(page.request, 'post', `/api/runs/${undoId}/approve`, await apiLogin('reviewer'), { plan_hash: ch.plan_hash, guardrails_hash: ch.guardrails_hash, report_hash: ch.report_hash, nonce: ch.nonce });
+          await api(page.request, 'post', `/api/runs/${undoId}/apply`, token);
+        }
+        if (j.status === 'applied') break;
+        await sleep(800);
+      }
+      const after = (await api(page.request, 'get', '/api/prod-checksum', token)).digest;
+      if (after !== before) throw new Error(`undo did not restore prod: ${before} -> ${after}`);
+      fs.writeFileSync(path.join(OUT, 'undo-proof.txt'), `${before} ${after}\n`);
+      await page.reload();
+      await page.waitForTimeout(1800);
+      await sleep(3500);
+      return skip;
+    });
+  },
+  async incidents() {
+    await withPage('incidents', 'judge', async (page, token) => {
+      await api(page.request, 'post', '/api/demo/reset', token);
+      await page.goto(BASE + '/incidents');
+      await page.waitForTimeout(1200);
+      const row = page.locator('.incident', { hasText: 'SaaStr' }).first();
+      await row.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(1500);
+      await row.getByRole('button', { name: 'Replay on a clone' }).click();
+      await page.waitForURL(/\/runs\//, { timeout: 30000 });
+      const id = page.url().split('/runs/')[1];
+      for (let i = 0; i < 120; i++) {
+        const j = await api(page.request, 'get', `/api/runs/${id}`, token);
+        if (DONE.includes(j.status)) break;
+        await sleep(800);
+      }
+      await page.waitForTimeout(1500);
+      await page.evaluate(() => window.scrollTo({ top: 0 }));
+      await sleep(5000);
+    });
+  },
+  async gauntlet() {
+    await withPage('gauntlet', 'judge', async page => {
+      await page.goto(`${BASE}/guardrails`);
+      await page.waitForTimeout(1200);
+      await goTo(page, page.locator('.gt-published').first(), -120);
+      await sleep(secs('gauntlet') * 700);
+      await goTo(page, page.locator('.gt-round').first(), -100);
+      await sleep(secs('gauntlet') * 300 + 400);
     });
   },
   async mcp() {
@@ -241,9 +325,16 @@ const stories = {
     await withPage('mcp', null, async page => {
       await page.setContent(`<!doctype html><html><body style="margin:0;background:#0b0c0d;color:#efece6;font:21px/1.5 ui-monospace,Menlo,Consolas,monospace"><div style="position:fixed;top:0;left:0;right:0;background:#1c1e20;padding:12px 26px;color:#c9c6bf">opencode run, model vultr/qwen3.8-27b, MCP server: shadowrun. Recorded session, from docs/evidence/opencode-session.md</div><div id="s" style="padding:70px 34px 60px">${body}</div></body></html>`);
       const total = secs('mcp') * 1000;
-      const h = await page.evaluate(() => document.body.scrollHeight - window.innerHeight);
-      const t0 = Date.now();
-      while (Date.now() - t0 < total) { await page.evaluate(y => window.scrollTo(0, y), h * (Date.now() - t0) / total); await sleep(50); }
+      const beats = [/^Result: `?blocked/i, /^- measured/i, /awaiting_approval|waiting for a person/i];
+      const tops = await page.evaluate(patterns => {
+        const lines = [...document.querySelectorAll('div')].filter(d => !d.children.length);
+        return patterns.map(p => { const hit = lines.find(l => new RegExp(p.source, p.flags).test(l.textContent)); return hit ? hit.getBoundingClientRect().top + window.scrollY - 200 : null; });
+      }, beats.map(r => ({ source: r.source, flags: r.flags })));
+      const stops = tops.filter(t => t !== null);
+      for (const top of stops.length ? stops : [0]) {
+        await page.evaluate(y => window.scrollTo(0, y), top);
+        await sleep(total / Math.max(1, stops.length));
+      }
       await sleep(600);
     });
   },
@@ -256,9 +347,21 @@ const stories = {
   },
   async close() {
     const svg = fs.readFileSync(path.join(ROOT, 'docs/architecture.svg'), 'utf8');
+    const state = JSON.parse(fs.readFileSync(path.join(ROOT, 'infra/STATE.json'), 'utf8'));
+    const resultsPath = path.join(ROOT, 'bench/results.json');
+    const r = fs.existsSync(resultsPath) ? JSON.parse(fs.readFileSync(resultsPath, 'utf8')) : null;
+    const h = r && r.status === 'measured' ? r.heldout : null;
+    const headline = h
+      ? `<div style="font-size:64px;font-weight:700;line-height:1.1">Harm on ${h.direct.risky_tasks} held-out risky tasks</div>
+         <div style="font-size:40px;margin-top:24px;color:#c9c6bf">Agent directly <b style="color:#ef6a5a">${h.direct.harm_on_prod.mean}</b> &nbsp; Static gate <b style="color:#ef6a5a">${h.static_gate.harm_on_prod.mean}</b> &nbsp; Shadow Run <b style="color:#7fd1b9">${h.shadow_run.harm_on_prod.mean}</b></div>`
+      : '<div style="font-size:72px;font-weight:700">Let it break a clone first.</div>';
     await withPage('close', null, async page => {
       await page.setContent(`<!doctype html><html><body style="margin:0;background:#fff;display:flex;align-items:center;justify-content:center;height:100vh"><div style="width:1500px">${svg}</div></body></html>`);
-      await sleep(secs('close') * 1000 + 400);
+      await sleep(secs('close') * 450);
+      await page.setContent(card(`${headline}
+        <div style="font-size:34px;margin-top:56px;font-family:ui-monospace,Menlo,Consolas,monospace;color:#7fd1b9">${state.public_url || ''}</div>
+        <div style="font-size:30px;margin-top:16px;font-family:ui-monospace,Menlo,Consolas,monospace;color:#9a9a93">github.com/Prashant-thakur77/Shadow-Run</div>`));
+      await sleep(secs('close') * 550 + 400);
     });
   },
 };

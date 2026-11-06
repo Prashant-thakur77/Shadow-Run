@@ -209,15 +209,224 @@ def cascade_paths(cur) -> list[dict]:
     ]
 
 
+UNDO_MAX_ROWS = 50_000
+UNDO_MAX_RETURN_BYTES = 3_000_000
+
+
+def table_order(tables: set[str], foreign_keys: list[dict]) -> list[str]:
+    """Parents before children, so rows can be put back without breaking a foreign key."""
+    short = lambda n: n.split(".")[-1].strip('"')  # noqa: E731
+    parents: dict[str, set[str]] = {t: set() for t in tables}
+    for fk in foreign_keys:
+        child, parent = short(fk["child"]), short(fk["parent"])
+        if child in parents and parent in parents and child != parent:
+            parents[child].add(parent)
+    ordered: list[str] = []
+    remaining = dict(parents)
+    while remaining:
+        ready = sorted(t for t, ps in remaining.items() if not (ps & set(remaining)))
+        if not ready:  # a cycle: any order, and the verification below will say if it failed
+            ready = sorted(remaining)
+        for t in ready:
+            ordered.append(t)
+            remaining.pop(t)
+    return ordered
+
+
+def _dollar_quote(text: str) -> str:
+    tag = "sr"
+    while f"${tag}$" in text:
+        tag += "x"
+    return f"${tag}${text}${tag}$"
+
+
+def additive_schema_undo(report: dict) -> tuple[list[str], set[str], str | None]:
+    """Statements that remove what the plan added, the tables it created, or a reason it can't be reversed.
+
+    Adding is reversible: drop what was added. Changing or removing part of the schema is not, because
+    the old definition and its data are gone, so those go to a person and the pre-apply backup.
+    """
+    q = txrun.quote_ident
+    created = set()
+    for d in report.get("ddl", []):
+        if d["tag"] in ("CREATE TABLE", "CREATE TABLE AS", "SELECT INTO"):
+            created.add((d.get("identity") or "").split(".")[-1].strip('"'))
+    constraints, indexes, columns = [], [], []
+    for d in report.get("schema_diff", []):
+        if d["change"] != "added":
+            return [], created, f"the plan changes or removes {d['kind']} {d['name']}, so reversing it needs a person; the pre-apply backup covers this"
+        table, _, item = d["name"].rpartition(".")
+        table = table.split(".")[-1].strip('"')
+        if d["kind"] in ("trigger", "function", "rule", "view"):
+            return [], created, f"the plan adds a {d['kind']}, so reversing it needs a person"
+        if table in created:
+            continue  # goes with its table
+        if d["kind"] == "constraint":
+            constraints.append(f"ALTER TABLE public.{q(table)} DROP CONSTRAINT {q(item)}")
+        elif d["kind"] == "index":
+            indexes.append(f"DROP INDEX public.{q(item)}")
+        elif d["kind"] == "column":
+            columns.append(f"ALTER TABLE public.{q(table)} DROP COLUMN {q(item)}")
+    drops = [f"DROP TABLE public.{q(t)}" for t in sorted(created)]
+    return constraints + indexes + columns + drops, created, None
+
+
+def make_undo(cur, report: dict, before_schema: list) -> tuple[dict, list[str] | None]:
+    """Write the exact inverse of what the plan did, run it on this clone, and check everything came back.
+
+    Rows come from what Postgres logged, so the undo covers cascades the plan never named. It is only
+    "verified" if the content of every touched table, and the schema, return to their state from before.
+    """
+    schema_steps, created, why = additive_schema_undo(report)
+    if why:
+        return {"possible": False, "why": why}, None
+    cur.execute("SELECT DISTINCT tbl, op FROM shadow.changes")
+    pairs = [(t, op) for t, op in cur.fetchall() if t not in created]
+    if not pairs and not schema_steps:
+        return {"possible": False, "why": "the plan changed nothing"}, None
+    if any(op == "TRUNCATE" for _, op in pairs):
+        return {"possible": False, "why": "TRUNCATE records no rows, so only the pre-apply backup can reverse it"}, None
+    tables = {t for t, _ in pairs}
+    cur.execute(
+        """SELECT c.relname, a.attname FROM pg_index i
+           JOIN pg_class c ON c.oid = i.indrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+           JOIN unnest(i.indkey) WITH ORDINALITY k(attnum, ord) ON true
+           JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum
+           WHERE i.indisprimary AND n.nspname = 'public' ORDER BY c.relname, k.ord"""
+    )
+    pks: dict[str, list[str]] = {}
+    for table, column in cur.fetchall():
+        pks.setdefault(table, []).append(column)
+    missing = sorted(t for t in tables if t not in pks)
+    if missing:
+        return {"possible": False, "why": f"no primary key on {', '.join(missing)}, so its rows cannot be addressed exactly"}, None
+    cur.execute("SELECT count(*) FROM shadow.changes")
+    if cur.fetchone()[0] > UNDO_MAX_ROWS:
+        return {"possible": False, "why": f"more than {UNDO_MAX_ROWS} row changes; use the pre-apply backup"}, None
+
+    # Net effect per row: its first old value and its last new value, as raw JSON text so numbers stay exact.
+    cur.execute("SELECT tbl, op, old_row::text, new_row::text FROM shadow.changes ORDER BY seq")
+    first_old: dict[tuple, str | None] = {}
+    last_new: dict[tuple, str | None] = {}
+    for table, op, old_text, new_text in cur.fetchall():
+        if table in created:
+            continue  # the whole table goes
+        old, new = json.loads(old_text) if old_text else None, json.loads(new_text) if new_text else None
+        key_from = old if old is not None else new
+        key = (table, tuple(json.dumps(key_from.get(c), sort_keys=True) for c in pks[table]))
+        if old is not None and new is not None and any(old.get(c) != new.get(c) for c in pks[table]):
+            return {"possible": False, "why": f"the plan changes a primary key on {table}"}, None
+        if key not in first_old:
+            first_old[key] = old_text
+        last_new[key] = new_text
+
+    restore: dict[str, list[str]] = {}
+    revert: dict[str, list[str]] = {}
+    remove: dict[str, list[str]] = {}
+    for key, old_text in first_old.items():
+        table, new_text = key[0], last_new[key]
+        if old_text and not new_text:
+            restore.setdefault(table, []).append(old_text)
+        elif old_text and new_text and old_text != new_text:
+            revert.setdefault(table, []).append(old_text)
+        elif new_text and not old_text:
+            remove.setdefault(table, []).append(new_text)
+
+    cur.execute(
+        """SELECT table_name, column_name FROM information_schema.columns
+           WHERE table_schema = 'public' AND is_generated = 'NEVER' ORDER BY table_name, ordinal_position"""
+    )
+    writable: dict[str, list[str]] = {}
+    for table, column in cur.fetchall():
+        writable.setdefault(table, []).append(column)
+
+    cur.execute(
+        """SELECT DISTINCT table_name FROM information_schema.columns
+           WHERE table_schema = 'public' AND is_identity = 'YES' AND identity_generation = 'ALWAYS'"""
+    )
+    always_identity = {r[0] for r in cur.fetchall()}
+
+    q = txrun.quote_ident
+    order = table_order(tables, report.get("foreign_keys", []))
+    statements: list[str] = []
+    for t in order:  # deleted rows back, parents first
+        if restore.get(t):
+            cols = ", ".join(q(c) for c in writable[t])
+            override = " OVERRIDING SYSTEM VALUE" if t in always_identity else ""
+            statements.append(f"INSERT INTO public.{q(t)} ({cols}){override} SELECT {cols} FROM jsonb_populate_recordset(NULL::public.{q(t)}, {_dollar_quote('[' + ','.join(restore[t]) + ']')}::jsonb)")
+    for t in order:  # then changed rows, which may point at the rows just restored
+        if revert.get(t):
+            sets = ", ".join(f"{q(c)} = r.{q(c)}" for c in writable[t] if c not in pks[t])
+            match = " AND ".join(f"x.{q(c)} = r.{q(c)}" for c in pks[t])
+            statements.append(f"UPDATE public.{q(t)} AS x SET {sets} FROM jsonb_populate_recordset(NULL::public.{q(t)}, {_dollar_quote('[' + ','.join(revert[t]) + ']')}::jsonb) AS r WHERE {match}")
+    for t in reversed(order):  # new rows out, children first
+        if remove.get(t):
+            match = " AND ".join(f"x.{q(c)} = r.{q(c)}" for c in pks[t])
+            statements.append(f"DELETE FROM public.{q(t)} AS x USING jsonb_populate_recordset(NULL::public.{q(t)}, {_dollar_quote('[' + ','.join(remove[t]) + ']')}::jsonb) AS r WHERE {match}")
+
+    statements += schema_steps
+    counts = {"rows_restored": sum(map(len, restore.values())), "rows_reverted": sum(map(len, revert.values())), "rows_removed": sum(map(len, remove.values())), "schema_steps": len(schema_steps)}
+    verified, detail = verify_undo(cur, statements, tables, before_schema)
+    size = sum(len(x) for x in statements)
+    summary = {"possible": True, "verified": verified, "detail": detail, "statements": len(statements), "bytes": size, **counts}
+    if size > UNDO_MAX_RETURN_BYTES:
+        summary["too_large_to_store"] = True
+        return summary, None
+    return summary, statements
+
+
+def verify_undo(cur, statements: list[str], tables: set[str], before_schema: list) -> tuple[bool, str]:
+    """Run the undo as the plan's own role, then compare content and schema against before the plan."""
+    try:
+        with open(CONTENT_BEFORE) as f:
+            before = json.load(f)
+    except OSError:
+        return False, "no content baseline in this clone"
+    conn = agent_conn()
+    try:
+        ucur = conn.cursor()
+        for stmt in statements:
+            ucur.execute(stmt)
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return False, f"the undo failed on the clone: {txrun._oneline(e)}"
+    finally:
+        conn.close()
+    columns = {t: before["columns"][t] for t in tables if t in before["columns"]}
+    now = txrun.content_hashes(cur, columns)
+    differs = sorted(t for t in columns if now[t] != before["hashes"].get(t))
+    if differs:
+        return False, "after running the undo these tables still differ: " + ", ".join(differs)
+    if txrun.sha256_json(txrun.schema_state(cur)) != txrun.sha256_json(before_schema):
+        return False, "after running the undo the schema still differs"
+    return True, f"after the undo, the content of {len(columns)} touched table(s) and the schema matched their state from before the plan"
+
+
+def eval_metrics(cur, metrics: list[dict]) -> dict:
+    """One number per business metric. A metric that can no longer run, say its table is gone, is None."""
+    out: dict = {}
+    for m in metrics:
+        try:
+            cur.execute(m["sql"])
+            row = cur.fetchone()
+            out[m["id"]] = float(row[0]) if row and row[0] is not None else None
+        except Exception:
+            out[m["id"]] = None
+    return out
+
+
 def op_rehearse(job: dict) -> dict:
     timing: dict = {"postgres_start_ms": start_postgres()["ms"]}
     steps = job["steps"]
     guardrails = job.get("guardrails", [])
+    metrics = job.get("metrics", [])
     sup = super_conn()
     scur = sup.cursor()
     scur.execute("UPDATE shadow.ctl SET step = 0")
     before_counts = txrun.table_counts(scur)
     before_schema = txrun.schema_state(scur)
+    metrics_before = eval_metrics(scur, metrics)
 
     conn = agent_conn()
     cur = conn.cursor()
@@ -253,8 +462,24 @@ def op_rehearse(job: dict) -> dict:
     t0 = time.perf_counter()
     report = collect(scur, before_counts, before_schema, committed, counts)
     timing["collect_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+    metrics_after = eval_metrics(scur, metrics)
+    measured = [
+        {"id": m["id"], "name": m.get("name", m["id"]), "unit": m.get("unit", "count"), "before": metrics_before.get(m["id"]), "after": metrics_after.get(m["id"])}
+        for m in metrics
+    ]
+    undo, undo_statements = {"possible": False, "why": "the plan did not complete"}, None
+    if committed and job.get("undo", True):
+        t0 = time.perf_counter()
+        if any(not g.get("passed") for g in guardrail_results):
+            undo = {"possible": False, "why": "not generated, because the plan failed a guardrail"}
+        else:
+            undo, undo_statements = make_undo(scur, report, before_schema)
+        timing["undo_ms"] = round((time.perf_counter() - t0) * 1000, 1)
     sup.close()
     return {
+        "metrics": measured,
+        "undo": undo,
+        "undo_statements": undo_statements,
         "ok": error is None,
         "error": error,
         "steps": step_results,
@@ -352,6 +577,16 @@ def collect(cur, before_counts: dict, before_schema: list, committed: bool, coun
     cur.execute("SELECT step, tag, object_type, identity FROM shadow.ddl ORDER BY seq")
     ddl = [dict(zip(("step", "tag", "object_type", "identity"), r)) for r in cur.fetchall()]
 
+    # Which columns really changed, row by row. A row count can't tell a typo fix from a rewritten price.
+    cur.execute(
+        """SELECT c.tbl, e.key, count(*) FROM shadow.changes c CROSS JOIN LATERAL jsonb_each(c.new_row) e
+           WHERE c.op = 'UPDATE' AND (c.old_row -> e.key) IS DISTINCT FROM e.value
+           GROUP BY 1, 2 ORDER BY 1, 3 DESC, 2"""
+    )
+    changed_columns: dict = {}
+    for tbl, col, n in cur.fetchall():
+        changed_columns.setdefault(tbl, {})[col] = n
+
     after_counts = txrun.table_counts(cur)
     after_schema = txrun.schema_state(cur)
     unlogged = unlogged_changes(cur, changes) if ddl else []
@@ -368,6 +603,7 @@ def collect(cur, before_counts: dict, before_schema: list, committed: bool, coun
     return {
         "capture_gaps": capture_gaps(changes, counts),
         "changes": changes,
+        "changed_columns": changed_columns,
         "samples": samples,
         "ddl": ddl,
         "table_rows_before": before_counts,
