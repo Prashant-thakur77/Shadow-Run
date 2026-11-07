@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { Attempt } from '../api/types';
 import { bytes, ms, num } from '../lib/format';
 import { Mark, Tag } from '../ui/bits';
+import { plainNetwork } from '../ui/Figure';
 
 function Checkpoint({ n, title, ok, children }: { n: number; title: string; ok: boolean | undefined; children: ReactNode }) {
   const tone = ok === true ? 'good' : ok === false ? 'bad' : 'neutral';
@@ -221,7 +222,7 @@ export function RunRecordSection({ attempt }: { attempt: Attempt | null }) {
 
       <dl className="kvs kvs-inline record-extra">
         <Kv k="Limits">
-          {num(limits.cpus)} CPUs, {num(limits.memory_mib)} MiB, {num(limits.max_duration_s)} s cap, network {limits.network ?? 'unknown'}
+          {num(limits.cpus)} CPUs, {num(limits.memory_mib)} MiB, {num(limits.max_duration_s)} s cap, network {plainNetwork(limits.network ?? 'unknown')}
         </Kv>
         <Kv k="Secret scan">
           <span className={scan.ok === false ? 'tone-bad-text' : undefined}>

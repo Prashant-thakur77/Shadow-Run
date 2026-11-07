@@ -311,9 +311,10 @@ class Service:
             run["blocked_reason"] = {
                 "blocked_by_gate": "The static gate refused the plan.",
                 "failed_guardrails": "A guardrail failed on the clone. Guardrails are frozen and cannot be approved past.",
+                "evaded_rule": "The plan passed the guardrails only by getting around a rule it had broken, so it can't be approved. A person can still submit their own plan.",
                 "sql_error": f"The plan failed on the clone: {final.get('error')}",
                 "sandbox_error": f"The sandbox failed, and unknown is not safe: {final.get('error')}",
-                "invalid_plan": f"The agent did not produce a valid plan: {final.get('error')}",
+                "invalid_plan": f"The agent did not produce a valid plan: {final.get('error')}" if (final.get("plan") or {}).get("steps") else "The agent wrote no plan, so there is nothing to approve.",
             }.get(verdict, str(verdict))
             run["plan_hash"] = final.get("plan_hash")
             self.event(run, "run_blocked", {"reason": verdict, "attempts": len(run["attempts"])})

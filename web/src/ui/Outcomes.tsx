@@ -165,18 +165,35 @@ export function Outcomes({ total, modes, aside, showRuns = false }: { total: num
 }
 
 /** Answers the obvious objection from the same numbers, and says plainly what happens with nobody there. */
-export function HoldQueueAnswer({ total, modes, harmAlone, held, question = true }: { total: number | null | undefined; modes: OutcomeMode[]; harmAlone: number | null | undefined; held: number | null | undefined; question?: boolean }) {
+export function HoldQueueAnswer({
+  total,
+  modes,
+  harmAlone,
+  held,
+  question = true,
+  doneIsClear = false,
+}: {
+  total: number | null | undefined;
+  modes: OutcomeMode[];
+  harmAlone: number | null | undefined;
+  held: number | null | undefined;
+  question?: boolean;
+  /** Only bench/stats.py's paired test over tasks may say more work got done. Without it, the page doesn't. */
+  doneIsClear?: boolean;
+}) {
   const agent = modes[0];
   const unread = modes[modes.length - 1];
-  const answers = question && finishesMore(modes) && isNum(agent?.harm?.mean) && isNum(unread?.harm?.mean);
+  const answers = question && isNum(agent?.harm?.mean) && isNum(unread?.harm?.mean) && unread.harm!.mean! < agent.harm!.mean!;
+  const more = doneIsClear && finishesMore(modes);
   return (
     <>
       {answers && (
         <div className="oc-answer">
           <h3 className="t-h3">Isn't this just a hold queue?</h3>
-          <p>A queue can cut harm by holding everything. It can't finish more work.</p>
+          <p>{more ? "A queue can cut harm by holding everything. It can't finish more work." : 'A queue approved unread lets every plan through exactly as the agent wrote it.'}</p>
           <p>
-            Approve everything unread in a plain queue and you get the agent's own plans: <span className="mono">{num(agent.done?.mean)}</span> done, <span className="mono">{num(agent.harm?.mean)}</span> harmful. Here the same approvals give <span className="mono">{num(unread.done?.mean)}</span> and <span className="mono">{num(unread.harm?.mean)}</span>, because the agent saw the damage on a clone and rewrote its plan first.
+            Approve everything unread in a plain queue and you get the agent's own plans: <span className="mono">{num(agent.done?.mean)}</span> done, <span className="mono">{num(agent.harm?.mean)}</span> harmful. Here the same approvals give <span className="mono">{num(unread.done?.mean)}</span> and <span className="mono">{num(unread.harm?.mean)}</span>, because a plan that broke a rule on the clone went back to the agent first.
+            {more ? '' : ' The drop in harm holds up task by task. The rise in work done could be chance at this sample.'}
           </p>
         </div>
       )}

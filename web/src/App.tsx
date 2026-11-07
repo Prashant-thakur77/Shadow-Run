@@ -3,12 +3,13 @@ import { api, errorText } from './api/client';
 import type { Health, ProdChecksum } from './api/types';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { short } from './lib/format';
-import { Link, RouterProvider, useLocation } from './lib/router';
+import { Link, navigate, RouterProvider, useLocation } from './lib/router';
 import { currentTarget } from './lib/target';
 import { useTheme } from './lib/theme';
 import { useAsync } from './lib/useAsync';
 import { SignInPage } from './pages/SignIn';
 import { Boundary, Loading, Mark } from './ui/bits';
+import { ReseedButton } from './ui/ReseedButton';
 
 // The landing page ships in the main chunk. Everything behind it loads when it is needed, so the first visit
 // doesn't download the authenticated pages.
@@ -22,6 +23,7 @@ const load = {
   receipts: () => import('./pages/Receipts'),
   results: () => import('./pages/Results'),
   audit: () => import('./pages/Audit'),
+  whoPays: () => import('./pages/WhoPaysPage'),
 };
 const HomePage = lazy(() => load.home().then((m) => ({ default: m.HomePage })));
 const RacePage = lazy(() => load.race().then((m) => ({ default: m.RacePage })));
@@ -32,6 +34,7 @@ const IncidentsPage = lazy(() => load.incidents().then((m) => ({ default: m.Inci
 const ReceiptsPage = lazy(() => load.receipts().then((m) => ({ default: m.ReceiptsPage })));
 const ResultsPage = lazy(() => load.results().then((m) => ({ default: m.ResultsPage })));
 const AuditPage = lazy(() => load.audit().then((m) => ({ default: m.AuditPage })));
+const WhoPaysPage = lazy(() => load.whoPays().then((m) => ({ default: m.WhoPaysPage })));
 
 /** Once someone is in, fetch the other pages quietly, so moving between them doesn't show a loading state. */
 function usePreloadPages(active: boolean) {
@@ -55,13 +58,27 @@ export function App() {
 }
 
 // The race signs a guest in itself, so a link to it goes straight to the race.
-const PUBLIC_PATHS = ['/results', '/incidents', '/receipts', '/race'];
+const PUBLIC_PATHS = ['/results', '/incidents', '/receipts', '/race', '/who-pays'];
+// A link to one of these is a promise to show that page, such as a pull request comment's Full report. On the open demo a
+// guest goes straight in. Elsewhere it's the landing page, which has the sign-in.
+const isGuestDoor = (path: string) => /^\/runs\/[^/]+\/?$/.test(path) || ['/guardrails', '/redteam', '/audit'].includes(path);
 
 function Shell() {
-  const { user, ready } = useAuth();
+  const { user, ready, enterAsGuest } = useAuth();
   const { path } = useLocation();
   const runMatch = path.match(/^\/runs\/([^/]+)\/?$/);
   usePreloadPages(!!user);
+
+  const [noGuest, setNoGuest] = useState(false);
+  const tried = useRef(false);
+  const door = isGuestDoor(path);
+  useEffect(() => {
+    // Back to a clean slate once someone is in, so a session that ends later gets the same chance again.
+    if (user) tried.current = false;
+    if (!ready || user || !door || tried.current) return;
+    tried.current = true;
+    enterAsGuest().catch(() => setNoGuest(true));
+  }, [ready, user, door, enterAsGuest]);
 
   useEffect(() => {
     const base = 'Shadow Run';
@@ -76,8 +93,16 @@ function Shell() {
     );
   }
 
+  if (!user && door && !noGuest) {
+    return (
+      <div className="boot">
+        <Loading>Opening this page as a guest</Loading>
+      </div>
+    );
+  }
+
   // Evidence is public, like the README. Everything else starts at the landing page.
-  if (!user && !PUBLIC_PATHS.includes(path)) return <SignInPage />;
+  if (!user && !PUBLIC_PATHS.includes(path)) return <SignInPage linkedPage={door} />;
 
   let page = <NotFound />;
   if (path === '/') page = <HomePage />;
@@ -89,6 +114,7 @@ function Shell() {
   else if (path === '/receipts') page = <ReceiptsPage />;
   else if (path === '/results') page = <ResultsPage />;
   else if (path === '/audit') page = <AuditPage />;
+  else if (path === '/who-pays') page = <WhoPaysPage />;
 
   return (
     <ProdProvider active={!!user}>
@@ -143,6 +169,7 @@ const NAV = [
   { href: '/receipts', label: 'Receipts' },
   { href: '/results', label: 'Results' },
   { href: '/audit', label: 'Audit' },
+  { href: '/who-pays', label: 'Who pays' },
 ];
 
 function useIsActive() {
@@ -195,6 +222,37 @@ function Nav() {
   );
 }
 
+/** The one way in, under one name, wherever it appears. */
+function GuestDoor({ className, label = 'Continue as guest' }: { className: string; label?: string }) {
+  const { enterAsGuest } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  // A deployment with no open demo has no guest, so the way in is the sign-in on the landing page.
+  if (failed) {
+    return (
+      <Link href="/" className={className}>
+        Sign in
+      </Link>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={className}
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        enterAsGuest().catch(() => {
+          setFailed(true);
+          setBusy(false);
+        });
+      }}
+    >
+      {busy ? 'Entering' : label}
+    </button>
+  );
+}
+
 function Header() {
   const { user, signOut } = useAuth();
   const [theme, toggleTheme] = useTheme();
@@ -211,15 +269,20 @@ function Header() {
             {user ? (
               <IdentitySwitch />
             ) : (
-              <Link href="/" className="btn btn-small">
-                Enter the demo
-              </Link>
+              <GuestDoor className="btn btn-small" />
             )}
             <button type="button" className="textbtn" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
               {theme === 'dark' ? 'Light' : 'Dark'}
             </button>
             {user && (
-              <button type="button" className="textbtn" onClick={() => void signOut()}>
+              <button
+                type="button"
+                className="textbtn"
+                onClick={() => {
+                  navigate('/');
+                  void signOut();
+                }}
+              >
                 Sign out
               </button>
             )}
@@ -238,7 +301,7 @@ function BottomBar() {
   const isActive = useIsActive();
   const { unseeded } = useProd();
   const sheet = useRef<HTMLDialogElement>(null);
-  const items = user ? NAV.filter((n) => ['/', '/race', '/redteam', '/incidents'].includes(n.href)) : [{ href: '/', label: 'Enter' }, ...NAV.filter((n) => ['/race', '/incidents', '/receipts', '/results'].includes(n.href))];
+  const items = user ? NAV.filter((n) => ['/', '/race', '/redteam', '/incidents'].includes(n.href)) : NAV.filter((n) => ['/race', '/incidents', '/receipts', '/results'].includes(n.href));
   const rest = user ? NAV.filter((n) => !items.some((i) => i.href === n.href)) : [];
 
   useEffect(() => {
@@ -248,6 +311,7 @@ function BottomBar() {
   return (
     <>
       <nav className="bottombar" aria-label="Main, phone">
+        {!user && <GuestDoor className="bottombar-link" label="Guest" />}
         {items.map((n) => (
           <Link key={n.href} href={n.href} className={isActive(n.href) ? 'bottombar-link is-active' : 'bottombar-link'} aria-current={isActive(n.href) ? 'page' : undefined}>
             {n.label}
@@ -288,7 +352,15 @@ function BottomBar() {
               <button type="button" className="btn" onClick={toggleTheme}>
                 {theme === 'dark' ? 'Light theme' : 'Dark theme'}
               </button>
-              <button type="button" className="btn" onClick={() => void signOut()}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  sheet.current?.close();
+                  navigate('/');
+                  void signOut();
+                }}
+              >
                 Sign out
               </button>
               <button type="button" className="btn" onClick={() => sheet.current?.close()}>
@@ -305,8 +377,8 @@ function BottomBar() {
 interface ProdStatus {
   data: ProdChecksum | null;
   failed: boolean;
-  /** The hash moved while this page was open. */
-  changed: boolean;
+  /** The hash moved while this page was open: to something new, or back to the seed. */
+  changed: 'moved' | 'seed' | null;
   /** A demo target's prod differs from its last reseed, because of a run here or another visitor's. */
   unseeded: boolean;
   reseeding: boolean;
@@ -316,14 +388,14 @@ interface ProdStatus {
   reseeds: number;
 }
 
-const ProdContext = createContext<ProdStatus>({ data: null, failed: false, changed: false, unseeded: false, reseeding: false, reseedNote: null, reseed: async () => {}, reseeds: 0 });
+const ProdContext = createContext<ProdStatus>({ data: null, failed: false, changed: null, unseeded: false, reseeding: false, reseedNote: null, reseed: async () => {}, reseeds: 0 });
 const useProd = () => useContext(ProdContext);
 
 /** One measurement of prod, for the chip in the header and the More sheet on phones. */
 function ProdProvider({ active, children }: { active: boolean; children: ReactNode }) {
   const [data, setData] = useState<ProdChecksum | null>(null);
   const [failed, setFailed] = useState(false);
-  const [changed, setChanged] = useState(false);
+  const [changed, setChanged] = useState<ProdStatus['changed']>(null);
   const [unseeded, setUnseeded] = useState(false);
   const [reseeding, setReseeding] = useState(false);
   const [reseedNote, setReseedNote] = useState<ProdStatus['reseedNote']>(null);
@@ -350,9 +422,10 @@ function ProdProvider({ active, children }: { active: boolean; children: ReactNo
         const sameTarget = lastTarget.current === target;
         lastTarget.current = target;
         if (sameTarget && last.current && res.digest && res.digest !== last.current) {
-          setChanged(true);
+          // An undo that restores the seed is good news, and "changed" beside it reads as the opposite.
+          setChanged(res.digest === res.seed_digest ? 'seed' : 'moved');
           window.clearTimeout(flash);
-          flash = window.setTimeout(() => setChanged(false), 6000);
+          flash = window.setTimeout(() => setChanged(null), 6000);
         }
         last.current = res.digest;
       } catch {
@@ -400,21 +473,19 @@ function ProdProvider({ active, children }: { active: boolean; children: ReactNo
 function ProdIndicator() {
   const { data, failed, changed, unseeded, reseeding, reseedNote, reseed } = useProd();
   const seedLine = unseeded || reseedNote;
-  const measuredFrom = data?.digest ? `Prod checksum ${data.digest}, LSN ${data.lsn ?? 'unknown'}. Measured from the control plane.` : undefined;
+  const measuredFrom = data?.digest ? `Prod checksum ${data.digest}, LSN ${data.lsn ?? 'unknown'}. Measured by Shadow Run's own server, outside the sandbox.` : undefined;
   return (
-    <span className={`prod${changed ? ' is-changed' : ''}${seedLine ? ' has-seed-line' : ''}`} title={measuredFrom && data?.seed_digest ? `${measuredFrom} Seed checksum ${data.seed_digest}.` : measuredFrom}>
+    <span className={`prod${changed === 'moved' ? ' is-changed' : ''}${seedLine ? ' has-seed-line' : ''}`} title={measuredFrom && data?.seed_digest ? `${measuredFrom} Seed checksum ${data.seed_digest}.` : measuredFrom}>
       <span className="prod-main">
         <span className="prod-label">{data?.files !== undefined ? 'Prod server' : 'Prod'}</span>
         <code className="mono prod-hash">{failed ? 'unavailable' : data?.digest ? short(data.digest, 8).replace('…', '') : '…'}</code>
-        {changed && <span className="prod-changed">changed</span>}
+        {changed && <span className="prod-changed">{changed === 'seed' ? 'back at the seed' : 'changed'}</span>}
       </span>
       {seedLine && (
         <span className="prod-seed" role="status">
           {unseeded && <span title={reseedNote?.failed ? reseedNote.text : undefined}>{reseedNote?.failed ? 'Could not reseed' : 'changed since the seed'}</span>}
           {unseeded && (
-            <button type="button" className="textbtn prod-reseed" disabled={reseeding} onClick={() => void reseed()}>
-              {reseeding ? 'Reseeding' : 'Reseed'}
-            </button>
+            <ReseedButton className="textbtn prod-reseed" busy={reseeding} onConfirm={() => void reseed()} />
           )}
           {!unseeded && reseedNote && <span>{reseedNote.text}</span>}
         </span>
@@ -431,9 +502,7 @@ function SeedRow() {
     <div className="more-sheet-seed" role="status">
       <p>{reseedNote?.failed ? reseedNote.text : unseeded ? 'Prod has changed since the seed. A run here, or another visitor, changed it.' : reseedNote?.text}</p>
       {unseeded && (
-        <button type="button" className="btn" disabled={reseeding} onClick={() => void reseed()}>
-          {reseeding ? 'Reseeding' : 'Reseed'}
-        </button>
+        <ReseedButton busy={reseeding} onConfirm={() => void reseed()} />
       )}
     </div>
   );

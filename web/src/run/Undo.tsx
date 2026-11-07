@@ -119,7 +119,7 @@ export function UndoPanel({ run }: { run: Run }) {
         <Statements run={run} />
       )}
       {run.status === 'applied' && !undo.too_large_to_store && (
-        <div className="undo-action">
+        <div className="undo-action" id="undo-action">
           <button type="button" className="btn" disabled={busy} onClick={start}>
             {busy ? 'Starting' : 'Undo this change'}
           </button>

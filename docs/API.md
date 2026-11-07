@@ -8,8 +8,9 @@ Base URL: the public URL (see `infra/STATE.json` -> `public_url`, or `SHADOWRUN_
 
 | Method and path | Purpose |
 | --- | --- |
-| `POST /api/runs {target_id?, task?, steps?, source?}` | Start a run. `task` is plain English for the built-in agent. `steps` is `[{type:"sql", cmd, why?}]` and skips the agent. Returns `201 {id, status}`. `429` when over the hourly limit. |
+| `POST /api/runs {target_id?, task?, steps?, source?, from_race?}` | Start a run. `task` is plain English for the built-in agent. `steps` is `[{type:"sql", cmd, why?}]` and skips the agent. Returns `201 {id, status}`. `429` when over the hourly limit. `from_race` takes a race lane's final plan to prod: the steps must hash to that plan or the reply is `409`, and the run always waits for a person. |
 | `GET /api/runs?limit=` | Summaries, newest first: `{id, created_at, status, requester, task, source, target_id, plan_hash, attempts, rows_changed, rows_via_cascade, guardrails_failed, cost_usd, rehearsal_ms}`. |
+| `GET /api/runs/feed?ids=` | The Recent runs list for one browser: `{mine: [...], examples: [...]}`. `ids` are the runs this browser started; examples are finished runs of the site's own example buttons, each with why it's there. |
 | `GET /api/runs/{id}` | Full run. Poll about once a second until a terminal status. |
 | `POST /api/runs/{id}/approve {plan_hash, guardrails_hash, report_hash, nonce}` | Send back exactly the values in `run.challenge`. `403` requester cannot approve own run. `409` a value differs or the run was already decided. `410` the approval window expired. |
 | `POST /api/runs/{id}/reject {reason}` | Reject. |
@@ -39,7 +40,7 @@ Base URL: the public URL (see `infra/STATE.json` -> `public_url`, or `SHADOWRUN_
 
 **An attempt:**
 
-- `n`, `verdict`: `passed | failed_guardrails | blocked_by_gate | sql_error | sandbox_error | invalid_plan`, and `error`
+- `n`, `verdict`: `passed | failed_guardrails | evaded_rule | blocked_by_gate | sql_error | sandbox_error | invalid_plan | read_only_plan`, and `error`
 - `plan: {steps: [{type, cmd, why, statements}], summary}`, `plan_hash`, `guardrails_hash`, `report_hash`
 - `gate: {verdict: pass|review|block, flagged, findings: [{step, statement, rule, severity: block|high|review, reason}], steps: [{step, risk: read|reversible_write|irreversible_write}], highest_risk}`
 - `guardrails: [{id, name, passed, violations, violation_count_capped, error, ms}]`
@@ -85,6 +86,8 @@ Start body, optional: `{rounds: 1-10, policy: "named_scope" | "row_budget_only"}
 
 **Landing page replay.** `GET /api/public` has `hero`: one real replay of the SaaStr incident's command, with fields listed one by one in `control/hero.py`, or `null` if nothing has been measured, or if the deployment has no open demo. `GET /api/receipts` items for negative controls have `got`, the server's actual reply.
 
+**Getting around a rule.** When a plan passes after an earlier attempt in the same run broke a guardrail, that attempt has `evasion: {evaded, rewrote: [{rule, columns}], read: {model, verdict: respects_it|gets_around_it|gave_up|no_answer, reason}}`. `rewrote` is measured: columns the plan changed that a rule it broke reads, and that the plan which broke the rule didn't change. `read` is a second model reading only the plans. If either one doubts it, the verdict is `evaded_rule`, the plan goes back to the agent, and a run that ends there is blocked. A plan the caller submits gets one try, so it is never checked this way.
+
 **Second opinion.** On a run where a model wrote the plan from a request, and it passed, the final attempt has `second_opinion: {model, verdict: does_it|partly|does_not, left_out, added, numbers_verified, unverified_numbers}`, or `{error}`. Anything but `does_it` holds the plan for a person even inside the auto-apply list. It never removes a hold.
 
 **Rehearse only.** `POST /api/runs` takes `rehearse_only: true`. The run then waits for a person even inside the auto-apply list. The CLI's `--rehearse-only` and the GitHub Action use it.
@@ -106,12 +109,14 @@ Start body, optional: `{rounds: 1-10, policy: "named_scope" | "row_budget_only"}
 | Method and path | Purpose |
 | --- | --- |
 | `GET /api/prod-checksum` | `{digest, lsn, rows: {table: n}, at}`. Hash of prod, measured from the control plane. |
-| `POST /api/demo/drift` | Writes one row directly to demo prod behind Shadow Run's back: `{inserted_user_id, what}`. |
+| `POST /api/demo/drift?run_id=` | Writes one row directly to demo prod behind Shadow Run's back. With `run_id`, it writes to a table that run's plan touches: `{table, what}`. Without it, it adds a user: `{inserted_user_id, what}`. |
 | `POST /api/demo/reset` | Reseeds demo prod. |
 | `POST /api/redteam` | Starts the 7 attacks, or returns the one already running. |
 | `GET /api/redteam?limit=` | Newest first: `{id, status: running|done|error, expected, attacks: [...], prod_before, prod_after, prod_unchanged, contained, total, wall_two, created_at}`. Poll while running. |
 | `GET /api/redteam/attacks` | `[{id, title, expected}]`. |
 | `GET /api/results` | Benchmark results (public, no login). `{"status": "not measured yet"}` until the benchmark has run. Never show a number that is not in this response. |
+| `GET /api/evasion` | Public. What the retry loop taught the agent and what the check for getting around a rule catches, from `bench/evasion.json` without its per-plan rows. |
+| `GET /api/market` | Public. Who pays, with sources, from `docs/market.json`. |
 | `GET /api/audit?after=&limit=` | `{events: [{seq, run_id, ts, actor, type, detail, prev_sha256, sha256}], chain: {ok, events, head}}`. |
 | `GET /api/health` | Public. `{ok, s3, inference_base_is_vultr, planner_model, runner: {host, msb_doctor_ok, image_digest, firewall}}`. |
 | `GET /api/targets`, `GET /api/targets/{id}` | `{id, name, kind, guardrails, guardrails_hash, budget, auto_apply_within_budget}`. |

@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { api, errorText, notifyProdChanged } from '../api/client';
+import { ApiError, api, errorText, notifyProdChanged } from '../api/client';
 import type { Counts, FileCounts, Run } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { bytes, clockTime, ms, num, short, when } from '../lib/format';
 import { Link, navigate } from '../lib/router';
 import { Hash, Mark, Notice, Tag } from '../ui/bits';
-import { narrowedRows } from './derive';
+import { changedToPass, isReadOnly, narrowedRows, undoOnOffer } from './derive';
 import { hashMovedSinceRehearsal, measureProdBeforeApply } from './ProdProof';
+import { EvadedNotice, evadedAttempt, PassedAfterBreaking } from './Evaded';
+import { RefusedNotice } from './Refused';
+import { canTakeToProd, ToProdButton } from './ToProd';
 import { UndoPanel } from './Undo';
 
 function HashRow({ label, value, locked, index }: { label: string; value?: string | null; locked?: boolean; index: number }) {
@@ -53,7 +56,9 @@ function ApprovePanel({ run, setRun }: { run: Run; setRun: (r: Run) => void }) {
     try {
       setRun(await api.approve(run.id, c));
     } catch (e) {
-      setError(errorText(e));
+      // The window closed while this page was open, so the page should say Expired, not just show an error.
+      if (e instanceof ApiError && e.status === 410) setRun(await api.run(run.id));
+      else setError(errorText(e));
     } finally {
       setBusy(null);
     }
@@ -76,7 +81,7 @@ function ApprovePanel({ run, setRun }: { run: Run; setRun: (r: Run) => void }) {
       <h3 className="decide-title">Your decision</h3>
       <p>You are approving these exact hashes. If any of them differs when this reaches the server, the approval is refused.</p>
       <ThreeHashes plan={c?.plan_hash} guardrails={c?.guardrails_hash} report={c?.report_hash} />
-      {c?.expires_at !== undefined && <p className="muted">The approval window closes at <span className="mono">{clockTime(c.expires_at)}</span>.</p>}
+      {c?.expires_at !== undefined && <p className="muted">The approval window closes on <span className="mono">{when(c.expires_at)}</span>.</p>}
       <div className="decide-actions">
         <button type="button" className="btn btn-primary btn-large" disabled={!!busy || !c} onClick={approve}>
           {busy === 'approve' ? 'Approving' : 'Approve'}
@@ -242,13 +247,36 @@ function RehearseAgain({ run }: { run: Run }) {
     }
   };
   return (
-    <div className="decide-actions">
+    <div className="decide-actions" id="rehearse-again">
       <button type="button" className="btn btn-primary btn-large" disabled={busy} onClick={go}>
         {busy ? 'Starting' : 'Rehearse again'}
       </button>
       <span className="muted">Same plan, new snapshot, new rehearsal. Nothing carries over.</span>
       {error && <p className="error-line" role="alert">{error}</p>}
     </div>
+  );
+}
+
+/** A window that closed. The plan may still be fine, but what was measured may no longer describe prod. */
+function ExpiredPanel({ run }: { run: Run }) {
+  return (
+    <div className="decide">
+      <h3 className="decide-title">The approval window closed on <span className="mono">{when(run.approval_expires_at)}</span>.</h3>
+      <p>Nothing reached prod. An approval only holds for a short time, because prod can change after a rehearsal. Rehearsing again runs the same plan on a new snapshot, and a different person approves that.</p>
+      <RehearseAgain run={run} />
+    </div>
+  );
+}
+
+/** Shadow Run says what a change would do, so a plan that only reads has nothing to report. It also has no rows to show: they stay in the clone. */
+function ReadOnlyPanel() {
+  return (
+    <Notice tone="neutral" title="Nothing changed, because this plan only reads.">
+      <span className="narrowed-line">Shadow Run is for changes. It measures what a plan would do to prod, and it does not return what a query finds. The rows stayed in the clone, and the clone is gone.</span>
+      <span className="narrowed-line">
+        Try a change: <Link href={`/?task=${encodeURIComponent('Mark trial users as expired')}`}>mark trial users as expired</Link>, <Link href={`/?task=${encodeURIComponent('Purge expired sessions older than 30 days')}`}>purge expired sessions</Link>, or <Link href="/race">race the agent</Link>.
+      </span>
+    </Notice>
   );
 }
 
@@ -497,9 +525,12 @@ function Outcome({ run }: { run: Run }) {
 
 /** The retry loop can narrow a request until it passes, so whoever decides is told when the plan shrank. */
 /** A different model read the request against the final plan. Its doubt adds a person, and it never removes one. */
-function SecondOpinionNotice({ run }: { run: Run }) {
-  const opinion = run.final?.second_opinion;
-  if (!opinion || opinion.error || !opinion.verdict) return null;
+function SecondOpinionNotice({ run, origin }: { run: Run; origin?: Run | null }) {
+  // A plan from a race was written, and read by the second model, in that race. Once a person has decided, the line that
+  // helps them decide has done its job, and the doubt stays on the record.
+  const opinion = (origin?.final ?? run.final)?.second_opinion;
+  if (!opinion || opinion.error || !opinion.verdict || run.refused) return null;
+  const because = run.status === 'awaiting_approval' && !run.expired ? changedToPass(origin?.attempts ?? run.attempts, origin?.final ?? run.final) : null;
   const said = [opinion.left_out, opinion.added].filter(Boolean);
   if (opinion.verdict === 'does_it') {
     return (
@@ -515,6 +546,7 @@ function SecondOpinionNotice({ run }: { run: Run }) {
           {line}
         </span>
       ))}
+      {because && <span className="narrowed-line">{because}</span>}
       <span className="narrowed-line muted">
         From <code className="mono">{opinion.model}</code>, which didn't write the plan. Its doubt can add a person, and it can't remove one.
         {opinion.numbers_verified === false ? ' Some numbers it states are not in the measurements.' : ''}
@@ -525,7 +557,7 @@ function SecondOpinionNotice({ run }: { run: Run }) {
 
 function NarrowedNotice({ run }: { run: Run }) {
   const rows = narrowedRows(run);
-  if (!rows || !['awaiting_approval', 'approved', 'applied', 'no_change'].includes(run.status)) return null;
+  if (!rows || run.refused || !['awaiting_approval', 'approved', 'applied', 'no_change'].includes(run.status)) return null;
   const done = run.status === 'applied';
   const summary = (run.final ?? run.attempts?.[run.attempts.length - 1])?.plan?.summary;
   return (
@@ -565,23 +597,22 @@ export function DecisionBar({ run, setRun, pollFast }: { run: Run; setRun: (r: R
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [panelInView, setPanelInView] = useState(false);
-  // A race's runs can't be approved, so there's no decision to keep in reach.
-  const waiting = (run.status === 'awaiting_approval' || run.status === 'approved') && !run.race;
+  // A race's runs can't be approved, so there's no decision to keep in reach. Past the decision, the next move still is:
+  // an undo sits far down an applied run, and a stopped or expired one has to be rehearsed again.
+  const waiting = ((run.status === 'awaiting_approval' && !run.expired) || run.status === 'approved') && !run.race;
+  const after = !waiting && !run.race ? (undoOnOffer(run) ? 'undo' : run.can?.rehearse_again ? 'again' : null) : null;
+  const watched = after === 'undo' ? 'undo-action' : after === 'again' ? 'rehearse-again' : 'decision';
 
   useEffect(() => {
-    const el = document.getElementById('decision');
-    if (!el || !waiting) return;
-    const observer = new IntersectionObserver(([entry]) => setPanelInView(entry.isIntersecting), { threshold: 0.25 });
+    const el = document.getElementById(watched);
+    setPanelInView(false);
+    if (!el || (!waiting && !after)) return;
+    const observer = new IntersectionObserver(([entry]) => setPanelInView(entry.isIntersecting), { threshold: waiting ? 0.25 : 0.9 });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [waiting, run.status]);
+  }, [waiting, after, watched, run.status]);
 
-  if (!waiting || panelInView) return null;
-
-  const c = run.challenge;
-  const a = run.approval;
-  const other = run.requester === 'reviewer' ? 'judge' : 'reviewer';
-  const hashes = run.status === 'approved' ? [a?.plan_hash, a?.guardrails_hash, a?.report_hash] : [c?.plan_hash, c?.guardrails_hash, c?.report_hash];
+  if ((!waiting && !after) || panelInView) return null;
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -594,6 +625,47 @@ export function DecisionBar({ run, setRun, pollFast }: { run: Run; setRun: (r: R
       setBusy(false);
     }
   };
+
+  if (after) {
+    const hash = run.prod_after && !run.prod_after.startsWith('unavailable') ? run.prod_after : null;
+    return (
+      <aside className="decisionbar" aria-label="The next step">
+        <p className="decisionbar-state">
+          {after === 'undo' ? 'On prod. You can undo it.' : run.expired ? 'The approval window closed.' : 'That approval is used up.'}
+          {hash && (
+            <>
+              {' '}
+              Prod <code className="mono">{short(hash, 8).replace('…', '')}</code>
+            </>
+          )}
+        </p>
+        {error && <p className="error-line decisionbar-error" role="alert">{error}</p>}
+        <div className="decisionbar-actions">
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy}
+            onClick={() =>
+              void act(async () => {
+                const res = after === 'undo' ? await api.undo(run.id) : await api.rehearseAgain(run.id);
+                navigate(`/runs/${encodeURIComponent(res.id)}`);
+              })
+            }
+          >
+            {busy ? 'Starting' : after === 'undo' ? 'Undo this change' : 'Rehearse again'}
+          </button>
+          <a className="btn" href="#decision">
+            {run.expired ? 'Read why' : 'Read the outcome'}
+          </a>
+        </div>
+      </aside>
+    );
+  }
+
+  const c = run.challenge;
+  const a = run.approval;
+  const other = run.requester === 'reviewer' ? 'judge' : 'reviewer';
+  const hashes = run.status === 'approved' ? [a?.plan_hash, a?.guardrails_hash, a?.report_hash] : [c?.plan_hash, c?.guardrails_hash, c?.report_hash];
 
   return (
     <aside className="decisionbar" aria-label="The decision">
@@ -642,21 +714,28 @@ export function DecisionBar({ run, setRun, pollFast }: { run: Run; setRun: (r: R
             Switch to {other}
           </button>
         )}
-        <a className="btn" href="#decision">
-          Read the decision
-        </a>
+        {run.status === 'approved' ? (
+          <a className="btn" href="#break">
+            Try to break it first
+          </a>
+        ) : (
+          <a className="btn" href="#decision">
+            Read the decision
+          </a>
+        )}
       </div>
     </aside>
   );
 }
 
-export function DecisionSection({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) => void; pollFast: (on: boolean) => void }) {
+export function DecisionSection({ run, origin, setRun, pollFast }: { run: Run; origin?: Run | null; setRun: (r: Run) => void; pollFast: (on: boolean) => void }) {
   // Undo is offered while a person decides, and after the change is on prod.
-  const showUndo = ['awaiting_approval', 'approved', 'applied'].includes(run.status);
+  const showUndo = ['awaiting_approval', 'approved', 'applied'].includes(run.status) && !run.expired;
   return (
     <>
       <Badges run={run} />
-      <SecondOpinionNotice run={run} />
+      <SecondOpinionNotice run={run} origin={origin} />
+      {run.status === 'awaiting_approval' && !run.expired && <PassedAfterBreaking attempts={(origin ?? run).attempts} final={(origin ?? run).final} />}
       <NarrowedNotice run={run} />
       <DecisionPanel run={run} setRun={setRun} pollFast={pollFast} />
       {showUndo && <UndoPanel run={run} />}
@@ -664,16 +743,24 @@ export function DecisionSection({ run, setRun, pollFast }: { run: Run; setRun: (
   );
 }
 
-function RacePanel() {
+function RacePanel({ run }: { run: Run }) {
   return (
-    <Notice tone="wait" title="This plan is held. It came from a race, which only rehearses.">
-      In a normal run a different person would approve these exact hashes. Here the server refuses to approve or apply it, so nothing from a race can reach prod. To take this further, start the task from <Link href="/">New task</Link>.
-    </Notice>
+    <div className="decide">
+      <h3 className="decide-title">This plan came from a race, which only rehearses.</h3>
+      <p>The server refuses to approve or apply a race's runs, so nothing from a race can reach prod. To go further, start a normal run with these exact steps. It rehearses them again, then a different person approves.</p>
+      {canTakeToProd(run) && (
+        <div className="decide-actions">
+          <ToProdButton run={run} />
+        </div>
+      )}
+    </div>
   );
 }
 
 function DecisionPanel({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) => void; pollFast: (on: boolean) => void }) {
-  if (run.race && run.status === 'awaiting_approval') return <RacePanel />;
+  if (run.race && run.status === 'awaiting_approval') return <RacePanel run={run} />;
+  if (run.refused) return <RefusedNotice run={run} />;
+  if (run.expired) return <ExpiredPanel run={run} />;
   switch (run.status) {
     case 'awaiting_approval':
       return run.can?.approve ? <ApprovePanel run={run} setRun={setRun} /> : <RequesterPanel run={run} />;
@@ -686,6 +773,7 @@ function DecisionPanel({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) =
     case 'applying':
       return <Notice tone="live" title="Writing the backup and applying to prod." />;
     case 'no_change':
+      if (isReadOnly(run)) return <ReadOnlyPanel />;
       return <Notice tone="neutral" title="Nothing to apply.">The rehearsal changed nothing, so nothing reached prod and there is nothing to approve.</Notice>;
     case 'rejected':
       return (
@@ -695,6 +783,13 @@ function DecisionPanel({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) =
       );
     case 'blocked': {
       const guardrail = run.final?.verdict === 'failed_guardrails';
+      if (run.race?.lane === 'alone') {
+        return (
+          <Notice tone="neutral" title="Rehearsed only. Nothing reached prod.">
+            {run.blocked_reason ?? 'This plan is only measured.'}
+          </Notice>
+        );
+      }
       return (
         <div className="outcome tone-bad">
           <div className="outcome-word">
@@ -702,7 +797,8 @@ function DecisionPanel({ run, setRun, pollFast }: { run: Run; setRun: (r: Run) =
             Blocked. Nothing reached prod.
           </div>
           <p className="outcome-line">{run.blocked_reason ?? 'The run was blocked.'}</p>
-          {run.race?.lane !== 'alone' && <p>{guardrail ? 'There is nothing for a reviewer to sign. The plan itself has to change.' : 'There is nothing to approve. The plan itself has to change.'}</p>}
+          {evadedAttempt(run.attempts) && <EvadedNotice attempt={evadedAttempt(run.attempts)!} />}
+          <p>{guardrail ? 'There is nothing for a reviewer to sign. The plan itself has to change.' : 'There is nothing to approve. The plan itself has to change.'}</p>
           <p>
             <Link href="/">Start a new task</Link>
           </p>

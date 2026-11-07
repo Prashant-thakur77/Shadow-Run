@@ -28,7 +28,7 @@ export function TryToBreak({ receipts, loading }: { receipts: Receipt[] | undefi
     <section className="ch ch-screen" id="break" aria-labelledby="break-title">
       <div className="ch-inner ch-split">
         <div className="break-text">
-          <ChapterHead id="break-title" label="Try to break it" title="It says no, and says why." lead="These requests were sent to the real API. The replies are the server's own words." />
+          <ChapterHead id="break-title" label="Try to break it" title="It says no, and says why." lead="These requests were sent to the real API. The replies are the server's own words. Maker-checker means the person who asks for a change can't also approve it." />
           {!guestOff && (
             <button type="button" className="break-link" disabled={busy} onClick={() => void enter()}>
               Now try it yourself.

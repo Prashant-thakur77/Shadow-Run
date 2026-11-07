@@ -1,24 +1,5 @@
-import type {
-  AttackDef,
-  Audit,
-  Candidate,
-  Challenge,
-  Gauntlet,
-  GauntletPublished,
-  GuardrailDraft,
-  Health,
-  Incident,
-  Inspect,
-  Me,
-  ProdChecksum,
-  PublicInfo,
-  Race,
-  Receipt,
-  RedTeamRun,
-  Run,
-  RunSummary,
-  Target,
-} from './types';
+import type { AttackDef, Audit, Candidate, Challenge, EvasionFacts, Gauntlet, GauntletPublished, GuardrailDraft, Health, Incident, Inspect, Market, Me, ProdChecksum, PublicInfo, Race, Receipt, RedTeamRun, Run, RunFeed, RunSummary, Target } from './types';
+import { rememberRun } from '../lib/myRuns';
 
 export class ApiError extends Error {
   status: number;
@@ -122,11 +103,19 @@ async function call<T>(method: string, path: string, body?: unknown, token?: str
   return res.body as T;
 }
 
+/** Runs started from this browser are the ones its Recent runs list leads with. */
+function mine<T extends { id: string }>(run: T): T {
+  rememberRun(run.id);
+  return run;
+}
+
 export const api = {
   login: (username: string, password: string) =>
     call<{ username: string; name?: string; token: string }>('POST', '/api/login', { username, password }, null),
   logout: () => call<unknown>('POST', '/api/logout', {}, null),
   publicInfo: () => call<PublicInfo>('GET', '/api/public', undefined, null),
+  market: () => call<Market>('GET', '/api/market', undefined, null),
+  evasion: () => call<EvasionFacts>('GET', '/api/evasion', undefined, null),
   demoEnter: () => call<{ username: string; name?: string; token: string; others?: Record<string, string> }>('POST', '/api/demo/enter', {}, null),
   me: (token?: string | null) => call<Me>('GET', '/api/me', undefined, token === undefined ? undefined : token),
 
@@ -134,10 +123,16 @@ export const api = {
   prodChecksum: (targetId: string) => call<ProdChecksum>('GET', `/api/prod-checksum?target_id=${encodeURIComponent(targetId)}`),
 
   runs: (limit = 15) => call<RunSummary[]>('GET', `/api/runs?limit=${limit}`),
+  runFeed: (ids: string[]) => call<RunFeed>('GET', `/api/runs/feed?ids=${encodeURIComponent(ids.join(','))}`),
   run: (id: string) => call<Run>('GET', `/api/runs/${encodeURIComponent(id)}`),
-  startRun: (body: { task?: string; steps?: { type: 'sql' | 'shell'; cmd: string }[]; target_id?: string; source?: string }) =>
-    call<{ id: string; status: string }>('POST', '/api/runs', { source: 'web', ...body }),
-  raceStart: (task: string) => call<Race>('POST', '/api/race', { task }),
+  startRun: (body: { task?: string; steps?: { type: 'sql' | 'shell'; cmd: string; why?: string }[]; target_id?: string; source?: string; from_race?: string }) =>
+    call<{ id: string; status: string }>('POST', '/api/runs', { source: 'web', ...body }).then(mine),
+  raceStart: (task: string) =>
+    call<Race>('POST', '/api/race', { task }).then((race) => {
+      rememberRun(race.alone);
+      rememberRun(race.through);
+      return race;
+    }),
   race: (id: string) => call<Race>('GET', `/api/race/${encodeURIComponent(id)}`),
   approve: (id: string, c: Pick<Challenge, 'plan_hash' | 'guardrails_hash' | 'report_hash' | 'nonce'>) =>
     call<Run>('POST', `/api/runs/${encodeURIComponent(id)}/approve`, {
@@ -149,11 +144,10 @@ export const api = {
   reject: (id: string, reason: string) => call<Run>('POST', `/api/runs/${encodeURIComponent(id)}/reject`, { reason }),
   apply: (id: string, driftCheck = true) =>
     call<Run>('POST', `/api/runs/${encodeURIComponent(id)}/apply`, { drift_check: driftCheck }),
-  rehearseAgain: (id: string) =>
-    call<{ id: string; status: string }>('POST', `/api/runs/${encodeURIComponent(id)}/rehearse-again`),
+  rehearseAgain: (id: string) => call<{ id: string; status: string }>('POST', `/api/runs/${encodeURIComponent(id)}/rehearse-again`).then(mine),
 
   undoStatements: (id: string) => call<{ statements?: string[] }>('GET', `/api/runs/${encodeURIComponent(id)}/undo`),
-  undo: (id: string) => call<{ id: string; status: string }>('POST', `/api/runs/${encodeURIComponent(id)}/undo`),
+  undo: (id: string) => call<{ id: string; status: string }>('POST', `/api/runs/${encodeURIComponent(id)}/undo`).then(mine),
   learn: (id: string, reason: string) => call<Candidate>('POST', `/api/runs/${encodeURIComponent(id)}/learn`, { reason }),
   acceptCandidate: (id: string, targetId: string) =>
     call<Target>('POST', `/api/guardrails/candidates/${encodeURIComponent(id)}/accept?target_id=${encodeURIComponent(targetId)}`),
@@ -164,7 +158,7 @@ export const api = {
   gauntletList: (limit = 1) => call<Gauntlet[]>('GET', `/api/gauntlet?limit=${limit}`),
 
   incidents: () => call<Incident[]>('GET', '/api/incidents'),
-  replayIncident: (id: string) => call<{ id: string; status: string }>('POST', `/api/incidents/${encodeURIComponent(id)}/replay`),
+  replayIncident: (id: string) => call<{ id: string; status: string }>('POST', `/api/incidents/${encodeURIComponent(id)}/replay`).then(mine),
   receipts: () => call<{ items?: Receipt[]; note?: string }>('GET', '/api/receipts'),
 
   demoReset: (targetId: string) => call<{ ok?: boolean }>('POST', `/api/demo/reset?target_id=${encodeURIComponent(targetId)}`),
@@ -183,6 +177,8 @@ export const api = {
 };
 
 export function errorText(e: unknown): string {
+  // The one refusal a visitor can meet by simply waiting too long, so it says what to do next.
+  if (e instanceof ApiError && e.status === 410) return 'The approval window closed. Rehearse again to get a new one.';
   if (e instanceof ApiError) return e.status ? `${e.status}: ${e.message}` : e.message;
   return e instanceof Error ? e.message : String(e);
 }

@@ -69,6 +69,7 @@ function Got({ got }: { got: string }) {
         ) : (
           got
         )}
+        {/maker-checker/i.test(got) && <span className="muted"> Maker-checker means the person who asks for a change can't also approve it.</span>}
       </span>
     </span>
   );

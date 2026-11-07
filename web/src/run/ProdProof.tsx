@@ -8,7 +8,7 @@ import { useAsync } from '../lib/useAsync';
 import { Hash, Mark } from '../ui/bits';
 import { Stamp } from '../ui/Stamp';
 
-const MEASURED_FROM = 'Measured from the control plane, outside the sandbox.';
+const MEASURED_FROM = "Measured by Shadow Run's own server, outside the sandbox.";
 
 /** run.prod_after holds an "unavailable: ..." message when the measurement failed. */
 function usable(hash?: string | null): string | null {
@@ -69,6 +69,7 @@ function HashPanel({ tone, word, steps, children, stamp }: { tone: Tone; word: s
 }
 
 function RoundTrip({ run, parent }: { run: Run; parent: Run }) {
+  const now = useAsync(() => api.prodChecksum(run.target_id ?? currentTarget()), [run.id]);
   const before = usable(parent.prod_check?.before ?? parent.snapshot?.digest);
   const changed = usable(parent.prod_after);
   const undone = usable(run.prod_after);
@@ -85,6 +86,12 @@ function RoundTrip({ run, parent }: { run: Run; parent: Run }) {
       ]}
     >
       {back ? MEASURED_FROM : `Something else may have written to prod between these measurements. ${MEASURED_FROM}`}
+      {back && now.data?.changed_from_seed && (
+        <>
+          {' '}
+          Prod still differs from the seed, because of what happened before this change, such as a row written behind its back. <Link href="/guardrails#demo">Reseed</Link> clears that.
+        </>
+      )}
     </HashPanel>
   );
 }
@@ -109,7 +116,7 @@ export function hashMovedSinceRehearsal(run: Run): boolean {
 }
 
 const stopWord: Record<string, string> = { drift_detected: 'After the refusal', rolled_back: 'After the rollback' };
-const stampWord: Record<string, string> = { drift_detected: 'Refused', rolled_back: 'Stopped' };
+const stampWord: Record<string, string> = { drift_detected: 'Refused', rolled_back: 'Rolled back' };
 
 /** A rolled back or refused apply: what it left on prod, and why the hash may still differ from the rehearsal's. */
 export function StoppedProof({ run }: { run: Run }) {

@@ -2,6 +2,7 @@ import type { Attempt, PublicHero, Run, TimelineEvent } from '../api/types';
 import { bytes, isNum, num, short } from '../lib/format';
 import type { Tone } from '../lib/status';
 import { isInProgress, verdictText, verdictTone } from '../lib/status';
+import { plainSource } from '../ui/Figure';
 import type { GanttAttempt, GanttBar, GanttStep } from '../ui/RunGantt';
 import type { ProdView, RoomsLive } from '../ui/TwoRooms';
 import { failedGuardrails, liveAttempts, snapshotEvent } from './derive';
@@ -21,7 +22,7 @@ export function networkNote(attempt: Attempt | null | undefined): string | null 
   const rehearsal = attempt?.rehearsal;
   const policy = rehearsal?.limits?.network ?? '';
   const devices = rehearsal?.probes?.nics?.filter((n) => n !== 'lo' && n !== 'dummy0');
-  if (devices ? devices.length === 0 : /no NIC/i.test(policy)) return 'no NIC';
+  if (devices ? devices.length === 0 : /no NIC/i.test(policy)) return 'no network card';
   if (/deny-all/i.test(policy) && /link down/i.test(policy)) return 'deny-all, link down';
   return devices?.length ? `${devices.join(', ')} present` : null;
 }
@@ -203,7 +204,7 @@ export function prodViewFor(run: Run, moved: number): ProdView {
   const checkedAt = isNum(checked?.t) && isNum(created) ? `+${(checked.t - created).toFixed(1)} s` : null;
   const atRehearsal = usable(check?.after ?? check?.before ?? run.snapshot?.digest);
   const after = usable(run.prod_after);
-  const from = check?.measured_from ? `Measured from the ${check.measured_from}.` : 'Measured from the control plane.';
+  const from = `Measured ${plainSource(check?.measured_from)}.`;
   const common = { checkedAt, moved, waiting: 'Not checked yet. The hash is measured last.' };
 
   if (run.status === 'applied') {

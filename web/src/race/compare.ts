@@ -1,6 +1,7 @@
 import type { Attempt, GuardrailResult, Metric, Report, Run } from '../api/types';
 import { money, num, plural } from '../lib/format';
 import { isInProgress, type Tone } from '../lib/status';
+import { changedToPass } from '../run/derive';
 import { dollarsLost, hasMoved, metricDelta } from '../run/metrics';
 
 /** What one lane has come to so far. Everything here is read from the run, and nothing is worked out ahead of a measurement. */
@@ -14,6 +15,8 @@ export interface Lane {
   failure: string | null;
   /** The lane ended and has no plan to offer a person. */
   noPlan: boolean;
+  /** The agent declined the request. Null if it wrote a plan. */
+  refused: { reason?: string | null } | null;
   broken: GuardrailResult[];
   guardrails: number;
 }
@@ -45,12 +48,15 @@ export function readLane(run: Run | null): Lane {
   const final = finalAttempt(run);
   const guardrails = final?.guardrails ?? [];
   const report = settled ? measuredReport(final) : null;
+  const refused = settled ? (run?.refused ?? null) : null;
   return {
     run,
     settled,
     final,
     report,
-    failure: settled && run ? failureOf(run, final) : null,
+    refused,
+    // A refusal isn't a failure, so the internal message that goes with it never reaches the page.
+    failure: settled && run && !refused ? failureOf(run, final) : null,
     noPlan: settled && run?.race?.lane === 'through' && run.status !== 'awaiting_approval',
     broken: guardrails.filter((g) => g.passed === false),
     guardrails: guardrails.length,
@@ -81,6 +87,7 @@ const PENDING: Cell = { text: 'Not measured yet', tone: 'neutral', pending: true
 /** The cell for a lane that has no number to give, and the reason in a word. */
 function emptyCell(lane: Lane): Cell | null {
   if (!lane.settled) return PENDING;
+  if (lane.refused) return { text: 'Agent refused', tone: 'neutral', word: true };
   if (lane.noPlan) return { text: lane.run?.status === 'no_change' ? 'Changes nothing' : 'No plan', tone: 'neutral', word: true };
   if (!lane.report) return { text: lane.final?.verdict === 'invalid_plan' ? 'No plan' : lane.failure ? 'Errored' : 'Not measured', tone: 'neutral', word: true };
   return null;
@@ -184,9 +191,10 @@ function harms(a: Lane, b: Lane): Harm[] {
 
 function opinionLine(b: Lane): string | null {
   const o = b.final?.second_opinion;
-  if (!o || o.error || (o.verdict !== 'partly' && o.verdict !== 'does_not')) return null;
+  if (!o || o.error || b.refused || (o.verdict !== 'partly' && o.verdict !== 'does_not')) return null;
   const said = [o.left_out, o.added].filter(Boolean).join(' ');
-  return `A second model ${o.verdict === 'does_not' ? 'says this does not do' : 'says this only partly does'} what was asked. ${said}`.trim();
+  const because = changedToPass(b.run?.attempts, b.final);
+  return `A second model ${o.verdict === 'does_not' ? 'says this does not do' : 'says this only partly does'} what was asked. ${said}${because ? ` ${because}` : ''}`.trim();
 }
 
 function tries(b: Lane): string {
@@ -214,6 +222,22 @@ export function verdict(a: Lane, b: Lane): Verdict | null {
   const list = harms(a, b);
   const leftHarm = !!a.report && list.some((h) => h.alone > 0 && h.label !== 'rows deleted');
 
+  if (b.refused) {
+    const lines = [b.refused.reason, a.refused ? 'Neither lane ended with a plan that changes anything, and nothing reached prod.' : 'Through Shadow Run it ended with no plan that changes anything, and nothing reached prod.'].filter((l): l is string => !!l);
+    const big = list.find((h) => h.alone > 0);
+    if (a.report && big) lines.push(big.format === money ? `On its first try, the agent alone would have lost ${money(big.alone)} of ${big.label}.` : `On its first try, the agent alone wrote a plan: ${big.format(big.alone)} ${big.label}.`);
+    return { tone: leftHarm ? 'caution' : 'neutral', title: 'The agent refused this request.', lines, doubt: null };
+  }
+
+  if (a.refused && !held) {
+    return { tone: 'neutral', title: 'The agent refused this request on its first try.', lines: [a.refused.reason, 'Through Shadow Run it ended with nothing a person could approve, and nothing reached prod.'].filter((l): l is string => !!l), doubt };
+  }
+
+  if (a.refused && held) {
+    const lines = [a.refused.reason, `Through Shadow Run the agent wrote a plan. After ${tries(b)} it ${brokeWord(b)} and waits for a person.`].filter((l): l is string => !!l);
+    return { tone: 'neutral', title: `The agent refused on its first try. Through Shadow Run, its plan changes ${rowsChanged(b)}.`, lines, doubt };
+  }
+
   if (!held) {
     const changesNothing = b.run?.status === 'no_change';
     const lines = [changesNothing ? `After ${tries(b)} the agent ended on a plan that changes nothing. If the task asked for a change, it isn't done.` : `After ${tries(b)} no plan passed, so nothing waits for a person and the task isn't done.`];
@@ -225,7 +249,7 @@ export function verdict(a: Lane, b: Lane): Verdict | null {
       lines.push(`The agent's first plan failed too. ${a.failure}`);
     }
     // A plan the checks stopped isn't the same story as an agent that never wrote one that runs.
-    const stopped = b.final?.verdict === 'failed_guardrails' || b.final?.verdict === 'blocked_by_gate';
+    const stopped = b.final?.verdict === 'failed_guardrails' || b.final?.verdict === 'blocked_by_gate' || b.final?.verdict === 'evaded_rule';
     const title = changesNothing ? 'Through Shadow Run, the plan changes nothing.' : stopped ? 'Shadow Run stopped it, and the task is not done.' : 'The agent never wrote a plan that runs. The task is not done.';
     return { tone: leftHarm ? 'caution' : 'neutral', title, lines, doubt };
   }
@@ -282,7 +306,8 @@ export function laneWord(lane: Lane, name: 'alone' | 'through'): { text: string;
     case 'snapshotting':
       return { text: 'Taking a snapshot of prod', tone: 'live' };
     case 'planning':
-      if (last?.gate?.verdict === 'block' && !last.report) return { text: 'The gate refused this plan. Running it on a clone anyway, to measure it.', tone: 'live' };
+      if (last?.verdict === 'invalid_plan') return { text: 'The agent gave back no plan. Asking again.', tone: 'live' };
+      if (last?.gate?.verdict === 'block' && !last.report) return { text: name === 'alone' ? 'The gate refused this plan. Running it on a clone anyway, to measure it.' : 'The gate refused this plan. The agent is rewriting it.', tone: 'live' };
       if (last?.report && !last.verdict) return { text: 'Measured. Checking the result.', tone: 'live' };
       return { text: n > 1 ? `Reading what was measured and rewriting. Attempt ${num(n)}.` : 'The agent is planning', tone: 'live' };
     case 'rehearsing':
@@ -290,9 +315,11 @@ export function laneWord(lane: Lane, name: 'alone' | 'through'): { text: string;
     case 'awaiting_approval':
       return { text: 'Waiting for a person', tone: 'wait' };
     case 'blocked':
-      return name === 'alone' ? { text: 'Refused', tone: 'bad' } : { text: 'Stopped', tone: 'bad' };
+      if (lane.refused) return { text: 'Agent refused', tone: 'neutral' };
+      // The left lane is never approved, so its word says what it is. Colour comes from what was measured.
+      return name === 'alone' ? { text: 'Rehearsed only', tone: lane.broken.length || lane.final?.gate?.verdict === 'block' ? 'bad' : 'neutral' } : { text: 'Blocked', tone: 'bad' };
     case 'no_change':
-      return { text: 'Changed nothing', tone: 'neutral' };
+      return lane.refused ? { text: 'Agent refused', tone: 'neutral' } : { text: 'Changed nothing', tone: 'neutral' };
     case 'error':
       return { text: 'Failed', tone: 'bad' };
     default:

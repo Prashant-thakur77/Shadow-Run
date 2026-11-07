@@ -730,3 +730,45 @@
     display: none;
   }
 }
+
+.land-linked {
+  padding: 8px var(--margin);
+  border-bottom: 1px solid var(--line-2);
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+
+/* Phones: the way in comes right after the headline, and the two verdicts sit above the rooms, where they can't cover
+   a room's numbers. Same parts, in the order a phone reads them. */
+@media (max-width: 999px) {
+  .hero {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .hero > * {
+    min-width: 0;
+  }
+  .hero-bar {
+    display: contents;
+  }
+  .hero-bar-side:not(.hero-bar-controls) {
+    order: 1;
+    margin-top: var(--s-4);
+  }
+  .hero-stage {
+    order: 2;
+  }
+  .hero-bar-controls {
+    order: 3;
+    margin-top: var(--s-3);
+  }
+  .hero-caption {
+    order: 4;
+  }
+  .rooms-verdicts {
+    position: static;
+    order: -1;
+    border-top: 0;
+  }
+}

@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shlex
 import time
 from contextlib import asynccontextmanager
@@ -14,7 +15,7 @@ from typing import Any, Literal
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -90,6 +91,8 @@ class RunBody(BaseModel):
     steps: list[dict] | None = None
     source: str = "web"
     rehearse_only: bool = False
+    # The exact plan a race's right lane ended on, taken to a normal run. The server checks the steps really are that plan.
+    from_race: str | None = Field(default=None, max_length=64)
 
 
 class RaceBody(BaseModel):
@@ -168,23 +171,102 @@ def require_inference_budget() -> None:
         raise HTTPException(429, "today's inference budget for this demo is used up")
 
 
+# Terminal colour codes, as SQL parsers use to underline a typo. They only make sense in a terminal.
+ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-Z\\-_]")
+MESSAGE_KEYS = frozenset({"error", "reason", "blocked_reason", "sandbox_error"})
+
+
+def plain_messages(value: Any) -> Any:
+    """A copy with terminal codes taken out of what's written for a person to read. Only messages: a plan's own text stays
+    exactly as hashed, because the person approving it has to see what will run."""
+    if isinstance(value, dict):
+        return {k: ANSI.sub("", v) if k in MESSAGE_KEYS and isinstance(v, str) else plain_messages(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [plain_messages(x) for x in value]
+    return value
+
+
+def final_of(run: dict) -> dict | None:
+    return next((a for a in run.get("attempts", []) if a["n"] == run.get("final_attempt")), None)
+
+
+def approval_expired(run: dict) -> bool:
+    """The window has closed, and the server would answer 410. The stored status doesn't change, so the page has to be told."""
+    return run["status"] == "awaiting_approval" and not run.get("race") and bool(run.get("approval_expires_at")) and time.time() >= run["approval_expires_at"]
+
+
+REFUSAL_WORDS = re.compile(r"\brefus|\bdeclin|\bdenied\b|\breject|\bwill not\b|\bwon't\b|\bcannot (comply|do|perform|help|drop|delete|run|execute)\b|\bcan't (comply|do|perform|help|drop|delete|run|execute)\b", re.I)
+
+
+def agent_refusal(run: dict) -> dict | None:
+    """The agent declined, which isn't a plan that something stopped. Either it gave back no steps at all, or it gave back only
+    a harmless SELECT that says so, because the planner has to return a step. The reason is the agent's own, if it wrote one."""
+    if run["status"] not in ("blocked", "no_change"):
+        return None
+    final = final_of(run) or {}
+    plan = final.get("plan") or {}
+    steps = plan.get("steps") or []
+    summary = str(plan.get("summary") or "").strip()
+    if run["status"] == "blocked" and final.get("verdict") == "invalid_plan" and not steps:
+        return {"reason": summary or None}
+    placeholder = bool(steps) and all(re.match(r"\s*select\b", str(s.get("cmd", "")), re.I) and not re.search(r"\bfrom\b", str(s.get("cmd", "")), re.I) for s in steps)
+    text = " ".join(str(s.get("cmd", "")) for s in steps)
+    if run["status"] == "no_change" and placeholder and REFUSAL_WORDS.search(f"{text} {summary}"):
+        return {"reason": summary or None}
+    return None
+
+
+def drift_view(run: dict) -> dict | None:
+    """What "change prod behind its back" would write for this run, or why it can't.
+
+    The drift check compares the tables a plan touches with the snapshot, so a write anywhere else is correctly ignored and the
+    demo has to write to a touched table. A plan that drops or empties a table leaves no rows to compare after it runs, so with
+    the check off nothing would notice a write there. Those tables are the last choice, and the page is told."""
+    final = final_of(run)
+    if not final or run.get("race"):
+        return None
+    report = final.get("report") or {}
+    if report.get("kind") == "host":
+        return {"host": True}
+    result = (final.get("rehearsal") or {}).get("result") or {}
+    snapshot = (run.get("snapshot") or {}).get("tables") or {}
+    touched = [t for t in result.get("touched_tables") or [] if t in snapshot]
+    gone = {t.get("table") for t in report.get("tables") or [] if t.get("dropped") or t.get("truncated")}
+    has_rows = [t for t in touched if (snapshot.get(t) or {}).get("rows")]
+    kept = [t for t in has_rows if t not in gone]
+    if not has_rows:
+        why = (
+            f"This plan only touches {', '.join(touched)}, which had no rows at the rehearsal, so there is nothing to change behind its back."
+            if touched
+            else "This plan touches no table that existed at the rehearsal, so there is nothing for the drift check to compare."
+        )
+        return {"table": None, "touched": touched, "why": why}
+    table = "users" if "users" in kept else (kept[0] if kept else has_rows[0])
+    return {"table": table, "touched": touched, "caught_with_check_off": table in kept}
+
+
 def run_view(run: dict, user: str | None = None) -> dict:
     """What the UI gets. Adds server-computed permissions, so the UI never guesses."""
-    v = dict(run)
+    v = plain_messages(dict(run))
     v.pop("submitted_steps", None)
-    attempts = run.get("attempts", [])
+    attempts = v.get("attempts", [])
     # While the loop runs there is no final attempt yet, so show the latest one.
     final = next((a for a in attempts if a["n"] == run.get("final_attempt")), None) or (attempts[-1] if attempts else None)
     v["final"] = final
     in_race = bool(run.get("race"))
-    if run["status"] == "awaiting_approval" and run.get("plan_hash") and not in_race:
+    expired = approval_expired(run)
+    waiting = run["status"] == "awaiting_approval" and not in_race and not expired
+    if waiting and run.get("plan_hash"):
         v["challenge"] = challenge(run)
     v.pop("approval_nonce", None)
+    v["expired"] = expired
+    v["refused"] = agent_refusal(run)
+    v["drift"] = drift_view(run)
     v["can"] = {
-        "approve": run["status"] == "awaiting_approval" and user is not None and user != run["requester"] and not in_race,
-        "approve_blocked_reason": "You requested this run, so a different person has to approve it." if run["status"] == "awaiting_approval" and user == run["requester"] and not in_race else None,
+        "approve": waiting and user is not None and user != run["requester"],
+        "approve_blocked_reason": "You requested this run, so a different person has to approve it." if waiting and user == run["requester"] else None,
         "apply": run["status"] == "approved" and not in_race,
-        "rehearse_again": run["status"] in ("drift_detected", "rolled_back"),
+        "rehearse_again": run["status"] in ("drift_detected", "rolled_back") or expired,
     }
     ev = run.get("evidence") or {}
     if ev.get("key"):
@@ -217,10 +299,51 @@ def run_summary(run: dict) -> dict:
         "rows_changed": totals.get("rows_changed"), "rows_via_cascade": totals.get("rows_via_cascade"),
         "guardrails_failed": sum(1 for g in final.get("guardrails", []) if not g.get("passed")), "cost_usd": run.get("cost_usd"),
         "rehearsal_ms": (final.get("rehearsal") or {}).get("phases", {}).get("total_ms"),
+        "expired": approval_expired(run), "race_lane": (run.get("race") or {}).get("lane"), "refused": bool(agent_refusal(run)),
     }
 
 
 # ------------------------------------------------------------------ one click into the demo
+
+def bench_json(name: str) -> dict | None:
+    path = RESULTS.parent / name
+    try:
+        return json.loads(path.read_text()) if path.exists() else None
+    except ValueError:
+        return None
+
+
+def task_level() -> dict | None:
+    """bench/stats.py's paired, task-level tests, only when they read the same runs as results.json, or a page could pair
+    one run's numbers with another run's significance."""
+    st, r = bench_json("stats.json"), bench_json("results.json")
+    main = (st or {}).get("main") or {}
+    if not main or not r or main.get("code_sha256") != r.get("code_sha256") or main.get("suite_sha256") != r.get("suite_sha256"):
+        return None
+    pick = lambda c: {k: c.get(k) for k in ("from", "to", "difference", "ci95", "excludes_zero", "permutation_p", "tasks")}
+    out: dict = {}
+    for split in ("heldout", "external"):
+        cmp = ((main.get("sets") or {}).get(split) or {}).get("compare", {}).get("unread_vs_direct")
+        if cmp:
+            out[split] = {metric: pick(cmp[metric]) for metric in ("harm", "done")}
+    controls = (st.get("controls") or {})
+    held = (controls.get("sets") or {}).get("heldout_sql")
+    if held and controls.get("status") == "measured" and controls.get("same_code_as_main"):
+        out["controls"] = {"tasks": held["tasks"], "arms": held["arms"], "compare": {name: {m: pick(c[m]) for m in ("harm", "done")} for name, c in held["compare"].items()}}
+    return out or None
+
+
+def evasion_facts() -> dict | None:
+    """bench/evasion.json without its per-plan rows."""
+    doc = bench_json("evasion.json")
+    return {k: v for k, v in doc.items() if k != "rows"} if doc else None
+
+
+@app.get("/api/evasion")
+def evasion_public() -> dict:
+    """What the retry loop taught the agent, and what the check catches. Public, like the README section it comes from."""
+    return evasion_facts() or {}
+
 
 @app.get("/api/public")
 def public_info() -> dict:
@@ -236,7 +359,20 @@ def public_info() -> dict:
             "held": h["shadow_run"]["risky_held"]["mean"],
             "runs_per_task": r["runs_per_task"], "measured_at": r["at"],
         }
+        # The tasks from outside this project, where the gap is smaller. The landing page says so next to the stronger number.
+        ext = r.get("external") or {}
+        ext_direct, ext_ours = ext.get("direct") or {}, ext.get("shadow_run") or {}
+        if ext_direct.get("risky_tasks") and "risky_done" in ext_direct and "risky_done_if_rubber_stamped" in ext_ours:
+            headline["external"] = {"risky_tasks": ext_direct["risky_tasks"], "done_direct": ext_direct["risky_done"]["mean"], "done_unread": ext_ours["risky_done_if_rubber_stamped"]["mean"]}
+        headline["task_level"] = (task_level() or {}).get("heldout")
     return {"open_demo": OPEN_DEMO, "headline": headline, "hero": hero.latest(svc().store) if OPEN_DEMO else None, "applied_example": hero.applied_example(svc().store) if OPEN_DEMO else None, "video_url": os.environ.get("SHADOWRUN_VIDEO_URL") or None, "repo": "https://github.com/Prashant-thakur77/Shadow-Run"}
+
+
+@app.get("/api/market")
+def market() -> dict:
+    """Who pays, with sources. Public, like the README section it comes from, and only ever what docs/market.json says."""
+    path = ROOT / "docs" / "market.json"
+    return json.loads(path.read_text()) if path.exists() else {}
 
 
 @app.post("/api/demo/enter")
@@ -342,8 +478,8 @@ def static_check(body: CheckBody, user: str = Depends(auth.current_user)) -> dic
     try:
         steps = normalize_plan(body.steps)
     except PlanError as e:
-        raise HTTPException(422, str(e)) from e
-    return {"plan_hash": plan_hash(body.target_id, steps), "gate": check_plan(steps, t["kind"])}
+        raise HTTPException(422, ANSI.sub("", str(e))) from e
+    return {"plan_hash": plan_hash(body.target_id, steps), "gate": plain_messages(check_plan(steps, t["kind"]))}
 
 
 @app.post("/api/runs", status_code=201)
@@ -361,20 +497,56 @@ async def create_run(body: RunBody, user: str = Depends(auth.current_user)) -> d
     if len(s._tasks) >= settings.MAX_RUNNING:
         raise HTTPException(429, "the runner is busy; try again in a minute")
     require_inference_budget()
+    normalized = None
     if body.steps:
         try:
-            normalize_plan(body.steps)
+            normalized = normalize_plan(body.steps)
         except PlanError as e:
-            raise HTTPException(422, str(e)) from e
+            raise HTTPException(422, ANSI.sub("", str(e))) from e
+    origin = race_origin(body.from_race, body.target_id, normalized) if body.from_race else None
     try:
-        run = s.new_run(body.target_id, user, body.task, body.steps, body.source if body.source in ("web", "mcp", "cli", "api") else "api")
+        run = s.new_run(body.target_id, user, origin["task"] if origin else body.task, body.steps, body.source if body.source in ("web", "mcp", "cli", "api") else "api")
     except KeyError as e:
         raise HTTPException(404, "no such target") from e
-    if body.rehearse_only:
+    if origin:
+        # A plan from a race always meets a person, even one that could apply alone: that's what the button promises.
+        run["from_race"] = origin["from_race"]
+        run["rehearse_only"] = True
+        s.store.save_run(run)
+    elif body.rehearse_only:
         run["rehearse_only"] = True
         s.store.save_run(run)
     s.start(run)
     return {"id": run["id"], "status": run["status"]}
+
+
+def race_origin(race_id: str, target_id: str, steps: list[dict] | None) -> dict:
+    """Refuses unless these steps are the plan the race's right lane ended on, and that plan passed and changes something."""
+    s = svc()
+    race = s.store.kv_get(f"race:{race_id}")
+    if not race:
+        raise HTTPException(404, "no such race")
+    lane = s.store.get_run(race["through"]) or {}
+    final = final_of(lane) or {}
+    if lane.get("status") != "awaiting_approval" or final.get("verdict") != "passed":
+        raise HTTPException(409, "that race's right lane has no plan a person could approve")
+    if not steps or target_id != lane.get("target_id") or plan_hash(target_id, steps) != final.get("plan_hash"):
+        raise HTTPException(409, "these steps are not the plan that race ended on")
+    return {"task": race["task"], "from_race": {"id": race_id, "run": race["through"], "plan_hash": final["plan_hash"]}}
+
+
+FEED_MINE = 30
+
+
+@app.get("/api/runs/feed")
+def runs_feed(ids: str = "", user: str = Depends(auth.current_user)) -> dict:
+    """The Recent runs list as a new visitor should see it: this browser's own runs, by id, and a few finished examples."""
+    store = svc().store
+    mine = [r for r in (store.get_run(x) for x in list(dict.fromkeys(i for i in ids.split(",") if i))[:FEED_MINE]) if r]
+    mine.sort(key=lambda r: r.get("created_at") or 0, reverse=True)
+    seen = {r["id"] for r in mine}
+    examples = [{**run_summary(run), "example": why} for run, why in hero.examples(store) if run["id"] not in seen]
+    return {"mine": [run_summary(r) for r in mine], "examples": examples}
 
 
 @app.get("/api/runs")
@@ -422,6 +594,16 @@ async def undo_run(run_id: str, user: str = Depends(auth.current_user)) -> dict:
     except ValueError as e:
         raise HTTPException(409, str(e)) from e
     return {"id": run["id"], "status": run["status"]}
+
+
+def keep_race_origin(old_id: str, run: dict) -> None:
+    """A plan that came from a race stays linked to it through rehearse again, and still meets a person. The new run's task
+    only starts at the next await, so it reads this."""
+    origin = (svc().store.get_run(old_id) or {}).get("from_race")
+    if origin:
+        run["from_race"] = origin
+        run["rehearse_only"] = True
+        svc().store.save_run(run)
 
 
 @app.get("/api/runs/{run_id}/undo")
@@ -563,7 +745,9 @@ def receipts() -> dict:
                 items.append({"group": "Guardrail gauntlet", "claim": f"Real attacks stopped by a rule, {label}", "value": f"{s['caught']} of {s['real_attacks']}", "at": g.get("at"), "source": "bench/gauntlet.json", "rerun": "python scripts/gauntlet_live.py"})
                 items.append({"group": "Guardrail gauntlet", "claim": f"Real attacks that would have applied with no person looking, {label}", "value": f"{s.get('would_auto_apply', 0)} of {s['real_attacks']}", "at": g.get("at"), "source": "bench/gauntlet.json", "rerun": "python scripts/gauntlet_live.py"})
         if g.get("replay"):
-            items.append({"group": "Guardrail gauntlet", "claim": "Attacks that passed the rules, replayed against the rules they taught", "value": f"{g['replay']['caught']} of {g['replay']['total']} now stopped", "at": g.get("at"), "source": "bench/gauntlet.json", "rerun": "python scripts/gauntlet_live.py"})
+            rules = g["replay"].get("guardrails")
+            where = f", in a separate test with {rules} rules" if rules else ""
+            items.append({"group": "Guardrail gauntlet", "claim": f"Attacks that passed the rules, replayed against the rules they taught{where}", "value": f"{g['replay']['caught']} of {g['replay']['total']} now stopped", "at": g.get("at"), "source": "bench/gauntlet.json", "rerun": "python scripts/gauntlet_live.py"})
     inc = load("incidents.json")
     if inc:
         for i in inc["incidents"]:
@@ -579,7 +763,7 @@ def receipts() -> dict:
                 items.append({"group": "Reviewer test", "claim": f"A model standing in for the reviewer, {how}: {label} plans approved", "value": f"{rv[key][kind]['approved']} of {rv[key][kind]['total']}", "at": rv["at"], "source": "bench/reviewer.json", "rerun": rv["rerun"]})
     so = load("soak.json")
     if so:
-        items.append({"group": "Soak", "claim": f"{so['rehearsals']} rehearsals, every one contained with teardown confirmed", "value": "yes" if so["all_contained"] and so["all_teardown_ok"] else "NO", "at": so["at"], "source": "bench/soak.json", "rerun": so["rerun"]})
+        items.append({"group": "Soak", "claim": f"{so['rehearsals']} rehearsals, every one contained with teardown confirmed", "value": "yes" if so["all_contained"] and so["all_teardown_ok"] else "NO", "count": so["rehearsals"], "at": so["at"], "source": "bench/soak.json", "rerun": so["rerun"]})
     return {"items": items, "note": "Nothing here is estimated. A claim with no measurement isn't listed." if items else "not measured yet"}
 
 
@@ -618,6 +802,7 @@ async def rehearse_again(run_id: str, user: str = Depends(auth.current_user)) ->
         run = svc().rehearse_again(run_id, user)
     except (KeyError, ValueError) as e:
         raise HTTPException(404, str(e)) from e
+    keep_race_origin(run_id, run)
     return {"id": run["id"], "status": run["status"]}
 
 
@@ -647,12 +832,52 @@ async def prod_checksum(target_id: str = DEMO_TARGET_ID, user: str = Depends(aut
     return {"seed_digest": seed, "changed_from_seed": bool(seed) and seed != fp["digest"], "digest": fp["digest"], "lsn": fp["lsn"], "rows": {k: v["rows"] for k, v in fp["tables"].items()}, "at": time.time()}
 
 
+def copy_one_row(c: Any, table: str) -> None:
+    """Adds a copy of one row to a table. Whatever the plan does next, this shows: a plan that deletes or updates the copy
+    counts one row more than the rehearsal did, and one that leaves it alone ends with different content. A change to an
+    existing row would go unseen if the plan went on to delete that row."""
+    from psycopg import sql
+
+    columns = c.execute(
+        "SELECT column_name, column_default, data_type, is_identity, is_generated FROM information_schema.columns WHERE table_schema = 'public' AND table_name = %s ORDER BY ordinal_position",
+        (table,),
+    ).fetchall()
+    unique = {r[0] for r in c.execute(
+        "SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey) WHERE i.indrelid = to_regclass(%s) AND i.indisunique",
+        (f'public."{table}"',),
+    ).fetchall()}
+    names, values = [], []
+    for name, default, kind, identity, generated in columns:
+        if generated == "ALWAYS" or identity == "YES" or (name in unique and str(default or "").startswith("nextval(")):
+            continue
+        ident = sql.Identifier(name)
+        if name in unique:
+            if kind not in ("text", "character varying"):
+                raise ValueError(f"{name} has to be unique, and the demo can only vary text")
+            values.append(sql.SQL("{} || '-drift-' || extract(epoch from now())::bigint").format(ident))
+        else:
+            values.append(ident)
+        names.append(ident)
+    row = c.execute(
+        sql.SQL("INSERT INTO {t} ({n}) SELECT {v} FROM {t} LIMIT 1 RETURNING 1").format(t=sql.Identifier(table), n=sql.SQL(", ").join(names), v=sql.SQL(", ").join(values))
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"{table} has no rows to copy")
+
+
 @app.post("/api/demo/drift")
-async def make_drift(target_id: str = DEMO_TARGET_ID, user: str = Depends(auth.current_user)) -> dict:
-    """Change prod behind Shadow Run's back: a real write to a table plans usually touch."""
+async def make_drift(target_id: str = DEMO_TARGET_ID, run_id: str | None = None, user: str = Depends(auth.current_user)) -> dict:
+    """Change prod behind Shadow Run's back: a real write. Given a run, it goes to a table that run's plan touches, because
+    that's what the drift check covers. With no run, to users, which plans usually touch."""
     import psycopg
 
     limit(user, "demo drift writes", 120)
+    run = None
+    if run_id:
+        run = svc().store.get_run(run_id)
+        if not run:
+            raise HTTPException(404, "no such run")
+        target_id = run["target_id"]
     t = svc().store.get_target(target_id)
     if not t or not t.get("demo_controls"):
         raise HTTPException(403, "only a demo target can be drifted on purpose")
@@ -660,18 +885,30 @@ async def make_drift(target_id: str = DEMO_TARGET_ID, user: str = Depends(auth.c
         await svc().runner.host_exec(t["host_id"], "echo drift >> /var/app/logs/app.log")
         svc().store.append_event(None, user, "demo_drift", {"target": target_id})
         return {"what": "one line appended to /var/app/logs/app.log, outside Shadow Run"}
+    table = "users"
+    if run is not None:
+        plan = drift_view(run) or {}
+        if not plan.get("table"):
+            raise HTTPException(409, plan.get("why") or "this run has no rehearsal to compare with")
+        table = plan["table"]
     conn = conn_from_target(t)
 
     def write() -> dict:
         with psycopg.connect(**conn.kwargs()) as c:
-            row = c.execute(
-                """INSERT INTO users (account_id, email, full_name, role, status, last_login_at, created_at)
-                   SELECT id, 'drift+' || extract(epoch from now())::bigint || '@example.test', 'Drift User', 'member', 'active',
-                          now() - interval '2 years', now() FROM accounts ORDER BY id LIMIT 1 RETURNING id"""
-            ).fetchone()
-            return {"inserted_user_id": row[0], "what": "one user inserted directly into prod, outside Shadow Run"}
+            if table == "users":
+                row = c.execute(
+                    """INSERT INTO users (account_id, email, full_name, role, status, last_login_at, created_at)
+                       SELECT id, 'drift+' || extract(epoch from now())::bigint || '@example.test', 'Drift User', 'member', 'active',
+                              now() - interval '2 years', now() FROM accounts ORDER BY id LIMIT 1 RETURNING id"""
+                ).fetchone()
+                return {"table": "users", "inserted_user_id": row[0], "what": "one user inserted directly into prod, outside Shadow Run"}
+            copy_one_row(c, table)
+            return {"table": table, "what": f"one row added to {table} directly on prod, outside Shadow Run"}
 
-    result = await asyncio.to_thread(write)
+    try:
+        result = await asyncio.to_thread(write)
+    except (psycopg.Error, ValueError) as e:
+        raise HTTPException(409, f"could not write to {table}: {' '.join(str(e).split())[:200]}") from e
     svc().store.append_event(None, user, "demo_drift", result)
     return result
 
@@ -765,6 +1002,8 @@ def results() -> dict:
         reviewer = RESULTS.parent / "reviewer.json"
         if reviewer.exists():
             doc["reviewer"] = {k: v for k, v in json.loads(reviewer.read_text()).items() if k != "rows"}
+        doc["task_level"] = task_level()
+        doc["evasion"] = evasion_facts()
         return doc
     return {"status": "not measured yet"}
 
@@ -790,12 +1029,27 @@ async def health() -> dict[str, Any]:
     return out
 
 
+@app.api_route("/cover.png", methods=["GET", "HEAD"], include_in_schema=False)
+def cover() -> FileResponse:
+    """The picture a link preview shows."""
+    path = ROOT / "docs" / "cover.png"
+    if not path.exists():
+        raise HTTPException(404, "no cover image")
+    return FileResponse(path, media_type="image/png")
+
+
+def index_html() -> str:
+    """Link previews need an absolute image URL, and only the server knows where it lives."""
+    html = (WEB_DIST / "index.html").read_text()
+    return html.replace('content="/cover.png"', f'content="{PUBLIC_URL.rstrip("/")}/cover.png"') if PUBLIC_URL else html
+
+
 if WEB_DIST.exists():
     app.mount("/assets", StaticFiles(directory=WEB_DIST / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):
         candidate = (WEB_DIST / path).resolve()
-        if path and candidate.is_file() and candidate.is_relative_to(WEB_DIST.resolve()):
+        if path and candidate.is_file() and candidate.is_relative_to(WEB_DIST.resolve()) and candidate.name != "index.html":
             return FileResponse(candidate)
-        return FileResponse(WEB_DIST / "index.html")
+        return HTMLResponse(index_html())

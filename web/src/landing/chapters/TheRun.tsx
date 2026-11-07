@@ -12,8 +12,8 @@ import { ChapterHead, pad, Pager, Segments, useMode } from './parts';
 
 const STAGES = [
   { word: 'Frozen', line: 'The plan is frozen and hashed. Change a byte and the hash changes.' },
-  { word: 'Gated', line: 'A static gate reads the plan before anything runs.' },
-  { word: 'Cloned', line: 'A clone of prod boots in a microVM with no network.' },
+  { word: 'Gated', line: 'A static gate, rules that read the SQL without running it, looks at the plan first.' },
+  { word: 'Cloned', line: 'A clone of prod boots in a microVM, a small throwaway virtual machine with no network.' },
   { word: 'Rehearsed', line: 'The plan runs on the clone. Postgres counts every row, cascades included.' },
   { word: 'Checked', line: "Frozen guardrails check the result. The agent can't edit them." },
   { word: 'Approved', line: 'A different person approves the exact hashes.' },

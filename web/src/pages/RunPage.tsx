@@ -9,7 +9,7 @@ import { FooterSection } from '../run/Footer';
 import { GuardrailsSection } from '../run/Guardrails';
 import { handedOffRun } from '../run/handoff';
 import { IncidentBanner } from '../run/IncidentBanner';
-import { RaceBanner } from '../run/RaceBanner';
+import { RaceBanner, RaceOriginBanner } from '../run/RaceBanner';
 import { LearnSection } from '../run/Learn';
 import { showsComparison, WithWithout } from '../run/WithWithout';
 import { RunHeader, TaskBlock } from '../run/Header';
@@ -19,13 +19,16 @@ import { StoppedProof, UndoRoundTrip } from '../run/ProdProof';
 import { RehearsalSection } from '../run/Rehearsal';
 import { RunRecordSection } from '../run/RunRecord';
 import { RunRooms } from '../run/RunRooms';
-import { notifyProdChanged } from '../api/client';
+import { api, notifyProdChanged } from '../api/client';
+import type { Run } from '../api/types';
 import { failedGuardrails, selectedAttempt, statusWord, storySteps } from '../run/derive';
 import { useRun } from '../run/useRun';
-import { isInProgress, statusInfo, type Tone } from '../lib/status';
+import { isInProgress, runInfo, type Tone } from '../lib/status';
 import { showTarget } from '../lib/target';
+import { useAsync } from '../lib/useAsync';
 import { Link } from '../lib/router';
 import { Boundary, Loading, Mark, Notice, Section } from '../ui/bits';
+import { plainNetwork } from '../ui/Figure';
 import { Label } from '../ui/Label';
 import { TwoRoomsEmpty } from '../ui/TwoRooms';
 
@@ -135,7 +138,10 @@ export function RunPage({ id }: { id: string }) {
   const steps = useMemo(() => (run ? storySteps(run, inProgress) : []), [run, inProgress]);
   const [breakResults, setBreakResults] = useState<Record<string, BreakResult[]>>({});
   // A race's runs refuse every approval, so the controls on this panel would say nothing useful.
-  const showBreakIt = !run?.race && (run?.status === 'awaiting_approval' || run?.status === 'approved' || Object.keys(breakResults).length > 0);
+  const showBreakIt = !run?.race && !run?.expired && (run?.status === 'awaiting_approval' || run?.status === 'approved' || Object.keys(breakResults).length > 0);
+  // A plan from a race was written in that race, so what the agent went through is on the race's run.
+  const originId = run?.from_race?.run;
+  const origin = useAsync<Run | null>(() => (originId ? api.run(originId) : Promise.resolve(null)), [originId]);
 
   // The prod indicator follows the target this run is about.
   useEffect(() => {
@@ -228,12 +234,13 @@ export function RunPage({ id }: { id: string }) {
   }
   if (!run) return <RunLoading id={id} error={error} />;
 
-  const info = statusInfo(run.status);
+  const info = runInfo(run);
+  const needsYou = (run.status === 'awaiting_approval' && !run.expired) || run.status === 'approved';
   const selectedN = attempt?.n ?? null;
   const flags = run.data_flags ?? [];
   const waitingForAttempts = inProgress && !(run.attempts?.length);
   const failedHere = attempt ? failedGuardrails(attempt) : 0;
-  const anyAttemptFailed = (run.attempts ?? []).some((a) => a.verdict && a.verdict !== 'passed');
+  const anyAttemptFailed = (run.attempts ?? []).some((a) => a.verdict && a.verdict !== 'passed' && a.verdict !== 'read_only_plan');
   const gateVerdict = attempt?.gate?.verdict;
 
   // Zone two is the evidence, with the decision first. Zone three is the record, folded.
@@ -241,8 +248,8 @@ export function RunPage({ id }: { id: string }) {
     {
       id: 'decision',
       title: 'Decision',
-      alert: run.status === 'awaiting_approval' || run.status === 'approved' ? 'wait' : undefined,
-      body: <DecisionSection run={run} setRun={setRun} pollFast={pollFast} />,
+      alert: needsYou ? 'wait' : undefined,
+      body: <DecisionSection run={run} origin={origin.data} setRun={setRun} pollFast={pollFast} />,
     },
   ];
   if (showsComparison(run)) {
@@ -263,7 +270,7 @@ export function RunPage({ id }: { id: string }) {
   items.push({
     id: 'rehearsal',
     title: 'Rehearsal',
-    aside: <span className="muted">Disposable clone, microVM, network: {attempt?.rehearsal?.limits?.network ?? 'none'}</span>,
+    aside: <span className="muted">Disposable clone, microVM, network: {plainNetwork(attempt?.rehearsal?.limits?.network ?? 'none')}</span>,
     alert: attempt?.rehearsal?.sandbox_error || attempt?.rehearsal?.contained === false ? 'bad' : undefined,
     body: <RehearsalSection run={run} attempt={attempt} inProgress={inProgress} selected={selectedN} onSelect={setPicked} />,
   });
@@ -340,11 +347,11 @@ export function RunPage({ id }: { id: string }) {
   const number = (it: Item) => String(items.indexOf(it) + 1).padStart(2, '0');
 
   return (
-    <div className={run.status === 'awaiting_approval' || run.status === 'approved' ? 'runpage is-waiting' : 'runpage'}>
+    <div className={needsYou ? 'runpage is-waiting' : 'runpage'}>
       <div className="run-verdict">
         <Boundary label="header">
           <div className="run-fold">
-            <RunHeader run={run} />
+            <RunHeader run={run} origin={origin.data} />
             <nav className="rail-chips" aria-label="Sections of this run, phone">
               {items.map((it) => (
                 <a key={it.id} href={`#${it.id}`} onClick={() => goTo(it.id)}>
@@ -357,6 +364,7 @@ export function RunPage({ id }: { id: string }) {
           </div>
           {run.incident && <IncidentBanner incident={run.incident} />}
           {run.race && <RaceBanner race={run.race} />}
+          {run.from_race && <RaceOriginBanner run={run} />}
           <UndoRoundTrip run={run} />
           <StoppedProof run={run} />
         </Boundary>

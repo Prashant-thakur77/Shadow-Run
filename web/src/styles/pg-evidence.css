@@ -1884,3 +1884,77 @@ details[open] > .ev-run-row .ev-chevron {
     display: none;
   }
 }
+
+/* The control arms: four ways to keep an agent off prod, on the same tasks. */
+.ctl-table th[scope='col'] {
+  vertical-align: bottom;
+}
+.ctl-note {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-3);
+  font-weight: 400;
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+}
+.ctl-table td.is-good {
+  color: var(--good);
+}
+.ctl-table td.is-bad {
+  color: var(--bad);
+}
+.ga-section {
+  display: grid;
+  gap: var(--s-5);
+  scroll-margin-top: 96px;
+}
+.ctl-cards {
+  display: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+}
+.ctl-card {
+  display: grid;
+  gap: 4px;
+  padding: var(--s-3) var(--s-4);
+  border-top: 1px solid var(--line);
+}
+.ctl-card:first-child {
+  border-top: 0;
+}
+.ctl-card-name {
+  font-weight: 600;
+}
+.ctl-card dl {
+  display: grid;
+  gap: 2px;
+  margin: var(--s-2) 0 0;
+}
+.ctl-card dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.ctl-card dt {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+.ctl-card dd {
+  margin: 0;
+}
+.ctl-card dd.is-good {
+  color: var(--good);
+}
+.ctl-card dd.is-bad {
+  color: var(--bad);
+}
+@media (max-width: 760px) {
+  .ev-table-wrap:has(.ctl-table) {
+    display: none;
+  }
+  .ctl-cards {
+    display: block;
+  }
+}

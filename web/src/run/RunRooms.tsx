@@ -13,7 +13,9 @@ function NoClone({ run, attempt }: { run: Run; attempt: Attempt | null }) {
     attempt?.verdict === 'blocked_by_gate'
       ? 'The static gate refused this plan, so no clone was started.'
       : attempt?.verdict === 'invalid_plan'
-        ? 'The agent produced no valid plan, so no clone was started.'
+        ? run.refused
+          ? 'The agent refused, so no clone was started.'
+          : 'The agent produced no valid plan, so no clone was started.'
         : attempt?.verdict === 'sandbox_error'
           ? 'The sandbox failed, so nothing here was measured.'
           : attempt?.verdict === 'sql_error'

@@ -615,6 +615,8 @@ textarea {
 /* Dialog */
 .dialog {
   width: min(420px, calc(100vw - 32px));
+  /* A dialog can open from inside the header chip, and it shouldn't inherit the chip's one-line text. */
+  white-space: normal;
   padding: var(--s-5);
   border: 1px solid var(--line-2);
   border-radius: var(--radius);
@@ -633,6 +635,13 @@ textarea {
 .dialog-title {
   font-size: var(--fs-l);
   font-weight: 600;
+}
+.dialog-confirm {
+  font-size: var(--fs-m);
+  font-weight: 400;
+}
+.dialog-confirm > * + * {
+  margin-top: var(--s-3);
 }
 .dialog-actions {
   margin-top: var(--s-2);

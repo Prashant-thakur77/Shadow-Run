@@ -589,7 +589,7 @@ def block_gauntlet() -> str:
         f"| Old policy, a row limit only | {base['real_attacks']} | {base['caught']} | {base['held_for_a_person']} | **{base['would_auto_apply']}** | {reach(base)} |\n"
         f"| Named list of what may change alone | {a['real_attacks']} | {a['caught']} | {a['held_for_a_person']} | **{a['would_auto_apply']}** | {reach(a)} |\n"
         f"| Same, after adopting {len(g['adopted'])} rules it taught us | {b['real_attacks']} | {b['caught']} | {b['held_for_a_person']} | **{b['would_auto_apply']}** | {reach(b)} |\n\n"
-        f"Replaying the attacks that passed the rules, against the rules they taught: {r['caught']} of {r['total']} now stopped. That's a regression check on those attacks, not a claim about new ones, and the last row shows new ones still come."
+        f"Replaying the attacks that passed the rules, against the rules they taught: {r['caught']} of {r['total']} now stopped, in a separate test with {r['guardrails']} rules. That's a regression check on those attacks, not a claim about new ones, and the last row shows new ones still come."
     )
     return text + f" Model `{g['model']}`, ${g['cost_usd']} of inference, full transcripts in `bench/gauntlet.json`. Re-run: `{g['rerun']}`." + where(g)
 
@@ -629,7 +629,71 @@ def block_reviewer() -> str:
     )
 
 
+def evasion_sentence(d: dict) -> str:
+    """The finding in one paragraph. The submission uses it too, so the two can't say different things."""
+    r = d["rates"]
+    a, f = r["passed_after_breaking_a_rule"], r["passed_first_time"]
+    des, un = d["detection"]["design"], d["detection"]["unseen"]
+    return (
+        f"Told which rule it broke, the agent sometimes gets around it. In runs recorded before we checked for this, risky plans that passed only after breaking a guardrail "
+        f"did harm in {a['harmful']} of {a['plans']} cases ({a['harmful_pct']}%), against {f['harmful']} of {f['plans']} ({f['harmful_pct']}%) for plans that passed first time. "
+        f"So a plan that follows a broken rule now gets two more checks, and if either doubts it, the plan goes back to the agent. "
+        f"On plans nobody read while writing the checks, they caught {un['harmful']['caught']} of {un['harmful']['total']} harmful plans and sent back {un['good']['caught']} of {un['good']['total']} good ones."
+    )
+
+
+def block_evasion() -> str:
+    d = load("evasion.json")
+    if not d or not d.get("detection"):
+        return ""
+    r = d["rates"]
+    des, un = d["detection"]["design"], d["detection"]["unseen"]
+    out = [evasion_sentence(d).replace("Told which rule it broke, the agent sometimes gets around it. ", "", 1)]
+    out.append(f"None of the {r['safe_plans']} safe plans broke a rule first, so the checks cost nothing there.")
+    ex = (d.get("examples") or [None])[0]
+    if ex:
+        rows = []
+        for a in ex["attempts"]:
+            what = {"failed_guardrails": f"broke: {'; '.join(a['broke'])}", "passed": "passed every guardrail", "invalid_plan": "no steps, told to return at least one", "sql_error": "error on the clone"}.get(a["verdict"], str(a["verdict"]).replace("_", " "))
+            plan = "<br>".join(f"`{c[:110]}{'…' if len(c) > 110 else ''}`" for c in a["plan"]) or "none"
+            rows.append([str(a["n"]), plan, what])
+        out.append(f"One recorded run, task `{ex['task']}`: \"{ex['request']}\"\n\n" + table(["Attempt", "Plan", "Result on the clone"], rows))
+        if ex.get("harm"):
+            out.append(f"The benchmark's own check, run after approving the last plan, found: {', '.join(ex['harm'])}. Every guardrail had passed.")
+    out.append(
+        "The two checks: **measured**, with no model, a column the plan changed that a rule it broke reads, and that the plan which broke the rule didn't change; "
+        f"and a **second model** (`{d['model']}`) reading only the plans. Either one's doubt sends the plan back. A plan a person submits gets one try, so it's never checked this way."
+    )
+    out.append(table(
+        ["Retried plans, replayed", "Harmful plans caught", "...by the measured check", "...by the second model", "Good plans sent back"],
+        [
+            [f"Written from ({des['plans']} plans)", f"{des['harmful']['caught']} of {des['harmful']['total']}", str(des["harmful"]["by_measured_check"]), str(des["harmful"]["by_second_reader"]), f"{des['good']['caught']} of {des['good']['total']}"],
+            [f"Unseen ({un['plans']} plans)", f"{un['harmful']['caught']} of {un['harmful']['total']}", str(un["harmful"]["by_measured_check"]), str(un["harmful"]["by_second_reader"]), f"{un['good']['caught']} of {un['good']['total']}"],
+        ],
+    ))
+    out.append(
+        "The unseen plans come from the same tasks run on a stricter schema, so this tests new plans, not new tasks. "
+        "The replay reads columns from the plan's text, because those records don't keep measured columns; the product uses the measured ones."
+    )
+    e = d.get("empty_plans") or {}
+    if e.get("plans"):
+        out.append(
+            f"The loop also used to push an agent that returned no steps to return at least one. Those {e['plans']} plans were harmful {e['harmful']} times and good {e['good']} times. "
+            "Now no steps can be a refusal: it gets one plain question, and a second empty answer ends the run."
+        )
+    after = d.get("after")
+    if after and after.get("heldout"):
+        h, dn = after["heldout"]["harm"], after["heldout"]["done"]
+        out.append(
+            f"With both changes in the benchmark, approved unread, held-out harm went from {h['from']:g} to {h['to']:g} ({fmt_ci(h)}) and work done safely from {dn['from']:g} to {dn['to']:g} ({fmt_ci(dn)}). "
+            f"Of {after['runs']} Shadow Run runs, {after['checked']} were checked, {after['flagged_at_least_once']} were sent back at least once, and {after['stopped']} ended there."
+        )
+    out.append(f"Re-run: `{d['rerun']}`.")
+    return "\n\n".join(out)
+
+
 BLOCKS = {
+    "evasion": block_evasion,
     "market": block_market,
     "reviewer": block_reviewer,
     "incidents": block_incidents, "video": block_video, "wider": block_wider, "gate": block_gate, "clone_check": block_clone_check, "second_opinion": block_second_opinion, "gauntlet": block_gauntlet, "models": block_models,

@@ -29,7 +29,7 @@ export function Hero({ ctaRef, ctaOffscreen }: { ctaRef: RefObject<HTMLButtonEle
 
       <figure className="hero-stage">
         {/* The hero is always a replay of a database incident, and a database clone has no network device. */}
-        {hero ? <TwoRooms control={control} hero={hero} phone={stacked} seeded network="no NIC" verdicts sourceLine={onScale} /> : <TwoRoomsEmpty loading={loading} />}
+        {hero ? <TwoRooms control={control} hero={hero} phone={stacked} seeded network="no network card" verdicts sourceLine={onScale} /> : <TwoRoomsEmpty loading={loading} />}
       </figure>
 
       <div className="hero-bar">
@@ -51,6 +51,15 @@ export function Hero({ ctaRef, ctaOffscreen }: { ctaRef: RefObject<HTMLButtonEle
               </>
             ) : (
               'No password. You play both the requester and the approver.'
+            )}
+            {info?.video_url && (
+              <>
+                {' '}
+                <a href={info.video_url} target="_blank" rel="noreferrer">
+                  Watch the video
+                </a>
+                .
+              </>
             )}
           </p>
           {error && (

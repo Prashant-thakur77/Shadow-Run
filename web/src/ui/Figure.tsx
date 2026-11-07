@@ -1,6 +1,14 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 import { when } from '../lib/format';
 
+/** "control plane" is what the record calls the server that runs Shadow Run. */
+export function plainSource(from?: string | null): string {
+  return `by Shadow Run's own server${from && /outside the sandbox/i.test(from) ? ', outside the sandbox' : ''}`;
+}
+
+/** A NIC is a network card, and the record's own word for it means nothing to most readers. */
+export const plainNetwork = (policy: string) => policy.replace(/\bno NIC\b/gi, 'no network card');
+
 /** The source line every drawing carries: `fig. 2 · run r56… · measured 6 Nov 11:38 · 1 dot = 25 rows`. */
 export function sourceLine(parts: { n?: number; run?: string | null; measured?: number | null; scale?: string | null; extra?: string | null }): string {
   return [

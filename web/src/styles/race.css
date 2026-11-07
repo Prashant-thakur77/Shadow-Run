@@ -810,3 +810,39 @@
     flex: 1 1 100%;
   }
 }
+
+/* The way out of a finished race: the exact plan, as a normal run. */
+.race-toprod {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-5);
+  padding: var(--s-4);
+  border: 1px solid var(--line-2);
+  background: var(--bg-1);
+}
+.race-toprod-text {
+  display: flex;
+  flex: 1 1 420px;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.45;
+}
+.race-toprod-title {
+  color: var(--ink);
+  font-size: var(--fs-m);
+  font-weight: 600;
+}
+.race-toprod .error-line {
+  flex-basis: 100%;
+}
+@media (max-width: 719px) {
+  .race-toprod .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+}

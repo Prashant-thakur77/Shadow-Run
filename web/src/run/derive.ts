@@ -86,12 +86,44 @@ export function failedGuardrails(a: Attempt): number {
   return (a.guardrails ?? []).filter((g) => g.passed === false).length;
 }
 
+/** The plan only reads, so there is nothing to approve. The rows it read don't come back, so the page has to say that. */
+export function isReadOnly(run: Run): boolean {
+  return run.status === 'no_change' && !run.refused && run.final?.gate?.highest_risk === 'read';
+}
+
+/** The undo a person can start from an applied run. */
+export function undoOnOffer(run: Run): boolean {
+  const undo = run.final?.undo;
+  return run.status === 'applied' && !run.undo_of && !!undo && undo.possible !== false && !undo.too_large_to_store;
+}
+
+const WORDS = (text: string) => new Set(text.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 3));
+
+/**
+ * Why a plan a second model doubts differs from the request, when a measured failure forced the change. It reads only what
+ * was measured: a guardrail that failed on an earlier attempt, and the doubt on the final one. Null unless both exist.
+ */
+export function changedToPass(attempts: Attempt[] | undefined, final: Attempt | null | undefined): string | null {
+  const opinion = final?.second_opinion;
+  if (!final || !opinion || opinion.error || (opinion.verdict !== 'partly' && opinion.verdict !== 'does_not')) return null;
+  const broken = [...new Set((attempts ?? []).filter((a) => a.n < final.n && a.verdict === 'failed_guardrails').flatMap((a) => (a.guardrails ?? []).filter((g) => g.passed === false).map((g) => g.name ?? g.id ?? '')))].filter(Boolean);
+  if (!broken.length) return null;
+  // Of the rules an earlier plan broke, name the one closest to what the doubt is about. What was left out counts for more
+  // than what was added, because the rule that stopped the request is what a person has to weigh.
+  const leftOut = WORDS(opinion.left_out ?? '');
+  const added = WORDS(opinion.added ?? '');
+  const score = (name: string) => [...WORDS(name)].reduce((sum, w) => sum + (leftOut.has(w) ? 2 : added.has(w) ? 1 : 0), 0);
+  const named = [...broken].sort((a, b) => score(b) - score(a))[0];
+  const more = broken.length - 1;
+  return `An earlier plan broke the guardrail "${named}"${more ? ` and ${num(more)} more` : ''}. A person can't approve past a guardrail, so the agent changed the plan to satisfy it, and that is why it differs from what you asked. Approve if that is acceptable.`;
+}
+
 export function storySteps(run: Run, inProgress: boolean): StoryStep[] {
   const attempts = run.attempts ?? [];
   if (attempts.length) {
     return attempts.map((a) => ({
       n: a.n,
-      text: verdictText(a.verdict, failedGuardrails(a)),
+      text: a.verdict === 'invalid_plan' && !a.plan?.steps?.length ? 'no plan' : verdictText(a.verdict, failedGuardrails(a)),
       tone: verdictTone(a.verdict),
       planHash: a.plan_hash,
     }));

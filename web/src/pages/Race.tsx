@@ -10,6 +10,8 @@ import { isInProgress, verdictText, verdictTone } from '../lib/status';
 import { DEFAULT_TARGET, showTarget } from '../lib/target';
 import { useAsync } from '../lib/useAsync';
 import { failedGuardrails } from '../run/derive';
+import { refusalLine, TryTheDrop } from '../run/Refused';
+import { canTakeToProd, ToProdButton } from '../run/ToProd';
 import { hasMoved, metricDelta, metricValue } from '../run/metrics';
 import { useRun } from '../run/useRun';
 import { laneSeconds, laneWord, measuredReport, readLane, verdict, verdictRows, type Cell, type Lane, type Verdict, type VerdictRow } from '../race/compare';
@@ -72,7 +74,7 @@ function ProdStrip({ raceId, a, b, now }: { raceId: string | null; a: Lane; b: L
           <span className="race-prod-word">Hash now</span>
           {now ? <Hash value={now} chars={12} /> : <span className="mono muted">Measured when you start</span>}
         </div>
-        <p className="race-prod-note">Measured from the control plane, outside the sandbox.</p>
+        <p className="race-prod-note">Measured by Shadow Run's own server, outside the sandbox.</p>
       </div>
     );
   }
@@ -108,7 +110,7 @@ function ProdStrip({ raceId, a, b, now }: { raceId: string | null; a: Lane; b: L
             Prod's hash moved during this race. Neither lane can write to prod, so another run or visitor did it. <Link href="/audit">See the audit log</Link>.
           </>
         ) : (
-          'Measured from the control plane, outside the sandbox.'
+          "Measured by Shadow Run's own server, outside the sandbox."
         )}
       </p>
     </div>
@@ -327,23 +329,45 @@ function ErrorLine({ attempt }: { attempt: Attempt }) {
 function AloneDetail({ lane }: { lane: Lane }) {
   const attempt = lane.run?.attempts?.[0] ?? null;
   if (!attempt) return <p className="race-none">The first plan shows here when the agent has written it.</p>;
-  const gate = attempt.gate?.verdict;
+  // Only a plan the gate read can be refused by it, and only one that really ran on a clone can be said to have.
+  const gateRefused = attempt.verdict === 'blocked_by_gate';
+  if (lane.refused) {
+    return (
+      <>
+        <h3 className="race-detail-title">The agent's first answer</h3>
+        <RefusedDetail lane={lane} />
+      </>
+    );
+  }
   return (
     <>
       <h3 className="race-detail-title">The agent's first plan</h3>
       {attempt.plan ? <PlanText attempt={attempt} /> : <Loading>The agent is planning</Loading>}
-      {gate === 'block' && <p className="race-note">The static gate refuses this plan. It ran on a clone anyway, so you can see what it does.</p>}
+      {gateRefused && <p className="race-note">{attempt.rehearsal ? 'The static gate, which reads the SQL without running it, refuses this plan. It ran on a clone anyway, so you can see what it does.' : 'The static gate, which reads the SQL without running it, refuses this plan. It never ran.'}</p>}
       <ErrorLine attempt={attempt} />
       <MeasuredBlock attempt={attempt} heading="What it would have done to prod" />
       {lane.settled && (
         <div className="race-end">
-          <Stamp tone="bad" land>
-            Refused
+          <Stamp tone={laneWord(lane, 'alone').tone} land>
+            Rehearsed only
           </Stamp>
-          <p>This lane is measured for comparison and stays refused. Nothing from it reaches prod.</p>
+          <p>This lane shows what the agent's first plan does. It only ever runs on a clone, and it can't be approved or applied.</p>
         </div>
       )}
     </>
+  );
+}
+
+function RefusedDetail({ lane }: { lane: Lane }) {
+  return (
+    <div className="race-end">
+      <Stamp tone="neutral" land>
+        Agent refused
+      </Stamp>
+      {lane.refused?.reason && <p>{lane.refused.reason}</p>}
+      <p>{refusalLine(lane.run)}</p>
+      <TryTheDrop task={lane.run?.task} targetId={lane.run?.target_id} />
+    </div>
   );
 }
 
@@ -354,6 +378,14 @@ function ThroughDetail({ lane }: { lane: Lane }) {
   const finalN = lane.settled ? (lane.final?.n ?? null) : null;
   const opinion = lane.final?.second_opinion;
   const waiting = run?.status === 'awaiting_approval';
+  if (lane.refused) {
+    return (
+      <>
+        <h3 className="race-detail-title">The agent's answer</h3>
+        <RefusedDetail lane={lane} />
+      </>
+    );
+  }
   return (
     <>
       <h3 className="race-detail-title">Each attempt</h3>
@@ -405,12 +437,12 @@ function ThroughDetail({ lane }: { lane: Lane }) {
             </Stamp>
           ) : (
             <Stamp tone="bad" land>
-              Stopped
+              Blocked
             </Stamp>
           )}
           <p>
             {waiting
-              ? 'A person would approve these exact hashes before this could reach prod. A race only rehearses, so here it stays.'
+              ? 'A person would approve these exact hashes before this could reach prod. A race only rehearses, so this run stays here. Take this plan to prod starts a normal run with the same steps.'
               : run?.status === 'no_change'
                 ? 'The rehearsal changed nothing, so there is nothing for a person to approve.'
                 : (run?.blocked_reason ?? run?.error ?? 'Nothing reached prod.')}
@@ -494,6 +526,17 @@ function Board({ race, a, b, rows, prodNow }: { race: Race | null; a: Lane; b: L
     <section className="race-board" aria-label="The race">
       <ProdStrip raceId={race?.id ?? null} a={a} b={b} now={prodNow} />
       <VerdictHead words={words} started={!!race} />
+      {done && canTakeToProd(b.run) && b.run && (
+        <div className="race-toprod">
+          <div className="race-toprod-text">
+            <h2 className="race-toprod-title">Now do it for real, on demo prod</h2>
+            <p>
+              A race can't reach prod. This starts a normal run with these exact steps, plan <code className="mono">{short(b.final?.plan_hash, 12)}</code>. It rehearses them again, then waits for a person. You can approve it as the other identity, change prod behind its back, watch the apply roll back, apply it and undo it.
+            </p>
+          </div>
+          <ToProdButton run={b.run} />
+        </div>
+      )}
       <Frame className="race-frame">
         <div className="race-lanes race-fields">
           <section className="race-lane" aria-label="The agent alone">

@@ -76,6 +76,7 @@ bench() {
   python -m bench.gate_score
   python -m bench.gate_replay
   python -m bench.second_opinion_eval
+  python -m bench.evasion_eval
   python -m bench.rescore
   python -m bench.stats
 }

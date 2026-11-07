@@ -10,6 +10,8 @@ import { Figure, sourceLine } from '../ui/Figure';
 import { Frame } from '../ui/Frame';
 import { Label } from '../ui/Label';
 import { Measured } from '../ui/Measured';
+import type { ControlArms, EvasionFacts, TaskLevel } from '../api/types';
+import { GotAround } from '../ui/GotAround';
 import { finishesMore, HoldQueueAnswer, Outcomes, type OutcomeMode } from '../ui/Outcomes';
 import { PageHead, useFirstSight } from './_evidence';
 
@@ -106,28 +108,131 @@ function outcomeModes(b: Block): OutcomeMode[] {
 
 const outcomesSource = (runs: number | undefined) => `${SOURCE} · mean of ${num(runs)} runs per task · neither is the tasks minus the other two · cells are counted, not matched to tasks`;
 
-/** The strongest result on the page, and the answer to the first objection. Stopping harm alone could be a queue. */
-function Lead({ block, measured, runs }: { block: Block; measured: number | null; runs: number | undefined }) {
+/** A difference the paired test over tasks can tell from chance. Without the test, nothing is called clear. */
+export const clear = (c: TaskLevel['harm']) => !!c?.excludes_zero;
+const ci = (c: TaskLevel['harm']) => (c?.ci95 ? `95% interval ${num(c.ci95[0])} to ${num(c.ci95[1])}, p = ${num(c.permutation_p)}` : '');
+
+/** The strongest result on the page, and the answer to the first objection. Stopping harm alone could be a queue. The
+ * title claims more work done only when the paired test over tasks says so, not when one mean is higher than another. */
+function Lead({ block, measured, runs, tests }: { block: Block; measured: number | null; runs: number | undefined; tests: TaskLevel | null | undefined }) {
   const modes = outcomeModes(block);
   const total = block.direct?.risky_tasks;
-  const more = finishesMore(modes);
+  const more = finishesMore(modes) && clear(tests?.done);
+  const less = clear(tests?.harm) && (tests?.harm?.difference ?? 0) < 0;
   return (
     <Figure className="ev-figure-block" n={1} measured={measured} extra={outcomesSource(runs)}>
       <h2 className="ev-statement">
         {more ? (
           'The agent finishes more of the work correctly'
+        ) : less ? (
+          'Harm on prod falls, even with every plan approved unread'
         ) : (
           <>
             Done, harmful or neither, of <span className="mono">{num(total)}</span> risky tasks held out from tuning
           </>
         )}
       </h2>
-      {more && (
+      {tests?.harm && tests?.done ? (
         <p className="ev-lead-line">
-          Of <span className="mono">{num(total)}</span> risky tasks held out from tuning, <span className="mono">{num(modes[2].done?.mean)}</span> were done with no harm when a person approved every plan unread. The agent alone managed <span className="mono">{num(modes[0].done?.mean)}</span>.
+          Of <span className="mono">{num(total)}</span> risky tasks held out from tuning, harm went from <span className="mono">{num(tests.harm.from)}</span> to{' '}
+          <span className="mono">{num(tests.harm.to)}</span> with a person approving every plan unread ({ci(tests.harm)}). Work done safely went from{' '}
+          <span className="mono">{num(tests.done.from)}</span> to <span className="mono">{num(tests.done.to)}</span>
+          {clear(tests.done) ? ` (${ci(tests.done)}).` : `, and that one could be chance at this sample (${ci(tests.done)}).`}
         </p>
-      )}
-      <Outcomes total={total} modes={modes} showRuns aside={<HoldQueueAnswer total={total} modes={modes} harmAlone={block.shadow_run?.harm_on_prod?.mean} held={block.shadow_run?.risky_held?.mean} />} />
+      ) : null}
+      <Outcomes total={total} modes={modes} showRuns aside={<HoldQueueAnswer total={total} modes={modes} harmAlone={block.shadow_run?.harm_on_prod?.mean} held={block.shadow_run?.risky_held?.mean} doneIsClear={clear(tests?.done)} />} />
+    </Figure>
+  );
+}
+
+const ARMS: { key: string; label: string; note: string }[] = [
+  { key: 'direct', label: 'Agent directly', note: 'Its plan runs on prod.' },
+  { key: 'rules_in_prompt', label: 'Rules in the prompt', note: 'The same guardrails, given up front. The plan runs on prod.' },
+  { key: 'rollback', label: 'Transaction with rollback', note: 'The guardrails checked inside a transaction on prod, with the same retries.' },
+  { key: 'unread', label: 'Shadow Run, approved unread', note: 'Rehearsed on a clone, then a person approves without reading.' },
+];
+
+/** The two control arms, which ask how much of the gain a prompt or a transaction gets you without a clone. */
+function Controls({ controls, n, measured, runs, heldHarm }: { controls: ControlArms; n: number; measured: number | null; runs: number | undefined; heldHarm: number | null | undefined }) {
+  const arms = controls.arms ?? {};
+  const vsRules = controls.compare?.unread_vs_rules;
+  const vsRollback = controls.compare?.unread_vs_rollback;
+  const tie = !clear(vsRules?.harm) && !clear(vsRollback?.harm);
+  return (
+    <Figure className="ev-figure-block" n={n} measured={measured} extra={`bench/stats.json · mean of ${num(runs)} runs per task · ${num(controls.tasks)} held-out SQL tasks, the ones a transaction can run`}>
+      <h2 className="ev-statement">
+        {tie ? 'A prompt with the rules cuts harm about as much. It still lands on prod with nobody looking.' : 'Against a prompt with the rules, and a transaction'}
+      </h2>
+      <div className="ev-table-wrap">
+        <table className="ev-table data ctl-table">
+          <thead>
+            <tr>
+              <th scope="col">Of {num(controls.tasks)} risky SQL tasks</th>
+              {ARMS.map((a) => (
+                <th scope="col" key={a.key}>
+                  {a.label}
+                  <span className="ctl-note">{a.note}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Harm on prod, if every plan goes ahead</th>
+              {ARMS.map((a) => (
+                <td key={a.key} className="mono">
+                  {num(arms[a.key]?.harm)}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th scope="row">Done with no harm</th>
+              {ARMS.map((a) => (
+                <td key={a.key} className="mono">
+                  {num(arms[a.key]?.done)}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th scope="row">Harm that reached prod before any person saw it</th>
+              {ARMS.map((a) => (
+                <td key={a.key} className={`mono ${a.key === 'unread' ? (heldHarm === 0 ? 'is-good' : '') : 'is-bad'}`}>
+                  {a.key === 'unread' ? num(heldHarm) : num(arms[a.key]?.harm)}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ul className="ctl-cards" aria-label={`The same numbers by arm, of ${num(controls.tasks)} risky SQL tasks`}>
+        {ARMS.map((a) => (
+          <li key={a.key} className="ctl-card">
+            <span className="ctl-card-name">{a.label}</span>
+            <span className="ctl-note">{a.note}</span>
+            <dl>
+              <div>
+                <dt>Harm, if every plan goes ahead</dt>
+                <dd className="mono">{num(arms[a.key]?.harm)}</dd>
+              </div>
+              <div>
+                <dt>Done with no harm</dt>
+                <dd className="mono">{num(arms[a.key]?.done)}</dd>
+              </div>
+              <div>
+                <dt>Harm before any person saw it</dt>
+                <dd className={`mono ${a.key === 'unread' ? (heldHarm === 0 ? 'is-good' : '') : 'is-bad'}`}>{a.key === 'unread' ? num(heldHarm) : num(arms[a.key]?.harm)}</dd>
+              </div>
+            </dl>
+          </li>
+        ))}
+      </ul>
+      <p className="ev-lead-line">
+        {tie
+          ? 'On plan quality, the paired test over tasks cannot tell Shadow Run from either control. '
+          : 'The paired test over tasks finds a difference against at least one control. '}
+        What differs is where the harm happens. With a prompt or a transaction, a plan that passes every rule commits on its own. With Shadow Run it waits on a clone, with what it measured, until a person signs that exact plan. A transaction can't wait like that: it holds its locks on prod while it does.
+        {heldHarm === 0 ? ' The last row is held-out harm with no one approving: none of it reached prod.' : ''}
+      </p>
     </Figure>
   );
 }
@@ -588,6 +693,8 @@ export function ResultsPage() {
   const notes = data?.notes;
   const rerun = typeof data?.rerun === 'string' ? data.rerun : null;
   const heldout = data?.heldout as Block | undefined;
+  const taskLevel = data?.task_level as ({ heldout?: TaskLevel; external?: TaskLevel; controls?: ControlArms } | null | undefined);
+  const evasionFacts = data?.evasion as EvasionFacts | null | undefined;
   const external = data?.external as Block | undefined;
   const facts: [string, unknown][] = [
     ['Measured', data?.at ? whenAny(data.at) : undefined],
@@ -622,22 +729,29 @@ export function ResultsPage() {
               {reason}
             </Notice>
           )}
-          {!reason && heldout?.direct && <Lead block={heldout} measured={measuredAt} runs={runs} />}
-          {!reason && heldout?.direct && <Verdict held={heldout} n={2} measured={measuredAt} runs={runs} />}
-          {!reason && heldout?.direct && <HarmChart block={heldout} n={3} measured={measuredAt} />}
-          {!reason && heldout?.shadow_run && <GapAndPrice held={heldout} n={4} measured={measuredAt} />}
-          {!reason && results.data?.reviewer ? <ReviewerTest doc={results.data.reviewer as ReviewerDoc} n={5} measured={measuredAt} /> : null}
+          {!reason && heldout?.direct && <Lead block={heldout} measured={measuredAt} runs={runs} tests={taskLevel?.heldout} />}
+          {!reason && taskLevel?.controls?.arms ? <Controls controls={taskLevel.controls} n={2} measured={measuredAt} runs={runs} heldHarm={heldout?.shadow_run?.harm_on_prod?.mean} /> : null}
+          {!reason && evasionFacts?.examples?.length ? (
+            <section id="got-around" className="ev-figure-block ga-section">
+              <h2 className="ev-statement">Told which rule it broke, the agent sometimes gets around it</h2>
+              <GotAround facts={evasionFacts} source="fig. 3 · bench/evasion.json" />
+            </section>
+          ) : null}
+          {!reason && heldout?.direct && <Verdict held={heldout} n={4} measured={measuredAt} runs={runs} />}
+          {!reason && heldout?.direct && <HarmChart block={heldout} n={5} measured={measuredAt} />}
+          {!reason && heldout?.shadow_run && <GapAndPrice held={heldout} n={6} measured={measuredAt} />}
+          {!reason && results.data?.reviewer ? <ReviewerTest doc={results.data.reviewer as ReviewerDoc} n={7} measured={measuredAt} /> : null}
           {!reason && external?.direct && isNum(external.direct.risky_tasks) && external.direct.risky_tasks > 0 && (
             <>
-              <ExternalOutcomes block={external} n={6} measured={measuredAt} runs={runs} />
-              <HarmChart block={external} n={7} measured={measuredAt} />
+              <ExternalOutcomes block={external} n={8} measured={measuredAt} runs={runs} />
+              <HarmChart block={external} n={9} measured={measuredAt} />
             </>
           )}
           {hasTable && table ? (
             <section className="ev-table-section" aria-label="The benchmark table">
               <div className="ev-section-head">
                 <Label>The whole table</Label>
-                <span className="t-caption">Cell for cell from bench/results.json. Bars share one scale.</span>
+                <span className="t-caption">Cell for cell from bench/results.json. Bars share one scale. SABER-derived means adapted from SABER, a published set of tasks for testing agents' safety, rather than written by us.</span>
               </div>
               <BenchTable table={table} colored={!reason} />
             </section>

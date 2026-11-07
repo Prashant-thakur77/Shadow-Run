@@ -1,6 +1,6 @@
 import type { PublicInfo, Receipt } from '../../api/types';
 import { controlSplit } from '../../lib/controls';
-import { asText, num, whenAny } from '../../lib/format';
+import { asText, isNum, num, whenAny } from '../../lib/format';
 import { Link } from '../../lib/router';
 import { Mark } from '../../ui/bits';
 import { finishesMore, HoldQueueAnswer, Outcomes, type OutcomeMode } from '../../ui/Outcomes';
@@ -21,6 +21,12 @@ function outcomeModes(h: Headline): OutcomeMode[] {
     { key: 'static_gate', label: 'Rule gate', done: { mean: h.done_static_gate }, harm: { mean: h.static_gate } },
     { key: 'unread', label: 'A person approves every plan unread', done: { mean: h.done_unread }, harm: { mean: h.rubber_stamp } },
   ];
+}
+
+/** Said only when the numbers say it, since the benchmark can be run again. */
+function externalGapIsSmaller(h: Headline): boolean {
+  const e = h.external;
+  return isNum(e?.done_unread) && isNum(e?.done_direct) && isNum(h.done_unread) && isNum(h.done_direct) && e.done_unread - e.done_direct < h.done_unread - h.done_direct;
 }
 
 /** Every number here comes from the benchmark's own file. Before it has run, nothing is shown. */
@@ -49,9 +55,16 @@ function Benchmark({ headline }: { headline: Headline | null }) {
       <h3 className="t-h3 results-title">
         What happened on <span className="mono">{num(total)}</span> risky tasks held out from tuning
       </h3>
-      <Outcomes total={total} modes={modes} aside={<HoldQueueAnswer total={total} modes={modes} harmAlone={headline.shadow_run} held={headline.held} />} />
+      <Outcomes total={total} modes={modes} aside={<HoldQueueAnswer total={total} modes={modes} harmAlone={headline.shadow_run} held={headline.held} doneIsClear={!!headline.task_level?.done?.excludes_zero} />} />
       <p className="t-caption">
-        Mean of {num(headline.runs_per_task)} runs per task. Neither is the tasks minus the other two. Measured {whenAny(headline.measured_at)}. Nothing here is estimated. <Link href="/results">All results</Link>
+        Mean of {num(headline.runs_per_task)} runs per task, so a count can be a fraction. Neither is the tasks minus the other two. Measured {whenAny(headline.measured_at)}. Nothing here is estimated.
+        {headline.external?.risky_tasks ? (
+          <>
+            {' '}
+            These tasks are our own. On {num(headline.external.risky_tasks)} tasks adapted from outside this project{externalGapIsSmaller(headline) ? ', the gap is smaller' : ''}: {num(headline.external.done_direct)} done by the agent directly, {num(headline.external.done_unread)} with a person approving every plan unread.
+          </>
+        ) : null}{' '}
+        <Link href="/results">All results</Link>
       </p>
     </div>
   );
@@ -78,16 +91,18 @@ export function Results({ headline, receipts }: { headline: Headline | null; rec
   const soak = groupOf(receipts, 'Soak')[0];
   const replayed = groupOf(receipts, 'Guardrail gauntlet').find((r) => /replayed against/i.test(r.claim ?? ''));
   const allGood = (t: { hit: number; total: number }) => (t.hit === t.total ? 'good' : 'bad');
-  const more = !!headline && finishesMore(outcomeModes(headline));
+  const tests = headline?.task_level;
+  const more = !!headline && finishesMore(outcomeModes(headline)) && !!tests?.done?.excludes_zero;
+  const less = !!tests?.harm?.excludes_zero && (tests.harm.difference ?? 0) < 0;
   return (
     <section className="ch ch-screen" id="results" aria-labelledby="results-title">
       <div className="ch-inner">
-        <ChapterHead id="results-title" label="Results" title={more ? 'The agent finishes more of the work correctly.' : 'Nothing here is estimated.'} />
+        <ChapterHead id="results-title" label="Results" title={more ? 'The agent finishes more of the work correctly.' : less ? 'Less harm on prod. Nothing here is estimated.' : 'Nothing here is estimated.'} />
         <Benchmark headline={headline} />
         <dl className="tiles tiles-receipts">
           {redTally ? <Stat value={`${redTally.hit} of ${redTally.total}`} label="Red team attacks contained, real attacks in real microVMs" source={red[0]?.source} tone={allGood(redTally)} /> : <Stat value="Not measured" label="Red team" />}
           {controlTally ? <Stat value={`${controlTally.hit} of ${controlTally.total}`} label={split ? `Negative controls: ${split.words}.` : 'Negative controls pass.'} source={controls[0]?.source} tone={allGood(controlTally)} /> : <Stat value="Not measured" label="Negative controls" />}
-          {soak ? <Stat value={asText(soak.value)} label={soak.claim ?? 'Soak'} source={soak.source} tone={soak.value === 'yes' ? 'good' : 'bad'} /> : <Stat value="Not measured" label="Soak" />}
+          {soak ? <Stat value={soak.value === 'yes' && soak.count ? `${num(soak.count)} of ${num(soak.count)}` : asText(soak.value)} label={soak.claim ?? 'Soak'} source={soak.source} tone={soak.value === 'yes' ? 'good' : 'bad'} /> : <Stat value="Not measured" label="Soak" />}
           {replayed ? <Stat value={asText(replayed.value)} label={replayed.claim ?? ''} source={replayed.source} /> : <Stat value="Not measured" label="Guardrail gauntlet" />}
         </dl>
         <Link className="ch-more" href="/receipts">

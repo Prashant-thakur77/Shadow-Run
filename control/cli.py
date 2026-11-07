@@ -2,7 +2,7 @@
 """`shadowrun`: the same engine from a terminal or a CI pipeline.
 
 Exit codes: 0 passed and applied or nothing to do; 2 waiting for a person; 3 blocked; 4 rolled back or drifted; 1 error.
-Environment: SHADOWRUN_URL, SHADOWRUN_TOKEN (get one with `shadowrun login`, or from the web app).
+Environment: SHADOWRUN_URL, SHADOWRUN_TOKEN (get one with `shadowrun login --guest` on the open demo, `shadowrun login NAME`, or from the web app).
 """
 from __future__ import annotations
 
@@ -20,16 +20,54 @@ TERMINAL = {"blocked", "applied", "rolled_back", "rejected", "drift_detected", "
 EXIT = {"applied": 0, "no_change": 0, "approved": 2, "awaiting_approval": 2, "blocked": 3, "rejected": 3, "rolled_back": 4, "drift_detected": 4, "error": 1}
 
 
+class CliError(Exception):
+    """Something a person can act on. main() prints it as one line and exits 1."""
+
+
 def client() -> httpx.Client:
     url = os.environ.get("SHADOWRUN_URL", "http://localhost:8100")
     token = os.environ.get("SHADOWRUN_TOKEN", "")
     return httpx.Client(base_url=url, timeout=240, headers={"Authorization": f"Bearer {token}"} if token else {})
 
 
+def answer(response: httpx.Response) -> dict:
+    """The JSON of a good reply, or the server's own reason for refusing."""
+    if response.is_success:
+        return response.json()
+    try:
+        detail = response.json().get("detail")
+    except (ValueError, AttributeError):
+        detail = None
+    if isinstance(detail, list):
+        detail = "; ".join(str(d.get("msg", d)) if isinstance(d, dict) else str(d) for d in detail)
+    if response.status_code == 401:
+        raise CliError("not signed in. Set SHADOWRUN_TOKEN, for example: export SHADOWRUN_TOKEN=$(shadowrun login --guest)")
+    raise CliError(f"{response.status_code} from the server: {detail or response.reason_phrase}")
+
+
+def read_password() -> str:
+    if sys.stdin.isatty():
+        return getpass.getpass("password: ")
+    # A pipe still works. With nothing piped in there is no one to ask, so this ends rather than warning about echo.
+    line = sys.stdin.readline().rstrip("\n")
+    if not line:
+        raise EOFError
+    return line
+
+
+def read_plan(path: str) -> str:
+    if path == "-":
+        return sys.stdin.read()
+    try:
+        return Path(path).read_text()
+    except OSError as e:
+        raise CliError(f"can't read {path}: {e.strerror or e}") from e
+
+
 def wait(c: httpx.Client, run_id: str) -> dict:
     last = None
     while True:
-        run = c.get(f"/api/runs/{run_id}").raise_for_status().json()
+        run = answer(c.get(f"/api/runs/{run_id}"))
         if run["status"] != last:
             print(f"  {run['status']}", file=sys.stderr)
             last = run["status"]
@@ -96,11 +134,12 @@ def markdown(run: dict) -> str:
     return "\n".join(lines)
 
 
-def main() -> int:
+def dispatch(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="shadowrun", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     login = sub.add_parser("login", help="print a token for SHADOWRUN_TOKEN")
-    login.add_argument("username")
+    login.add_argument("username", nargs="?", help="an account with a password. On the open demo, use --guest instead")
+    login.add_argument("--guest", action="store_true", help="the open demo's guest, no password")
     r = sub.add_parser("rehearse", help="rehearse a plan file on a clone")
     r.add_argument("plan", help=".sql or .sh file, or - for stdin")
     r.add_argument("--target", default="demo-saas")
@@ -117,26 +156,34 @@ def main() -> int:
     ck = sub.add_parser("check", help="static gate only, no rehearsal")
     ck.add_argument("plan")
     ck.add_argument("--target", default="demo-saas")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     c = client()
 
     def steps_from(path: str) -> list[dict]:
-        text = sys.stdin.read() if path == "-" else Path(path).read_text()
+        text = read_plan(path)
         kind = "shell" if path.endswith(".sh") else "sql"
         return [{"type": kind, "cmd": text}]
 
     if args.cmd == "login":
-        pw = getpass.getpass("password: ")
-        print(c.post("/api/login", json={"username": args.username, "password": pw}).raise_for_status().json()["token"])
+        if args.guest:
+            print(answer(c.post("/api/demo/enter"))["token"])
+            return 0
+        if not args.username:
+            raise CliError("say who: shadowrun login NAME, or shadowrun login --guest on the open demo")
+        try:
+            pw = read_password()
+        except (EOFError, OSError) as e:
+            raise CliError("a password needs a terminal. On the open demo, use: shadowrun login --guest") from e
+        print(answer(c.post("/api/login", json={"username": args.username, "password": pw}))["token"])
         return 0
     if args.cmd == "check":
-        out = c.post("/api/check", json={"target_id": args.target, "steps": steps_from(args.plan)}).raise_for_status().json()
+        out = answer(c.post("/api/check", json={"target_id": args.target, "steps": steps_from(args.plan)}))
         print(json.dumps(out, indent=2))
         return {"pass": 0, "review": 2, "block": 3}[out["gate"]["verdict"]]
     if args.cmd in ("rehearse", "task"):
         body = {"target_id": args.target, "source": "cli"}
         body.update({"steps": steps_from(args.plan), "rehearse_only": args.rehearse_only} if args.cmd == "rehearse" else {"task": args.text})
-        run_id = c.post("/api/runs", json=body).raise_for_status().json()["id"]
+        run_id = answer(c.post("/api/runs", json=body))["id"]
         run = wait(c, run_id)
         if getattr(args, "json", False):
             print(json.dumps(run, indent=1))
@@ -146,13 +193,29 @@ def main() -> int:
             summary(run)
         return EXIT.get(run["status"], 1)
     if args.cmd == "status":
-        run = c.get(f"/api/runs/{args.run_id}").raise_for_status().json()
+        run = answer(c.get(f"/api/runs/{args.run_id}"))
         summary(run)
         return EXIT.get(run["status"], 0)
     if args.cmd == "apply":
-        run = c.post(f"/api/runs/{args.run_id}/apply").raise_for_status().json()
+        run = answer(c.post(f"/api/runs/{args.run_id}/apply"))
         summary(run)
         return EXIT.get(run["status"], 1)
+    return 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Every failure a person can meet here is one line, with no traceback."""
+    url = os.environ.get("SHADOWRUN_URL", "http://localhost:8100")
+    try:
+        return dispatch(argv)
+    except CliError as e:
+        print(f"shadowrun: {e}", file=sys.stderr)
+    except httpx.TransportError as e:
+        print(f"shadowrun: can't reach {url}: {e or type(e).__name__}. Set SHADOWRUN_URL to the server's address.", file=sys.stderr)
+    except httpx.InvalidURL as e:
+        print(f"shadowrun: SHADOWRUN_URL isn't a usable address: {e}", file=sys.stderr)
+    except KeyboardInterrupt:
+        print("shadowrun: stopped", file=sys.stderr)
     return 1
 
 

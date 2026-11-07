@@ -79,17 +79,20 @@ export function PlanSection({ attempt }: { attempt: Attempt }) {
           <span className="label">Frozen plan</span> <Hash value={attempt.plan_hash} chars={16} />
         </span>
       </div>
+      {gateInfo && <p className="muted plan-gate-gloss">The gate is a set of rules that reads a plan without running it. It comes first, and the rehearsal measures what the plan really does.</p>}
       {attempt.plan?.summary && (
         <p className="plan-summary">
           <span className="label">The plan's own summary</span>
           {attempt.plan.summary}
         </p>
       )}
-      {attempt.verdict === 'invalid_plan' && (
-        <Notice tone="bad" title="The agent did not produce a valid plan.">
+      {attempt.verdict === 'invalid_plan' && (steps.length > 0 ? (
+        <Notice tone="bad" title="The agent's plan could not be read.">
           {attempt.error}
         </Notice>
-      )}
+      ) : (
+        <Notice tone="neutral" title="The agent gave back no plan." />
+      ))}
       {steps.length > 1 && <PlanGraph steps={steps} risks={risks} findings={findings} />}
       <ol className="steps">
         {steps.map((s, i) => {

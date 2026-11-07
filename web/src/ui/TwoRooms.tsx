@@ -5,6 +5,7 @@ import { cssVar, onThemeChange } from '../lib/media';
 import type { Tone } from '../lib/status';
 import { CopyButton, Mark } from './bits';
 import { asInputs, layoutDots, type DotLayout, type TableInput } from './dotfield';
+import { plainSource } from './Figure';
 import { Frame } from './Frame';
 import { Label } from './Label';
 import { Measured } from './Measured';
@@ -729,7 +730,7 @@ export function TwoRooms({
         <section className="room room-prod" aria-label="Prod">
           <header className="room-head">
             <Label>Prod</Label>
-            <span className="room-head-note room-head-note-end">{hero.prod.measured_from ?? 'control plane'}</span>
+            <span className="room-head-note room-head-note-end">{plainSource(hero.prod.measured_from).replace(/^by /, '')}</span>
           </header>
           {!!prodView?.moved && <i className="rooms-sweep" key={prodView.moved} aria-hidden="true" />}
           <div className="room-body">
@@ -809,7 +810,7 @@ export function TwoRooms({
                     <dd>{short(hero.prod.after, 12)}</dd>
                   </div>
                 </dl>
-                <p className="prod-note">Measured from the {hero.prod.measured_from ?? 'control plane'}.</p>
+                <p className="prod-note">Measured {plainSource(hero.prod.measured_from)}.</p>
               </>
             ) : (
               <p className="prod-waiting">{prodView?.waiting ?? 'Not checked yet in this replay. The hash is measured last.'}</p>

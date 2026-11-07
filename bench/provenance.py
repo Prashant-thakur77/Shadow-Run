@@ -30,6 +30,7 @@ MEASURING = (
     "control/agent.py",
     "control/apply.py",
     "control/budget.py",
+    "control/evasion.py",
     "control/gate.py",
     "control/llm.py",
     "control/plan.py",

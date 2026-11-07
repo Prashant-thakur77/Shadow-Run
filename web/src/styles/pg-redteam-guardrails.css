@@ -2226,3 +2226,30 @@ a.gt-strip-cell:hover {
     flex-wrap: wrap;
   }
 }
+
+/* The page's first sentence: the worst that can happen here, in plain words, with the measurement under it. */
+.gr .gr-worst {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--line-2);
+}
+.gr .gr-worst-line {
+  max-width: 44ch;
+  font-size: clamp(20px, 2vw, 28px);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+.gr .gr-worst-line code {
+  font-size: 0.8em;
+  font-weight: 500;
+}
+.gr .gr-worst-more {
+  max-width: 76ch;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.45;
+}

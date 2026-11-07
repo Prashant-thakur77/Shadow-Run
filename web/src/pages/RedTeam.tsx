@@ -243,7 +243,7 @@ function Screen({ def, index, result, stage, shown, scanning }: { def: AttackDef
           [ {pad(index)} ]
         </span>
         <span className="rt-screen-id">{def.id}</span>
-        {noNic && <span className={noNic.ok ? 'rt-screen-nic' : 'rt-screen-nic is-bad'}>{noNic.ok ? 'no NIC' : 'NIC check failed'}</span>}
+        {noNic && <span className={noNic.ok ? 'rt-screen-nic' : 'rt-screen-nic is-bad'}>{noNic.ok ? 'no network card' : 'network card check failed'}</span>}
       </div>
       <div className="rt-screen-body">
         {stage === 'booting' && (
@@ -629,7 +629,7 @@ function ProdNotes({ run }: { run: RedTeamRun }) {
       <p className="rt-prod-why">
         <Mark tone={untouched ? 'good' : 'bad'} size={14} />
         <span>
-          {untouched ? 'The checksum of prod is identical before and after every attack.' : 'The checksum of prod differs. Something changed it during this run.'} Measured from the control plane, outside the sandbox. It is read again after each attack, and During is the latest of those.
+          {untouched ? 'The checksum of prod is identical before and after every attack.' : 'The checksum of prod differs. Something changed it during this run.'} Measured by Shadow Run's own server, outside the sandbox. It is read again after each attack, and During is the latest of those.
         </span>
       </p>
       {run.golden_unchanged !== undefined ? (

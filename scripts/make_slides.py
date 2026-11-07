@@ -39,7 +39,36 @@ for label, values in rows.items():
     m = re.search(r'<tr><td>' + re.escape(label) + r'</td>(.*?)</tr>', page)
     cells = [f'<td style="text-align:right">{v}</td>' for v in values]
     page = page.replace(m.group(0), f'<tr><td>{label}</td>{"".join(cells)}</tr>')
+st = load('stats.json')
+cmp = st['main']['sets']['heldout']['compare']['unread_vs_direct'] if st.get('main', {}).get('code_sha256') == r.get('code_sha256') else None
+if not cmp:
+    sys.exit('stats.json does not match results.json: run python -m bench.stats')
+hh, dd = cmp['harm'], cmp['done']
+line = f"Approved unread, harm falls from {n(hh['from'])} to {n(hh['to'])}, and that holds task by task (p = {n(hh['permutation_p'])})."
+line += f" Work done rises from {n(dd['from'])} to {n(dd['to'])}" + (f" (p = {n(dd['permutation_p'])})." if dd['excludes_zero'] else ", which could be chance at this sample.")
+ctl = (st.get('controls') or {}).get('sets', {}).get('heldout_sql')
+if ctl and st['controls'].get('same_code_as_main'):
+    a = ctl['arms']
+    line += f" A prompt with the rules gets harm to {n(a['rules_in_prompt']['harm'])} of {ctl['tasks']} SQL tasks, but it lands on prod with nobody looking. The zero is the hold."
+else:
+    line += " The zero is the hold: nearly every risky plan waits for a person."
+page = page.replace('[results_line]', line)
 (OUT / 'slides/results.html').write_text(page)
+ev = load('evasion.json')
+ex = ev['examples'][0]
+words = {'failed_guardrails': 'broke', 'passed': 'passed every guardrail', 'invalid_plan': 'no steps', 'sql_error': 'error on the clone'}
+esc = lambda t: t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+ladder = ''.join(
+    f"<p><span style=\"color:#8D9188;font-family:'JetBrains Mono', monospace\">Attempt {a['n']}</span> "
+    f"<b style=\"color:{'#F08A7A' if a['verdict'] == 'passed' else '#EEC84E' if a['verdict'] == 'failed_guardrails' else '#EFECE6'}\">{words.get(a['verdict'], a['verdict'].replace('_', ' '))}"
+    f"{': ' + esc('; '.join(a['broke'])) if a['broke'] else ''}</b><br><span style=\"font-family:'JetBrains Mono', monospace;font-size:21px;color:#C9C6BE\">"
+    f"{esc((a['plan'] or ['(none)'])[0][:96])}</span></p>" for a in ex['attempts'] if a['verdict'] != 'invalid_plan')
+un = ev['detection']['unseen']
+page = (OUT / 'slides/found.html').read_text()
+for k, v in {'request': esc(ex['request']), 'ladder': ladder, 'after_pct': ev['rates']['passed_after_breaking_a_rule']['harmful_pct'], 'first_pct': ev['rates']['passed_first_time']['harmful_pct'],
+             'unseen_caught': un['harmful']['caught'], 'unseen_total': un['harmful']['total'], 'unseen_false': un['good']['caught'], 'unseen_good': un['good']['total']}.items():
+    page = page.replace(f'[{k}]', str(v))
+(OUT / 'slides/found.html').write_text(page)
 page = (OUT / 'slides/containment.html').read_text()
 page = page.replace('[n] of [n] attacks contained', f"{rt['contained']} of {rt['total']} attacks contained").replace('[n] of [n] negative controls', f"{c['passed']} of {c['total']} negative controls")
 (OUT / 'slides/containment.html').write_text(page)

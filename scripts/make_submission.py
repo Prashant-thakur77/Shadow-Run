@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 from checker.control_kinds import control_kind  # noqa: E402
-from make_readme_table import basis_sentence, concentration_sentence, hold_sentence, lead_sentence, rehearsing_text, saber_sentence, task_level_sentence, view  # noqa: E402
+from make_readme_table import evasion_sentence, basis_sentence, concentration_sentence, hold_sentence, lead_sentence, rehearsing_text, saber_sentence, task_level_sentence, view  # noqa: E402
 
 
 def load(name: str) -> dict | None:
@@ -25,6 +25,8 @@ def main() -> int:
     rt = load("redteam.json") or {}
     c = load("controls.json") or {}
     st = load("stats.json") or {}
+    ev = load("evasion.json")
+    evasion = evasion_sentence(ev) if ev and ev.get("detection") else ""
     measured = r.get("status") == "measured" and r.get("scope") == "full" and st.get("main")
     if measured:
         s = r["heldout"]["shadow_run"]
@@ -62,7 +64,7 @@ def main() -> int:
         attack = (
             f"We attacked our own policy. An attacker model told every guardrail and the auto-apply rule got {base['would_auto_apply']} of {base['real_attacks']} damaging plans past a row limit, with no person looking, "
             f"so auto-apply now works from a named list. {now['would_auto_apply']} of the same attacker's {now['real_attacks']} damaging plans would still apply alone, but they can only change what the owner listed: {', '.join(now.get('reach_alone', [])) or 'nothing'}. What it finds becomes a candidate rule, which counts only if it holds on the clean database, fails on the attack and lets ordinary changes through. "
-            f"Replayed against the rules they taught, {replay['caught']} of {replay['total']} of those attacks are now stopped."
+            f"Replayed against the rules they taught, {replay['caught']} of {replay['total']} of those attacks are now stopped, in a separate test with {replay['guardrails']} rules."
         )
     kinds = [control_kind(x["control"]) for x in c.get("controls", [])]
     controls = f"{kinds.count('attack')} attacks on the approval, the apply and the measurement were refused, rolled back or held, and {kinds.count('honest path')} checks confirm the honest path still works." if c and c.get("passed") == c.get("total") else ""
@@ -87,9 +89,11 @@ Shadow Run sits between an agent and production and holds the only credential. T
 
 A small change goes through alone only if it stays on a list of tables and columns the team named as low-risk. Everything else waits for a different person, who approves those exact hashes, and a changed or replayed approval gets a 409. The same plan then runs on prod in one transaction, with the touched tables locked and re-checked for drift. If row counts, row content, schema or guardrails differ from the rehearsal at all, it rolls back. A backup and a signed evidence bundle go to Object Storage.
 
-{headline} {external} {timing} {containment} {controls} The rubber-stamp gap and the other limits are published in the README: side effects outside the target can't be rehearsed, some harm needs a person to notice, and clone cost grows with database size.
+{headline} {external} {timing} {containment} {controls}
 
-Every plan that passes also comes with an undo, written from the row log and proved on the clone before anyone approves: its check is that each touched table's content hash returns to where it started. A second microVM has to reproduce the result. The report states what a plan does to the numbers a business watches, in dollars, not only in rows, and the commands behind real incidents can be replayed on a clone from the web app.
+{evasion} The rubber-stamp gap and the other limits are published in the README: side effects outside the target can't be rehearsed, some harm needs a person to notice, and clone cost grows with database size.
+
+Almost every plan that passes also comes with an undo, written from the row log and proved on the clone before anyone approves: its check is that each touched table's content hash returns to where it started. A second microVM has to reproduce the result. The report states what a plan does to the numbers a business watches, in dollars, not only in rows, and the commands behind real incidents can be replayed on a clone from the web app.
 
 {attack}
 

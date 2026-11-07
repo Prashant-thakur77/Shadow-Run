@@ -542,3 +542,9 @@
     margin-top: var(--s-6);
   }
 }
+
+/* A stamp lands scaled up, and on a phone that used to widen the whole page for good, fixed bars and all. Clip keeps it to
+   the page's width without making a scroll container, so anything sticky inside still sticks. */
+.main {
+  overflow-x: clip;
+}

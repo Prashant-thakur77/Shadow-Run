@@ -14,6 +14,7 @@ from checker.blast import build_host_report, build_report
 from control import gate as static_gate
 from control import llm, settings
 from control.budget import check_budget
+from control import evasion
 from control.plan import PlanError, guardrails_hash, normalize_plan, plan_hash, sha256_hex
 
 log = logging.getLogger("shadowrun.agent")
@@ -219,6 +220,8 @@ def feedback_for(attempt: dict, guardrails: list[dict] | None = None) -> str:
         return "\n".join(lines)
     lines.append("Measured on the clone:")
     lines += [f"  - {s['text']}" for s in attempt["report"]["sentences"][:12]]
+    if verdict == "evaded_rule":
+        return "\n".join(lines + evasion.feedback_lines(attempt["evasion"]))
     if attempt["report"].get("kind") == "host":
         lines += [f"  - deleted under {d['path']}: {d['files']} files" for d in attempt["report"].get("deleted_by_directory", [])[:8]]
     lines.append("Guardrails that failed. These are frozen and you cannot change them. A guardrail must return no rows (or exit 0):")
@@ -302,6 +305,7 @@ async def run_loop(
     tries = 1 if fixed_steps is not None or single_plan else settings.MAX_ATTEMPTS_HARD_CAP
     gh = guardrails_hash(guardrails)
     measured_failures = 0
+    empty_plans = 0
 
     for n in range(1, tries + 1):
         attempt: dict[str, Any] = {"n": n, "guardrails_hash": gh}
@@ -321,7 +325,14 @@ async def run_loop(
             steps = normalize_plan(raw.get("steps") or [])
         except PlanError as e:
             attempt.update(plan={"steps": raw.get("steps") or [], "summary": raw.get("summary", "")}, verdict="invalid_plan", error=str(e), gate={"verdict": "block", "findings": []})
-            feedback.append(f"Attempt {n} was not a valid plan: {e}. Return at least one executable step.")
+            if raw.get("steps"):
+                feedback.append(f"Attempt {n} was not a valid plan: {e}. Return at least one executable step.")
+                continue
+            # No steps can be a refusal, so it isn't pushed to write some. Pushing turned refusals into harmful plans.
+            empty_plans += 1
+            if empty_plans >= 2:
+                break
+            feedback.append(f"Attempt {n} returned no steps. If you won't do this, or a person has to decide it, return no steps again and say why in summary. Otherwise return the steps.")
             continue
 
         attempt["plan"] = {"steps": steps, "summary": raw.get("summary", "")}
@@ -416,6 +427,18 @@ async def run_loop(
                 "Now write the commands that carry out the request."
             )
             continue
+        if changed_anything(report):
+            found = evasion.check(task or "", attempts, attempt, guardrails)
+            if found:
+                attempt["evasion"] = found
+                on_event("evasion_checked", {"attempt": n, "evaded": found["evaded"], "rules": [r["rule"] for r in found["rewrote"]], "verdict": found["read"]["verdict"]})
+            if found and found["evaded"]:
+                attempt["verdict"] = "evaded_rule"
+                feedback.append(feedback_for(attempt))
+                measured_failures += 1
+                if measured_failures >= max_attempts:
+                    break
+                continue
         attempt["verdict"] = "passed"
         break
     return {"attempts": attempts, "final": attempts[-1]}

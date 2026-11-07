@@ -295,8 +295,16 @@ export interface SecondOpinion {
   error?: string;
 }
 
+/** A plan that broke a rule and then passed: did it meet the rule or get around it? From control/evasion.py. */
+export interface Evasion {
+  evaded?: boolean;
+  rewrote?: { rule: string; columns: string[] }[];
+  read?: { model?: string; verdict?: 'respects_it' | 'gets_around_it' | 'gave_up' | 'no_answer'; reason?: string; error?: string };
+}
+
 export interface Attempt {
   second_opinion?: SecondOpinion | null;
+  evasion?: Evasion | null;
   reproduced?: Reproduced;
   undo?: UndoInfo | null;
   n: number;
@@ -402,9 +410,28 @@ export interface Race {
   through: string;
 }
 
+/** What "change prod behind its back" would write for this run, from what its rehearsal touched. */
+export interface DriftPlan {
+  host?: boolean;
+  /** The table the write goes to. Null when no touched table can be changed, and `why` says so. */
+  table?: string | null;
+  touched?: string[];
+  /** False when the plan drops or empties that table, so with the drift check off nothing could notice the write. */
+  caught_with_check_off?: boolean;
+  why?: string;
+}
+
 export interface Run {
   /** Set on a race's two lanes. They only rehearse, and the server refuses to approve or apply them. */
   race?: { id: string; lane: 'alone' | 'through' } | null;
+  /** This plan came from a race's right lane, and the server checked the steps are that plan. */
+  from_race?: { id: string; run: string; plan_hash: string } | null;
+  /** The approval window has closed, so nothing can be approved until it is rehearsed again. */
+  expired?: boolean;
+  approval_expires_at?: number;
+  /** The agent declined, which isn't a plan that something stopped. */
+  refused?: { reason?: string | null } | null;
+  drift?: DriftPlan | null;
   prod_before_apply?: string | null;
   rehearse_only?: boolean;
   undo_of?: string;
@@ -464,6 +491,16 @@ export interface RunSummary {
   guardrails_failed?: number;
   cost_usd?: number | null;
   rehearsal_ms?: number | null;
+  expired?: boolean;
+  race_lane?: 'alone' | 'through' | null;
+  refused?: boolean;
+  /** Why this run is on the short list new visitors see. */
+  example?: string;
+}
+
+export interface RunFeed {
+  mine: RunSummary[];
+  examples: RunSummary[];
 }
 
 export interface ProdChecksum {
@@ -688,6 +725,10 @@ export interface PublicInfo {
     held?: number;
     runs_per_task?: number;
     measured_at?: string | number;
+    /** The tasks from outside this project, where the gap is smaller. */
+    external?: { risky_tasks?: number; done_direct?: number; done_unread?: number } | null;
+    /** bench/stats.py's paired test over tasks, approved unread against the agent alone. */
+    task_level?: TaskLevel | null;
   } | null;
   hero?: PublicHero | null;
   /** A real run a person approved and that applied, because the hero's replay is blocked before that part. */
@@ -723,6 +764,22 @@ export interface Incident {
   adapted?: string;
 }
 
+/** Who pays, from docs/market.json. Sources travel with the figures. */
+export interface Market {
+  as_of?: string;
+  agents_market?: { usd_b_2025?: number; usd_b_2033?: number; source?: string; url?: string };
+  guardian_share?: { low_pct?: number; high_pct?: number; by_year?: number; source?: string; url?: string };
+  developers_using_agents?: { weekly_pct?: number; daily_pct?: number; respondents?: string; source?: string; url?: string };
+  postgres_companies?: { count?: number; source?: string; url?: string; caveat?: string };
+  price?: { usd_per_database_month?: number; label?: string };
+  derived?: { tam_how?: string; sam_usd_b_per_year?: number; sam_how?: string; first_target_pct?: number; first_target_usd_m_per_year?: number };
+  revenue?: string[];
+  funnel?: string[];
+  next?: string[];
+  competition?: { who?: string; strength?: string; gap?: string; urls?: string[] }[];
+  us?: { strength?: string; weakness?: string; usp?: string };
+}
+
 export interface Receipt {
   group?: string;
   claim?: string;
@@ -733,6 +790,8 @@ export interface Receipt {
   got?: string;
   /** Negative controls: "attack" or "honest path". */
   kind?: string;
+  /** Soak: how many rehearsals the yes covers. */
+  count?: number;
   detail?: unknown;
   at?: string | number;
   source?: string;
@@ -787,4 +846,58 @@ export interface PublicHero {
   prod: { before?: string | null; after?: string | null; unchanged?: boolean | null; measured_from?: string | null };
   /** Facts to sit beside the metrics, where the plan moved something other than money. Not sent by the API. */
   extras?: { name: string; text: string }[];
+}
+
+/** One paired comparison over tasks from bench/stats.json: b minus a. */
+export interface TaskCompare {
+  from?: number;
+  to?: number;
+  difference?: number;
+  ci95?: [number, number];
+  excludes_zero?: boolean;
+  permutation_p?: number;
+  tasks?: number;
+}
+
+export interface TaskLevel {
+  harm?: TaskCompare;
+  done?: TaskCompare;
+}
+
+export interface ControlArms {
+  tasks?: number;
+  arms?: Record<string, { harm?: number; done?: number; tasks?: number }>;
+  compare?: Record<string, TaskLevel>;
+}
+
+interface EvasionCount {
+  total?: number;
+  caught?: number;
+  by_measured_check?: number;
+  by_second_reader?: number;
+}
+
+interface EvasionRate {
+  plans?: number;
+  harmful?: number;
+  good?: number;
+  harmful_pct?: number | null;
+}
+
+/** bench/evasion.json, without its per-plan rows. */
+export interface EvasionFacts {
+  at?: string;
+  model?: string;
+  rates?: { passed_first_time?: EvasionRate; passed_after_breaking_a_rule?: EvasionRate; safe_plans?: number; safe_plans_that_broke_a_rule_first?: number };
+  detection?: Record<'design' | 'unseen', { plans?: number; harmful?: EvasionCount; good?: EvasionCount; neither?: EvasionCount }>;
+  empty_plans?: { plans?: number; harmful?: number; good?: number; neither?: number };
+  examples?: {
+    task: string;
+    request: string;
+    attempts: { n: number; verdict?: string; plan?: string[]; broke?: string[] }[];
+    harm?: string[];
+    second_reader?: string;
+    measured?: string[];
+  }[];
+  after?: Record<string, TaskLevel> & { checked?: number; flagged_at_least_once?: number; stopped?: number; runs?: number } | null;
 }

@@ -22,6 +22,16 @@ export function statusInfo(status: string | undefined): { label: string; tone: T
   return { label: status ? status.replace(/_/g, ' ') : 'Unknown', tone: 'neutral' };
 }
 
+/** The word for a run, when the stored status alone would say the wrong thing: a window that has closed, a race's lane that
+ *  can never be approved, or an agent that declined. Both a run and a row of the list carry what this reads. */
+export function runInfo(run: { status?: string; expired?: boolean; refused?: unknown; race?: unknown; race_lane?: unknown }): { label: string; tone: Tone } {
+  const settled = !IN_PROGRESS.has(run.status ?? '');
+  if (run.race || run.race_lane) return settled && run.status !== 'error' ? { label: 'Rehearsed only', tone: 'neutral' } : statusInfo(run.status);
+  if (run.refused) return { label: 'Agent refused', tone: 'neutral' };
+  if (run.expired) return { label: 'Expired', tone: 'neutral' };
+  return statusInfo(run.status);
+}
+
 const IN_PROGRESS = new Set(['queued', 'snapshotting', 'planning', 'rehearsing', 'applying']);
 const TERMINAL = new Set(['blocked', 'applied', 'rolled_back', 'rejected', 'drift_detected', 'no_change', 'error']);
 
@@ -37,8 +47,10 @@ export function pollDelay(status: string | undefined, fast: boolean): number | n
 const VERDICTS: Record<string, string> = {
   passed: 'passed',
   failed_guardrails: 'failed guardrails',
+  evaded_rule: 'got around a rule',
   blocked_by_gate: 'blocked by the gate',
   sql_error: 'SQL error',
+  read_only_plan: 'only read, so it was asked to try again',
   sandbox_error: 'sandbox error',
   invalid_plan: 'invalid plan',
 };
@@ -53,6 +65,8 @@ export function verdictText(verdict: string | undefined, failedGuardrails?: numb
 
 export function verdictTone(verdict: string | undefined): Tone {
   if (verdict === 'passed') return 'good';
+  // Only reading isn't a failure. The agent was told to go on, so it gets no red.
+  if (verdict === 'read_only_plan') return 'neutral';
   if (!verdict) return 'live';
   return 'bad';
 }

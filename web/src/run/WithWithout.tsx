@@ -54,6 +54,8 @@ function attemptLine(a: Attempt | undefined): { text: string; tone: ReturnType<t
       return { text: `Breaks ${failed} ${failed === 1 ? 'guardrail' : 'guardrails'}`, tone };
     case 'blocked_by_gate':
       return { text: failed ? `Breaks ${failed} ${failed === 1 ? 'guardrail' : 'guardrails'}, and the gate refuses it` : 'The gate refuses it', tone };
+    case 'evaded_rule':
+      return { text: 'Breaks no guardrail, by getting around one it broke', tone };
     case 'passed':
       return { text: 'Breaks no guardrail', tone };
     default:

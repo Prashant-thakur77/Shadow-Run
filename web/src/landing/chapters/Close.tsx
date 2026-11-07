@@ -15,7 +15,7 @@ export function Close() {
           </h2>
           {!guestOff && (
             <PrimaryButton type="button" className="btn-huge" disabled={busy} onClick={() => void enter()}>
-              {busy ? 'Entering' : 'Enter as guest'}
+              {busy ? 'Entering' : 'Continue as guest'}
             </PrimaryButton>
           )}
           <p className="close-note">
@@ -38,6 +38,11 @@ export function Close() {
                 </a>
               </li>
             )}
+            <li>
+              <a href="https://github.com/Prashant-thakur77/Shadow-Run/blob/main/docs/slides.pdf" target="_blank" rel="noreferrer">
+                The slides, PDF
+              </a>
+            </li>
             {info?.repo && (
               <li>
                 <a href={info.repo} target="_blank" rel="noreferrer">

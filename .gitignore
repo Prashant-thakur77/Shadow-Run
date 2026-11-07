@@ -34,3 +34,6 @@ web/dist/
 
 # The film is built separately, and heavy.
 /video/
+
+# Reference captures for design work, never published
+/.design-refs/

@@ -1954,3 +1954,38 @@
 .sample [role='banner'] {
   display: none;
 }
+
+/* Under the verdict: why a doubted plan differs, and what this run can do next. */
+.runhead-because {
+  max-width: 62ch;
+  color: var(--ink);
+  font-size: var(--fs-s);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.runhead-next {
+  max-width: 62ch;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.45;
+}
+.decisionbar-state {
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+.decisionbar-state code {
+  color: var(--ink);
+  font-size: 13px;
+}
+.refused-try {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+.refused-try .muted {
+  max-width: 62ch;
+  overflow-wrap: anywhere;
+}

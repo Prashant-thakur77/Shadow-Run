@@ -516,8 +516,8 @@ function Published({ data, error, target }: { data: GauntletPublished | null; er
                   <Measured value={r.caught} format={num} /> of <Measured value={r.total} format={num} />
                 </div>
                 <div className="gt-seam-text">
-                  <p>now stopped.</p>
-                  <p className="gt-seam-reach">Replaying the attacks that passed the rules, against the rules they taught.</p>
+                  <p>now stopped, in a separate test with {num(r.guardrails)} rules.</p>
+                  <p className="gt-seam-reach">Replaying the attacks that passed the rules, against the rules they taught. This demo has {num(target.guardrails?.length)}.</p>
                 </div>
               </div>
             )}

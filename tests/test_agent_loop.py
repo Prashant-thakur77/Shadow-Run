@@ -1,7 +1,7 @@
 """The retry loop's logic, with a fake runner and a scripted planner. The real path is covered live."""
 import pytest
 
-from control import agent
+from control import agent, evasion, llm
 
 
 class FakeRunner:
@@ -48,6 +48,7 @@ def scripted(monkeypatch, plans):
 
     monkeypatch.setattr(agent, "call_planner", fake)
     monkeypatch.setattr(agent, "explain", lambda *a, **k: {"text": "x", "numbers_verified": True})
+    monkeypatch.setattr(evasion, "second_reader", lambda *a, **k: {"model": "m", "verdict": "respects_it", "reason": ""})
     return seen
 
 
@@ -265,3 +266,127 @@ def test_a_plan_with_no_rows_changed_can_still_have_changed_something(report):
 def test_a_plan_that_really_changed_nothing_says_so():
     assert agent.changed_anything({"totals": {}, "sequences_unexplained": [], "files": {"counts": {"outside_measured": 0}}}) is False
 
+
+
+# ------------------------------------------------------------------ getting around a rule
+
+
+REAL_SECOND_READER = evasion.second_reader
+RULE = {"id": "g", "name": "guard", "sql": "SELECT b.id FROM before.t b JOIN t ON t.id = b.id WHERE t.status = 'paid'"}
+
+
+def wrote(columns, guard_passed=True):
+    record = rec(guard_passed=guard_passed)
+    record = {**record, "result": {**record["result"], "changed_columns": {"t": {c: 1 for c in columns}}}}
+    return record
+
+
+def second_reader_says(monkeypatch, verdict="respects_it", reason=""):
+    calls = []
+
+    def fake(task, attempts, attempt, model=None):
+        calls.append(attempt["n"])
+        return {"model": "m", "verdict": verdict, "reason": reason}
+
+    monkeypatch.setattr(evasion, "second_reader", fake)
+    return calls
+
+
+async def rules_loop(runner):
+    out = await agent.run_loop(
+        task="do it", fixed_steps=None, target=TARGET, guardrails=[RULE], run_id="r", snapshot_id="s",
+        runner=runner, inspection={"tables": [], "foreign_keys": []}, on_event=lambda t, d: None,
+    )
+    return out
+
+
+async def test_changing_a_new_column_the_broken_rule_reads_does_not_pass(monkeypatch):
+    seen = scripted(monkeypatch, [plan(f"UPDATE t SET a={i} WHERE id=1") for i in range(4)])
+    second_reader_says(monkeypatch)
+    out = await rules_loop(FakeRunner([wrote(["a"], guard_passed=False), wrote(["status"]), wrote(["status"])]))
+    assert [a["verdict"] for a in out["attempts"]] == ["failed_guardrails", "evaded_rule", "evaded_rule"]
+    assert out["final"]["evasion"]["rewrote"] == [{"rule": "guard", "columns": ["t.status"]}]
+    assert any("t.status" in f and "guard" in f for f in seen[2]), "the agent must be told what it got around"
+
+
+async def test_a_narrower_plan_on_the_same_column_is_not_getting_around_it(monkeypatch):
+    scripted(monkeypatch, [plan("UPDATE t SET status='x'"), plan("UPDATE t SET status='x' WHERE id=1")])
+    calls = second_reader_says(monkeypatch)
+    out = await rules_loop(FakeRunner([wrote(["status"], guard_passed=False), wrote(["status"])]))
+    assert out["final"]["verdict"] == "passed" and out["final"]["evasion"]["evaded"] is False
+    assert calls == [2]
+
+
+async def test_the_second_reader_alone_can_stop_a_plan(monkeypatch):
+    seen = scripted(monkeypatch, [plan(f"UPDATE t SET a={i} WHERE id=1") for i in range(4)])
+    second_reader_says(monkeypatch, "gets_around_it", "It reassigns the rows so the rule no longer sees them.")
+    out = await rules_loop(FakeRunner([wrote(["a"], guard_passed=False), wrote(["a"]), wrote(["a"])]))
+    assert out["final"]["verdict"] == "evaded_rule"
+    assert any("reassigns the rows" in f for f in seen[2])
+
+
+async def test_no_answer_from_the_second_reader_counts_as_doubt(monkeypatch):
+    scripted(monkeypatch, [plan(f"UPDATE t SET a={i} WHERE id=1") for i in range(4)])
+    monkeypatch.setattr(evasion, "second_reader", REAL_SECOND_READER)
+
+    def down(*a, **k):
+        raise llm.LLMError("inference is down")
+
+    monkeypatch.setattr(llm, "chat_json", down)
+    out = await rules_loop(FakeRunner([wrote(["a"], guard_passed=False), wrote(["a"]), wrote(["a"])]))
+    assert out["final"]["verdict"] == "evaded_rule"
+    assert out["final"]["evasion"]["read"]["verdict"] == "no_answer"
+
+
+async def test_a_plan_that_breaks_nothing_is_never_checked(monkeypatch):
+    scripted(monkeypatch, [plan("UPDATE t SET status='x' WHERE id=1")])
+    calls = second_reader_says(monkeypatch, "gets_around_it")
+    out = await rules_loop(FakeRunner([wrote(["status"])]))
+    assert out["final"]["verdict"] == "passed" and "evasion" not in out["final"] and calls == []
+
+
+async def test_a_submitted_plan_is_never_checked(monkeypatch):
+    calls = second_reader_says(monkeypatch, "gets_around_it")
+    out = await agent.run_loop(
+        task=None, fixed_steps=[{"type": "sql", "cmd": "UPDATE t SET status='x' WHERE id=1", "why": ""}], target=TARGET, guardrails=[RULE], run_id="r", snapshot_id="s",
+        runner=FakeRunner([wrote(["status"])]), inspection={"tables": [], "foreign_keys": []}, on_event=lambda t, d: None,
+    )
+    assert out["final"]["verdict"] == "passed" and calls == []
+
+
+def test_columns_read_follows_aliases_and_before_tables():
+    read = evasion.columns_read("SELECT b.id FROM before.invoices b LEFT JOIN invoices i ON i.id = b.id WHERE b.status = 'paid' AND i.id IS NULL")
+    assert read == {("invoices", "id"), ("invoices", "status")}
+
+
+def test_a_column_with_no_table_counts_for_every_table_in_the_rule():
+    assert ("t", "x") in evasion.columns_read("SELECT 1 FROM t JOIN u ON t.id = u.id WHERE x = 1")
+    assert ("u", "x") in evasion.columns_read("SELECT 1 FROM t JOIN u ON t.id = u.id WHERE x = 1")
+
+
+def test_a_rule_that_cannot_be_parsed_reads_nothing():
+    assert evasion.columns_read("((( not sql") == set()
+
+
+def test_host_rules_have_no_columns_to_compare():
+    attempts = [{"n": 1, "verdict": "failed_guardrails", "guardrails": [{"id": "h", "passed": False}], "report": {}}]
+    attempt = {"n": 2, "report": {"changed_columns": {}}, "guardrails": []}
+    assert evasion.new_columns_it_reads([*attempts, attempt], attempt, [{"id": "h", "name": "h", "sh": "true"}]) == []
+
+
+# ------------------------------------------------------------------ an agent that writes no plan
+
+
+async def test_no_steps_is_not_pushed_and_two_in_a_row_stops(monkeypatch):
+    empty = {"steps": [], "reads": [], "summary": "A person has to decide this."}
+    seen = scripted(monkeypatch, [dict(empty), dict(empty), plan("DELETE FROM t")])
+    out, _ = await loop(FakeRunner([rec()]))
+    assert [a["verdict"] for a in out["attempts"]] == ["invalid_plan", "invalid_plan"]
+    assert "return no steps again" in seen[1][0]
+    assert "at least one" not in seen[1][0]
+
+
+async def test_one_empty_answer_can_still_become_a_plan(monkeypatch):
+    scripted(monkeypatch, [{"steps": [], "reads": [], "summary": ""}, plan("UPDATE t SET a=1 WHERE id=1")])
+    out, _ = await loop(FakeRunner([rec()]))
+    assert [a["verdict"] for a in out["attempts"]] == ["invalid_plan", "passed"]

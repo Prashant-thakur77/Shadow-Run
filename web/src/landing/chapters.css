@@ -1011,3 +1011,182 @@
     visibility: visible;
   }
 }
+
+/* Who pays. Words and figures with their sources, so nothing here is drawn. The seam stays clear: text with no surface of
+   its own keeps to one side of it. */
+.pays {
+  gap: var(--s-5);
+}
+.pays-top,
+.pays-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-4) calc(var(--margin) * 2);
+  align-items: end;
+}
+.pays-split {
+  align-items: start;
+}
+.pays-half {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.pays-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pays-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line-2);
+  border: 1px solid var(--line-2);
+}
+.pays-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+  padding: var(--s-4);
+  background: var(--bg);
+}
+.pays-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: 0;
+  padding-left: 1.4em;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.4;
+  list-style: decimal;
+}
+.pays-steps li::marker {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.pays-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--s-2);
+}
+.pays-unit {
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+.pays-planned {
+  color: var(--caution-text);
+  font-size: var(--fs-s);
+  font-weight: 500;
+}
+.pays-note {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.4;
+}
+.pays-market {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.4;
+  list-style: none;
+}
+.pays-table-wrap {
+  background: var(--bg);
+}
+.pays-table {
+  width: 100%;
+  font-size: var(--fs-s);
+}
+.pays-table th[scope='row'] {
+  width: 24%;
+  font-weight: 600;
+}
+.pays-table td {
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+.pays-us th,
+.pays-us td {
+  border-top: 1px solid var(--line-2);
+  color: var(--ink);
+}
+.pays-us strong {
+  font-weight: 600;
+}
+@media (min-width: 1000px) {
+  .pays-source {
+    max-width: calc(50vw - var(--margin) - var(--s-5));
+  }
+}
+@media (max-width: 999px) {
+  .pays-top,
+  .pays-split,
+  .pays-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pays-links .btn {
+    min-height: 44px;
+  }
+}
+/* On a phone each competitor is a short stack, so where we're weak never sits off to the side, behind a sideways scroll. */
+@media (max-width: 719px) {
+  .pays-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .pays-table,
+  .pays-table tbody,
+  .pays-table tr,
+  .pays-table th,
+  .pays-table td {
+    display: block;
+    width: auto;
+  }
+  .pays-table tr {
+    padding: var(--s-3) 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .pays-table th[scope='row'],
+  .pays-table td {
+    padding: 0;
+    border: 0;
+  }
+  .pays-table td {
+    margin-top: var(--s-2);
+  }
+  .pays-table td::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--ink-3);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .pays-table th[scope='row'] {
+    width: auto;
+  }
+}
+
+/* The same chapter as a page inside the demo, where the page already sets the margins. */
+.whopays-page .ch-flow {
+  padding: 0;
+}
+.whopays-page .ch-inner {
+  padding: 0;
+}

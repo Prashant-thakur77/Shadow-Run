@@ -9,6 +9,7 @@ import { orderTargets, showTarget, targetLabel } from '../lib/target';
 import { Link, useLocation } from '../lib/router';
 import { useAsync } from '../lib/useAsync';
 import { CopyButton, Fold, Hash, Loading, Mark, Notice, Section, Sql, Tag } from '../ui/bits';
+import { ReseedButton } from '../ui/ReseedButton';
 import { asInputs, layoutRooms, type Room } from '../ui/dotfield';
 import { Caption, sourceLine } from '../ui/Figure';
 import { Label } from '../ui/Label';
@@ -429,9 +430,7 @@ function DemoControls({ target }: { target: Target }) {
   return (
     <div className="democtl">
       <p>Runs and negative controls change this target. This puts it back to the seed.</p>
-      <button type="button" className="btn" disabled={busy} onClick={reset}>
-        {busy ? 'Reseeding' : target.kind === 'host' ? 'Reseed demo server' : 'Reseed demo prod'}
-      </button>
+      <ReseedButton busy={busy} onConfirm={() => void reset()} label={target.kind === 'host' ? 'Reseed demo server' : 'Reseed demo prod'} what={target.kind === 'host' ? 'the demo server' : 'demo prod'} />
       {note && <p className="muted" role="status">{note}</p>}
     </div>
   );
@@ -537,40 +536,61 @@ function LockGlyph() {
   );
 }
 
-/** The page's headline, from the published measurement, before anyone has to scroll to the table. */
-function MeasuredLine({ data }: { data: GauntletPublished | null }) {
-  if (!data?.measured) return null;
-  const s = data.summary;
+/** What this target lets a plan change with no person, in `table.column` names, from its own budget. */
+function autoApplyColumns(target: Target): string[] {
+  const budget = (target.budget ?? {}) as Record<string, unknown>;
+  const scope = budget.auto_apply_scope as Record<string, string | string[]> | null | undefined;
+  return scope ? Object.entries(scope).flatMap(([t, c]) => (c === '*' ? [`${t}, any column`] : (c as string[]).map((col) => `${t}.${col}`))) : [];
+}
+
+/** The page's headline: the worst that can happen here, then what was measured. Every part is read from the data. */
+function MeasuredLine({ data, target }: { data: GauntletPublished | null; target: Target }) {
+  const columns = autoApplyColumns(target);
+  const single = columns.length === 1 ? columns[0] : null;
+  const worst = !columns.length ? (
+    'With no person looking, a plan can change nothing on this demo.'
+  ) : single?.endsWith('.note') ? (
+    <>
+      With no person looking, the worst a plan can do on this demo is write a false note in one column, <code className="mono">{single}</code>.
+    </>
+  ) : (
+    <>
+      With no person looking, the worst a plan can do on this demo is change {columns.length === 1 ? 'one column' : `these ${num(columns.length)} columns`}:{' '}
+      {columns.map((t, i) => (
+        <span key={t}>
+          {i > 0 && ', '}
+          <code className="mono">{t}</code>
+        </span>
+      ))}
+      .
+    </>
+  );
+  const s = data?.measured ? data.summary : null;
   const alone = s?.would_auto_apply ?? 0;
-  const reach = s?.reach_alone ?? [];
-  const r = data.replay;
+  const r = data?.measured ? data.replay : null;
+  const rulesHere = target.guardrails?.length ?? 0;
   return (
-    <a className={`gr-measured ${alone > 0 ? 'is-bad' : 'is-good'}`} href="#gauntlet">
-      <Mark tone={alone > 0 ? 'bad' : 'good'} size={15} />
-      <span className="gr-measured-text">
-        {alone > 0 ? (
-          <>
-            <strong className="mono">{num(alone)}</strong> damaging {alone === 1 ? 'plan' : 'plans'} would still apply alone. They could change{' '}
-            {reach.map((t, i) => (
-              <span key={t}>
-                {i > 0 && ', '}
-                <code className="mono">{t}</code>
-              </span>
-            ))}
-            .
-          </>
-        ) : (
-          'No damaging plan would apply alone.'
-        )}
-        {r && (
-          <span className="gr-measured-more">
-            {' '}
-            <span className="mono">{num(r.caught)}</span> of <span className="mono">{num(r.total)}</span> replayed attacks now stopped.
-          </span>
-        )}
-      </span>
-      <span className="gr-measured-go">See the table</span>
-    </a>
+    <div className="gr-worst">
+      <p className="gr-worst-line">{worst}</p>
+      {data?.measured && (
+        <p className="gr-worst-more">
+          {alone > 0 ? (
+            <>
+              An attacker model still got <span className="mono">{num(alone)}</span> damaging {alone === 1 ? 'plan' : 'plans'} through alone, and {alone === 1 ? 'that' : 'those'} could change only what is named above.
+            </>
+          ) : (
+            'An attacker model got no damaging plan through alone.'
+          )}
+          {r && (
+            <>
+              {' '}
+              In a separate test with <span className="mono">{num(r.guardrails)}</span> rules, <span className="mono">{num(r.caught)}</span> of <span className="mono">{num(r.total)}</span> replayed attacks are now stopped. This demo has <span className="mono">{num(rulesHere)}</span> rules, so that result is not this demo.
+            </>
+          )}{' '}
+          <a href="#gauntlet">See the table</a>
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -584,7 +604,7 @@ function TargetDetail({ target, onChanged }: { target: Target; onChanged: () => 
   const rules = target.guardrails ?? [];
   return (
     <>
-      {!isHost && <MeasuredLine data={published.data} />}
+      {!isHost && <MeasuredLine data={published.data} target={target} />}
       <div className="gr-layout">
         <SubNav isHost={isHost} />
         <div className="gr-column">

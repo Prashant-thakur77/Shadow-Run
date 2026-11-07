@@ -458,3 +458,8 @@
     -webkit-box-orient: vertical;
   }
 }
+.recent-note {
+  max-width: 72ch;
+  margin-bottom: var(--s-3);
+  font-size: var(--fs-s);
+}

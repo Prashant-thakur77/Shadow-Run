@@ -1,11 +1,12 @@
 import './_styles';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { ApiError, api, errorText } from '../api/client';
-import type { RunSummary, Target } from '../api/types';
+import type { RunFeed, RunSummary, Target } from '../api/types';
 import { MISSING, num, ms, short, usd, when } from '../lib/format';
 import { useReducedMotion } from '../lib/media';
-import { Link, navigate } from '../lib/router';
-import { isInProgress, statusInfo } from '../lib/status';
+import { myRuns } from '../lib/myRuns';
+import { Link, navigate, useLocation } from '../lib/router';
+import { isInProgress, runInfo } from '../lib/status';
 import { orderTargets, showTarget, targetLabel } from '../lib/target';
 import { useAsync } from '../lib/useAsync';
 import { Loading, Mark, Notice } from '../ui/bits';
@@ -21,6 +22,7 @@ const EXAMPLES = {
       'Purge expired sessions older than 30 days',
       'Drop the temp table orders_tmp',
       'Mark trial users as expired',
+      'Account 8 is shrinking to just the owner. Remove everyone else from the account.',
     ],
     plans: [
       { label: 'Delete inactive users, the naive way', code: "DELETE FROM users WHERE last_login_at < now() - interval '1 year'" },
@@ -73,9 +75,12 @@ export function HomePage() {
   const examples = isHost ? EXAMPLES.host : EXAMPLES.postgres;
   const planWord = isHost ? 'shell' : 'SQL';
 
-  const [mode, setMode] = useState<Mode>('task');
-  const [task, setTask] = useState('');
-  const [plan, setPlan] = useState('');
+  // A link can arrive with a task already written, such as the ones a read-only run suggests.
+  const { search } = useLocation();
+  const prefill = useMemo(() => new URLSearchParams(search), [search]);
+  const [mode, setMode] = useState<Mode>(prefill.get('plan') ? 'plan' : 'task');
+  const [task, setTask] = useState(prefill.get('task') ?? '');
+  const [plan, setPlan] = useState(prefill.get('plan') ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -307,22 +312,26 @@ function StartHere({ targetId, onError }: { targetId?: string; onError: (message
 const RECENT_FETCH = 60;
 const RECENT_SHOWN = 15;
 
+/** By default this browser's own runs and a few finished examples. Everyone on the demo shares one list, and strangers' text
+ *  and stale approvals are not the first thing a new visitor should meet, so the rest is one click away. */
 function RecentRuns({ kinds }: { kinds: Record<string, string | undefined> }) {
-  const runs = useAsync<RunSummary[]>(() => api.runs(RECENT_FETCH));
   const [showAll, setShowAll] = useState(false);
-  const anyLive = (runs.data ?? []).some((r) => isInProgress(r.status));
+  const feed = useAsync<RunFeed>(() => api.runFeed(myRuns()));
+  const everyone = useAsync<RunSummary[] | null>(() => (showAll ? api.runs(RECENT_FETCH) : Promise.resolve(null)), [showAll]);
+  const runs = showAll ? everyone : feed;
+  const mine = feed.data?.mine ?? [];
+  const examples = feed.data?.examples ?? [];
+  const all = everyone.data ?? [];
+  const anyLive = (showAll ? all : mine).some((r) => isInProgress(r.status));
+  const reload = showAll ? everyone.reload : feed.reload;
 
   useEffect(() => {
     if (!anyLive) return;
-    const t = window.setTimeout(runs.reload, 3000);
+    const t = window.setTimeout(reload, 3000);
     return () => window.clearTimeout(t);
-  }, [anyLive, runs.data, runs.reload]);
+  }, [anyLive, reload, feed.data, everyone.data]);
 
-  // Runs with source "api" come from scripts and tests, and a stranger can't tell what they were for.
-  const all = runs.data ?? [];
-  const fromPeople = all.filter((r) => r.source !== 'api');
-  const hidden = all.length - fromPeople.length;
-  const shown = showAll ? all : fromPeople.slice(0, RECENT_SHOWN);
+  const shown = showAll ? all.slice(0, RECENT_FETCH) : [...mine.slice(0, RECENT_SHOWN), ...examples];
   // One log scale for every bar in the list, so rows can be compared at a glance.
   const scaleMax = Math.max(1, ...shown.map((r) => r.rows_changed ?? 0));
   // Rows may fade in on first load. Polling afterwards must not trigger anything.
@@ -336,17 +345,16 @@ function RecentRuns({ kinds }: { kinds: Record<string, string | undefined> }) {
     <section className="recent" aria-labelledby="recent-title">
       <div className="recent-head">
         <h2 className="recent-title t-label" id="recent-title">
-          Recent runs
+          {showAll ? 'All recent runs' : 'Your runs and a few examples'}
         </h2>
-        {hidden > 0 && (
-          <button type="button" className="textbtn" onClick={() => setShowAll((v) => !v)}>
-            {showAll ? 'Hide runs from scripts and tests' : `Show all, including ${num(hidden)} from scripts and tests`}
-          </button>
-        )}
+        <button type="button" className="textbtn" aria-pressed={showAll} onClick={() => setShowAll((v) => !v)}>
+          {showAll ? 'Show only mine and the examples' : 'Show all'}
+        </button>
       </div>
+      <p className="muted recent-note">{showAll ? 'Everyone on this demo shares one prod and this list, so these include other visitors, scripts and tests.' : 'Everyone on this demo shares one prod. This list keeps to the runs from this browser, and examples of each way a run can end.'}</p>
       {runs.error && <Notice tone="bad" title="Could not load runs.">{runs.error}</Notice>}
       {!runs.data && !runs.error && <Loading />}
-      {runs.data && shown.length === 0 && <p className="muted">{hidden > 0 ? 'No runs from this page or an agent yet.' : 'No runs yet.'}</p>}
+      {runs.data && shown.length === 0 && <p className="muted">{showAll ? 'No runs yet.' : 'No runs from this browser yet. Start one above.'}</p>}
       {shown.length > 0 && (
         <div className="runlist">
           {shown.map((r, i) => (
@@ -368,12 +376,13 @@ function age(t: number | undefined): string {
 }
 
 function RunRow({ run, isHost, index, scaleMax, animate }: { run: RunSummary; isHost: boolean; index: number; scaleMax: number; animate: boolean }) {
-  const info = statusInfo(run.status);
+  const info = runInfo(run);
   const attempts = run.attempts ?? 0;
   const rows = run.rows_changed;
   const share = typeof rows === 'number' && rows > 0 ? Math.log10(rows + 1) / Math.log10(scaleMax + 1) : 0;
   const meta = [
-    run.source === 'race' ? 'one lane of a race' : null,
+    run.example ? `Example. ${run.example}` : null,
+    run.race_lane === 'alone' ? 'left lane of a race' : run.race_lane === 'through' ? 'right lane of a race' : null,
     run.requester ?? MISSING,
     when(run.created_at),
     !isHost && run.rows_via_cascade ? `${num(run.rows_via_cascade)} via cascade` : null,
