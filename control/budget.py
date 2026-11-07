@@ -1,6 +1,8 @@
 """Blast-radius budget per target: small safe changes go through without waiting for a person."""
 from __future__ import annotations
 
+import re
+
 # auto_apply_scope and auto_apply_paths default to nothing: a change has to be named as low-risk to skip a person.
 # Told only a row budget, an attacker model corrupted money in under 100 rows and passed every guardrail.
 DEFAULT_BUDGET = {"max_rows_changed": 100, "max_table_pct": 10.0, "max_cascade_rows": 0, "allow_drop": False, "allow_truncate": False, "allow_ddl": True, "auto_apply_scope": {}}
@@ -14,9 +16,22 @@ ADDITIVE_SCHEMA = "@additive_schema"
 IRREVERSIBLE_REASON = "the plan contains an irreversible write (DELETE, DROP, TRUNCATE, rm), which always needs a person"
 
 
+# A plain index on plain columns. A unique, partial or expression index can be undone, but until then it changes what prod accepts.
+PLAIN_INDEX = re.compile(r'^CREATE INDEX "?\w+"? ON (?:"?\w+"?\.)?"?\w+"? USING btree \("?\w+"?(?:, "?\w+"?)*\)$')
+
+
 def _additive(diff: dict, scope: dict) -> bool:
-    """A new column or index, on a list whose owner accepts those. Adding is what an undo can really take back."""
-    return bool(scope.get(ADDITIVE_SCHEMA)) and diff.get("change") == "added" and diff.get("kind") in ("column", "index")
+    """A new nullable column or plain index, on a list whose owner accepts those. It has to be harmless to writers, not only reversible."""
+    if not scope.get(ADDITIVE_SCHEMA) or diff.get("change") != "added":
+        return False
+    definition = str(diff.get("definition") or "")
+    if diff.get("kind") == "index":
+        return bool(PLAIN_INDEX.match(definition))
+    if diff.get("kind") == "column":
+        # type:nullable:default, as the schema fingerprint records it. A default or NOT NULL changes what prod accepts or rewrites rows.
+        parts = definition.split(":", 2)
+        return len(parts) == 3 and parts[1] == "YES" and parts[2] == ""
+    return False
 
 
 def delete_is_accepted(report: dict, scope: dict | None, undo: dict | None) -> bool:
@@ -70,7 +85,16 @@ def outside_paths(report: dict, paths: list[str]) -> list[str]:
 
 # A plan with no person looking runs as root on a host, in the same guest as the code measuring it, so it could replace
 # what measures it. So it's limited to plain commands, and every path it names has to be inside the auto-apply paths.
-NO_PERSON_COMMANDS = {"echo", "printf", "cat", "touch", "mkdir", "cp", "mv", "tee", "gzip", "gunzip", "date", "ls", "true", "test", "[", "wc", "head", "tail", "grep", "sort", "uniq", "du", "df"}
+NO_PERSON_COMMANDS = {"echo", "printf", "cat", "touch", "mkdir", "cp", "mv", "tee", "gzip", "gunzip", "ls", "true", "test", "[", "wc", "head", "tail", "grep", "sort", "uniq", "du", "df"}
+
+
+def _path_in_word(word: str) -> str:
+    """The path a word names, including --target-directory=/x and -t/x, which are how these commands take a destination."""
+    if word.startswith("--") and "=" in word:
+        return word.split("=", 1)[1]
+    if word.startswith("-") and len(word) > 2 and "/" in word:
+        return word[word.index("/"):] if word[2] != "." else word[2:]
+    return word
 
 
 def no_person_shell_reasons(no_person: dict, paths: list[str]) -> list[str]:
@@ -79,9 +103,11 @@ def no_person_shell_reasons(no_person: dict, paths: list[str]) -> list[str]:
     if unlisted:
         reasons.append(f"{unlisted[0]} isn't one of the plain commands that may run with no person")
     for word in no_person.get("words") or []:
+        path = _path_in_word(word)
         if any(ch in word for ch in "$`{}~") or ".." in word:
             reasons.append(f"a path in this plan can't be read for certain: {word[:60]}")
-        elif "/" in word and word.startswith(("/", ">")) and word != "/dev/null" and not any(word.startswith(prefix) for prefix in paths):
+        elif "/" in path and path != "/dev/null" and not any(path.startswith(prefix) for prefix in paths):
+            # A relative path with a folder in it counts too: it would need `cd`, which isn't allowed, to mean anything safe.
             reasons.append(f"it names a path outside the auto-apply paths: {word[:60]}")
     return reasons
 

@@ -3,7 +3,7 @@
 
 Takes each distinct SQL plan the benchmark held for a person, rehearses it again to get its report, and asks the same model
 to approve or reject it twice. Once with the request, the schema and the plan, which is what a reviewer reading a pull
-request has. Once with the measured report added. The benchmark's blind oracles already know what approving each plan did.
+request has. Once with the measured report added. The benchmark's oracles already know what approving each plan did.
 Writes bench/reviewer.json. Re-run: bash scripts/bench_remote.sh 'python -m bench.reviewer_eval'
 """
 from __future__ import annotations

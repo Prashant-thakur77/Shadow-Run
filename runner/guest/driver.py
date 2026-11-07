@@ -622,7 +622,7 @@ def collect(cur, before_counts: dict, before_schema: list, committed: bool, coun
     content_after = txrun.content_hashes(cur, measured)
     a, b = {tuple(r[:2]): r[2] for r in after_schema}, {tuple(r[:2]): r[2] for r in before_schema}
     schema_diff = [
-        {"kind": k[0], "name": k[1], "change": "added" if k not in b else "removed" if k not in a else "changed"}
+        {"kind": k[0], "name": k[1], "change": "added" if k not in b else "removed" if k not in a else "changed", "definition": a.get(k)}
         for k in sorted(set(a) | set(b))
         if a.get(k) != b.get(k)
     ]

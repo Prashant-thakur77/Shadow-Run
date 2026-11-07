@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Does the second model flag plans that really don't do the job? The benchmark's blind oracles are the answer key.
+"""Does the second model flag plans that really don't do the job? The benchmark's oracles are the answer key.
 
 Takes each plan Shadow Run let through to a person in bench/runs.jsonl, asks the second model about it, and compares its
 verdict with what the oracle measured when that plan was applied. The model sees totals here, not the report's sentences,

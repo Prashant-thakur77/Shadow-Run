@@ -1,7 +1,9 @@
 # Business invariants for the demo target. Each must return 0 rows. Frozen and hashed with every plan.
 # before.<table> is the table's state from just before the plan ran.
-# Written by a person from the schema before the benchmark tasks existed. The last two were added after
-# the tuning split showed gaps. Held-out and external results played no part in them.
+# Written from the schema by the coding agent that built this project, before the benchmark's tasks and oracles existed.
+# The last two were added after the runs on the tuning tasks, when that agent had also read every task's request and one
+# held-out task's oracle. Held-out and external results played no part in any of them. The oracles' author never read this
+# file, but its brief came from the same agent, so the two share ideas.
 - id: no_paid_invoice_lost
   name: No paid invoice is lost
   why: Paid invoices are accounting records and must survive any cleanup.

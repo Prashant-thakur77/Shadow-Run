@@ -8,16 +8,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
 from checker.control_kinds import control_kind  # noqa: E402
+from make_readme_table import basis_sentence, concentration_sentence, hold_sentence, lead_sentence, rehearsing_text, saber_sentence, task_level_sentence, view  # noqa: E402
 
 
 def load(name: str) -> dict | None:
     p = ROOT / "bench" / name
     return json.loads(p.read_text()) if p.exists() else None
-
-
-def g(x: float | None) -> str:
-    return "not measured" if x is None else f"{x:g}"
 
 
 def main() -> int:
@@ -26,21 +24,15 @@ def main() -> int:
     r = load("results.json") or {}
     rt = load("redteam.json") or {}
     c = load("controls.json") or {}
-    measured = r.get("status") == "measured" and r.get("scope") == "full"
+    st = load("stats.json") or {}
+    measured = r.get("status") == "measured" and r.get("scope") == "full" and st.get("main")
     if measured:
-        h = r["heldout"]
-        ext = r["external"]
-        d, s, sg = h["direct"], h["shadow_run"], h["static_gate"]
-        unread_done, unread_harm = s["risky_done_if_rubber_stamped"]["mean"], s["harm_if_rubber_stamped"]["mean"]
-        headline = (
-            f"On {d['risky_tasks']} risky tasks held out from tuning, the same agent finished the job safely {g(d['risky_done']['mean'])} times running directly and caused harm {g(d['harm_on_prod']['mean'])} times. "
-            f"Through Shadow Run, even with a person approving every plan unread, it finished safely {g(unread_done)} times and caused harm {g(unread_harm)} times, because it saw the measured damage and rewrote its plans. "
-            f"With a person who reads the report, nothing harmful reached prod without one, since {g(s['risky_held']['mean'])} of those plans waited for a person, including every safe task. That is the price."
-        )
-        external = (
-            f"On {ext['direct']['risky_tasks']} tasks adapted from the outside SABER benchmark: {g(ext['direct']['harm_on_prod']['mean'])} direct, "
-            f"{g(ext['static_gate']['harm_on_prod']['mean'])} static gate, {g(ext['shadow_run']['harm_on_prod']['mean'])} through Shadow Run with no person, {g(ext['shadow_run']['harm_if_rubber_stamped']['mean'])} if every plan were approved unread."
-        )
+        s = r["heldout"]["shadow_run"]
+        v = view(st, r)
+        lead = lead_sentence(v).replace("**", "")
+        # The sentences come from the README generator, so the two can't say different things.
+        headline = f"{lead} {basis_sentence(v)}{task_level_sentence(v)} {concentration_sentence(v)} {rehearsing_text(st, v).split(chr(10) * 2)[-1]} {hold_sentence(st, r)}"
+        external = saber_sentence(v)
         timing = (
             f"A rehearsal takes {s['rehearsal_s']['p50']} s at the median, and a task costs ${s['cost_per_task_usd']} in inference."
         )
@@ -52,12 +44,7 @@ def main() -> int:
         "AI agents with real access keep destroying production data with one command. Shadow Run sits between an agent and prod and holds the only credential. "
         "Every risky plan is frozen, hashed and run on a full clone of prod in a fresh Microsandbox microVM on Vultr, with no network device and no secrets. Postgres reports what really happened, frozen guardrails check it, and failures go back to the agent to rewrite the plan. "
         "A different person approves those exact hashes, and the same plan runs on prod in one transaction that rolls back if anything differs from the rehearsal.\n\n"
-        + (
-            f"On {h['direct']['risky_tasks']} risky tasks held out from tuning, the agent alone finished the job safely {g(h['direct']['risky_done']['mean'])} times and caused harm {g(h['direct']['harm_on_prod']['mean'])} times. "
-            f"Through Shadow Run, even with every plan approved unread: {g(h['shadow_run']['risky_done_if_rubber_stamped']['mean'])} and {g(h['shadow_run']['harm_if_rubber_stamped']['mean'])}. "
-            "With a person who reads the report, nothing harmful reached prod without one, since nearly every plan waits for a person. That is the price.\n\n"
-            if measured else ""
-        )
+        + (f"{lead} {hold_sentence(st, r)}\n\n" if measured else "")
         + "Every LLM call goes to Vultr Serverless Inference, on VX1, Cloud Compute, Managed PostgreSQL, Object Storage and a VPC. It ships as a web app, an MCP server, a CLI and a GitHub Action."
     )
     mk = json.loads((ROOT / "docs" / "market.json").read_text())

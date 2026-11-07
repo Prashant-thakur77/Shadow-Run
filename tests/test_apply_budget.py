@@ -641,7 +641,10 @@ def _schema_report(*diff):
 
 
 def test_a_new_column_or_index_runs_alone_where_the_owner_accepts_those():
-    report = _schema_report({"kind": "column", "name": "accounts.billing_email", "change": "added"}, {"kind": "index", "name": "orders.idx", "change": "added"})
+    report = _schema_report(
+        {"kind": "column", "name": "accounts.billing_email", "change": "added", "definition": "text:YES:"},
+        {"kind": "index", "name": "orders.idx", "change": "added", "definition": "CREATE INDEX idx ON public.orders USING btree (created_at)"},
+    )
     verdict = check_budget(report, {"verdict": "pass"}, [], WIDE, PROVED)
     assert verdict["within"] is True, verdict["reasons"]
 
@@ -657,7 +660,23 @@ def test_any_other_schema_change_needs_a_person(diff):
 
 
 def test_a_new_column_needs_a_person_unless_the_list_says_so_and_the_undo_is_proved():
-    report = _schema_report({"kind": "column", "name": "accounts.b", "change": "added"})
+    report = _schema_report({"kind": "column", "name": "accounts.b", "change": "added", "definition": "text:YES:"})
     assert check_budget(report, {"verdict": "pass"}, [], {"auto_apply_scope": {"accounts": ["x"]}, "allow_ddl": False}, PROVED)["within"] is False
     assert check_budget(report, {"verdict": "pass"}, [], WIDE, None)["within"] is False
+
+
+@pytest.mark.parametrize("diff,alone", [
+    ({"kind": "index", "name": "o.i", "change": "added", "definition": "CREATE INDEX i ON public.o USING btree (created_at)"}, True),
+    ({"kind": "index", "name": "o.i", "change": "added", "definition": "CREATE INDEX i ON public.o USING btree (a, b)"}, True),
+    ({"kind": "index", "name": "o.i", "change": "added", "definition": "CREATE UNIQUE INDEX i ON public.o USING btree (name)"}, False),
+    ({"kind": "index", "name": "o.i", "change": "added", "definition": "CREATE INDEX i ON public.o USING btree (lower(name))"}, False),
+    ({"kind": "index", "name": "o.i", "change": "added", "definition": "CREATE INDEX i ON public.o USING btree (a) WHERE (b > 0)"}, False),
+    ({"kind": "index", "name": "o.i", "change": "added", "definition": None}, False),
+    ({"kind": "column", "name": "o.c", "change": "added", "definition": "text:YES:"}, True),
+    ({"kind": "column", "name": "o.c", "change": "added", "definition": "text:NO:"}, False),
+    ({"kind": "column", "name": "o.c", "change": "added", "definition": "text:YES:'x'::text"}, False),
+    ({"kind": "column", "name": "o.c", "change": "added", "definition": None}, False),
+])
+def test_only_what_is_harmless_to_writers_counts_as_additive(diff, alone):
+    assert check_budget(_schema_report(diff), {"verdict": "pass"}, [], WIDE, PROVED)["within"] is alone
 

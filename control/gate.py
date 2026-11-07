@@ -61,7 +61,10 @@ ENVIRONMENT_FUNCTIONS = {
     "version", "pg_postmaster_start_time", "pg_conf_load_time", "current_database", "txid_current", "pg_current_xact_id",
     "pg_is_in_recovery", "pg_my_temp_schema",
 }
-ENVIRONMENT_WORDS = re.compile(r"\b(current_user|session_user|current_role|system_user|current_catalog)\b", re.I)
+# `user` on its own means current_user in Postgres. Quoted, or as part of a longer name, it's an ordinary name.
+ENVIRONMENT_WORDS = re.compile(r"\b(current_user|session_user|current_role|system_user|current_catalog|current_schema|current_schemas)\b|(?<![\"\w.])(user)(?![\"\w])", re.I)
+# Things that call into the catalog or a function without looking like a call the parser names.
+NO_PERSON_SYNTAX = re.compile(r"::\s*reg\w+|\bxml\w*\s*\(|\brows\s+from\b|\bgenerated\s+(always|by\s+default)\b", re.I)
 # What a plan may call with no person looking. Anything else, including the team's own functions, goes to a person,
 # because a function can do things no row log sees. sqlglot gives standard SQL functions their own types, so this lists the rest.
 NO_PERSON_FUNCTIONS = {
@@ -159,7 +162,9 @@ def functions_not_listed(stmt: str) -> list[str]:
     if isinstance(tree, exp.Command):
         return ["(a command the parser can't see inside)"]
     names = {func.name.lower() for func in tree.find_all(exp.Anonymous)}
-    return sorted(n for n in names if n not in NO_PERSON_FUNCTIONS)
+    unlisted = sorted(n for n in names if n not in NO_PERSON_FUNCTIONS)
+    syntax = NO_PERSON_SYNTAX.search(code_only(stmt))
+    return [*unlisted, f"({syntax.group(0)})"] if syntax else unlisted
 
 
 def check_sql_statement(step: int, stmt: str) -> tuple[list[dict], str]:
@@ -190,7 +195,7 @@ def check_sql_statement(step: int, stmt: str) -> tuple[list[dict], str]:
             findings.append(_finding(step, stmt, "asks_where_it_runs", "high", f"{name}() lets a plan act differently on prod than on the clone"))
     word = ENVIRONMENT_WORDS.search(code)
     if word:
-        findings.append(_finding(step, stmt, "asks_where_it_runs", "high", f"{word.group(1).lower()} lets a plan act differently on prod than on the clone"))
+        findings.append(_finding(step, stmt, "asks_where_it_runs", "high", f"{(word.group(1) or word.group(2)).lower()} lets a plan act differently on prod than on the clone"))
 
     if re.match(r"^\s*(create\s+(or\s+replace\s+)?(constraint\s+)?(function|procedure|trigger|rule|event\s+trigger)\b|do\b|call\b)", code, re.I):
         findings.append(_finding(step, stmt, "executable_code", "high", "this adds or runs code the parser cannot follow, so it always goes to a person"))

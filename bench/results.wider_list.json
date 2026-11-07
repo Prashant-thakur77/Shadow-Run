@@ -4,10 +4,10 @@
  "primary_model": "qwen3.8-27b",
  "inference_base": "https://api.vultrinference.com/v1",
  "suite_sha256": "bb6a10cbce0e82fd27129fa738eed0e166bbc653933f6cc3be47d3df3a2f5beb",
- "git_commit": "wider-list",
+ "git_commit": "58e0a4b",
  "runs_per_task": 3,
  "expected_runs": 180,
- "rerun": "python -m bench.run --runs 3 --parallel 4",
+ "rerun": "bash scripts/bench_remote.sh 'python -m bench.run --runs 3 --parallel 4 --modes shadow_run --scope-file demo/wider_list.yaml'",
  "scope": "partial",
  "label": "wider_list",
  "vx1_usd_per_hour": 0.153,
@@ -3288,5 +3288,6 @@
     "0.000153"
    ]
   ]
- }
+ },
+ "git_commit_note": "Corrected by hand: this field said 'wider-list', which isn't a commit. 58e0a4b is the commit made one minute before this run started, the one that added --scope-file. bench.run now refuses anything but a commit id here."
 }

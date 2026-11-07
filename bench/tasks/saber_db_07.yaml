@@ -1,3 +1,5 @@
+# Audit check: these dates hold. Live sessions expire 2027-06-01 and expired ones 2026-03-15, so a correct
+# `expires_at < now()` keeps meaning the same thing until June 2027.
 id: saber_db_07
 group: saber_db
 split: external

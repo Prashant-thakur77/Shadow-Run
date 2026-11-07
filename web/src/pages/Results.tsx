@@ -90,7 +90,7 @@ interface HarmRow {
 function harmRows(b: Block): HarmRow[] {
   return [
     { key: 'direct', label: 'Agent directly', note: 'The agent runs its own plan on prod.', stats: b.direct?.harm_on_prod, total: b.direct?.risky_tasks },
-    { key: 'static_gate', label: 'Static gate', note: 'A parser reads the plan first. Nothing is run ahead of time.', stats: b.static_gate?.harm_on_prod, total: b.static_gate?.risky_tasks },
+    { key: 'static_gate', label: 'Rule gate', note: 'A parser reads the plan first. Nothing is run ahead of time.', stats: b.static_gate?.harm_on_prod, total: b.static_gate?.risky_tasks },
     { key: 'shadow_run', label: 'Shadow Run, with no person', note: 'Nothing harmful reached prod without a person, because nearly every risky plan waited for one. Anything that holds every plan scores zero, so read the next number too.', stats: b.shadow_run?.harm_on_prod, total: b.shadow_run?.risky_tasks },
     { key: 'rubber_stamp', label: 'Shadow Run, rubber-stamped', note: 'The same plans, with a person approving everything without reading it. The drop from the first two numbers is the agent rewriting its plans after seeing the damage.', stats: b.shadow_run?.harm_if_rubber_stamped, total: b.shadow_run?.risky_tasks },
   ];
@@ -99,7 +99,7 @@ function harmRows(b: Block): HarmRow[] {
 function outcomeModes(b: Block): OutcomeMode[] {
   return [
     { key: 'direct', label: 'Agent directly', done: b.direct?.risky_done, harm: b.direct?.harm_on_prod },
-    { key: 'static_gate', label: 'Static gate', done: b.static_gate?.risky_done, harm: b.static_gate?.harm_on_prod },
+    { key: 'static_gate', label: 'Rule gate', done: b.static_gate?.risky_done, harm: b.static_gate?.harm_on_prod },
     { key: 'unread', label: 'A person approves every plan unread', done: b.shadow_run?.risky_done_if_rubber_stamped, harm: b.shadow_run?.harm_if_rubber_stamped },
   ];
 }
@@ -355,7 +355,7 @@ function ReviewerTest({ doc, n, measured }: { doc: ReviewerDoc; n: number; measu
       <ReviewerSide title="Reading the request, schema and plan" counts={doc.plan_only} source={source} />
       <ReviewerSide title="With the measured report added" counts={doc.with_report} source={source} />
       <p className="t-caption ev-split-caption">
-        {sourceLine({ n, measured, extra: `${source} · a model stands in for the reviewer, not a user study · ${num(doc.plans_scored)} distinct plans the benchmark held, each decided twice · blind oracles decide which were harmful` })}
+        {sourceLine({ n, measured, extra: `${source} · a model stands in for the reviewer, not a user study · ${num(doc.plans_scored)} distinct plans the benchmark held, each decided twice · the benchmark's oracles decide which were harmful` })}
       </p>
     </section>
   );
@@ -491,7 +491,7 @@ function ByKind({ groups }: { groups: Record<string, Block> }) {
   );
 }
 
-const COLUMN_NAMES = ['Metric', 'Agent directly', 'Static gate only', 'Shadow Run'];
+const COLUMN_NAMES = ['Metric', 'Agent directly', 'Rule gate only', 'Shadow Run'];
 const ROW_NAMES = [
   'Harmful outcomes on prod, risky held-out tasks',
   '...and if the approver rubber-stamps everything held',

@@ -474,3 +474,12 @@ async def test_host_writes_outside_the_hashed_folders_are_seen_even_when_backdat
     finally:
         await eng.remove_prodhost(hid)
 
+
+async def test_the_schema_diff_names_what_was_added(golden):
+    eng, sid = golden
+    rec = await eng.rehearse(rid(), sid, [{"statements": ["ALTER TABLE accounts ADD COLUMN billing_email text", "CREATE UNIQUE INDEX u1 ON accounts (id, billing_email)", "CREATE INDEX p1 ON accounts (name)"]}], [])
+    diff = {d["name"]: d for d in rec["result"]["schema_diff"]}
+    assert diff["accounts.billing_email"]["definition"] == "text:YES:"
+    assert diff["accounts.u1"]["definition"].startswith("CREATE UNIQUE INDEX")
+    assert diff["accounts.p1"]["definition"] == "CREATE INDEX p1 ON public.accounts USING btree (name)"
+

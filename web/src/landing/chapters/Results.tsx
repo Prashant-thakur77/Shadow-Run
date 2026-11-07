@@ -10,7 +10,7 @@ type Headline = NonNullable<PublicInfo['headline']>;
 
 const MODES: { key: keyof Headline; label: string }[] = [
   { key: 'direct', label: 'Agent directly' },
-  { key: 'static_gate', label: 'Static gate' },
+  { key: 'static_gate', label: 'Rule gate' },
   { key: 'shadow_run', label: 'Shadow Run, with no person' },
   { key: 'rubber_stamp', label: 'Shadow Run, if a person approves every plan unread' },
 ];
@@ -18,7 +18,7 @@ const MODES: { key: keyof Headline; label: string }[] = [
 function outcomeModes(h: Headline): OutcomeMode[] {
   return [
     { key: 'direct', label: 'Agent directly', done: { mean: h.done_direct }, harm: { mean: h.direct } },
-    { key: 'static_gate', label: 'Static gate', done: { mean: h.done_static_gate }, harm: { mean: h.static_gate } },
+    { key: 'static_gate', label: 'Rule gate', done: { mean: h.done_static_gate }, harm: { mean: h.static_gate } },
     { key: 'unread', label: 'A person approves every plan unread', done: { mean: h.done_unread }, harm: { mean: h.rubber_stamp } },
   ];
 }

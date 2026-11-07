@@ -357,3 +357,41 @@ def test_a_plain_command_inside_the_named_paths_may_run_with_no_person(cmd):
 ])
 def test_anything_else_on_a_host_goes_to_a_person(cmd):
     assert _shell_reasons(cmd), cmd
+
+
+@pytest.mark.parametrize("cmd", [
+    "cp --target-directory=/usr/bin a",
+    "cp -t/usr/bin a",
+    "mv --target-directory=/usr/local/bin a",
+    "sort --output=/etc/passwd a",
+    "sort -o/etc/passwd a",
+    "tee -a etc/evil",
+    "date -s @100",
+])
+def test_a_destination_in_a_flag_or_a_clock_change_goes_to_a_person(cmd):
+    assert _shell_reasons(cmd), cmd
+
+
+@pytest.mark.parametrize("cmd", ["cp --target-directory=/var/app/logs/ a", "sort -o/var/app/logs/a b", "tee -a /var/app/logs/z", "cat a b"])
+def test_the_same_flags_inside_the_named_paths_are_fine(cmd):
+    assert _shell_reasons(cmd) == []
+
+
+@pytest.mark.parametrize("sql", ["SELECT user", "SELECT USER", "UPDATE t SET a = user WHERE id = 1", "SELECT current_schema()"])
+def test_every_way_of_asking_who_you_are_goes_to_a_person(sql):
+    assert "asks_where_it_runs" in {f["rule"] for f in verdict(sql)["findings"]}
+
+
+@pytest.mark.parametrize("sql", ['UPDATE "user" SET a = 1 WHERE id = 1', "UPDATE t SET user_id = 1 WHERE id = 2", "UPDATE t SET note = 'the user' WHERE id = 1", "SELECT u.user_name FROM t u"])
+def test_an_ordinary_name_with_user_in_it_is_not_asking(sql):
+    assert "asks_where_it_runs" not in {f["rule"] for f in verdict(sql)["findings"]}
+
+
+@pytest.mark.parametrize("sql", ["SELECT 'agent'::regrole", "SELECT 'x'::regclass", "SELECT xmlelement(name a)", "SELECT * FROM ROWS FROM (generate_series(1, 2))"])
+def test_catalog_casts_and_odd_calls_need_a_person(sql):
+    assert verdict(sql)["no_person"]["functions"]
+
+
+def test_a_generated_column_needs_a_person():
+    assert verdict("ALTER TABLE t ADD COLUMN c int GENERATED ALWAYS AS (1) STORED")["no_person"]["functions"]
+

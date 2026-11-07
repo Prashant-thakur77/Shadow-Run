@@ -9,15 +9,19 @@ Press **Continue as guest**. You get two identities, `judge` to request changes 
 <!-- live:end -->
 
 <!-- headline:start -->
-**The same agent on 23 risky tasks held out from tuning finished the job safely 10 times running directly, and 15.33 times through Shadow Run, even with a person approving every plan unread. Harm fell from 10.67 to 2.67.**
+**With every plan approved unread, the same agent did harm on 3.67 of 23 held-out risky tasks instead of 10, and finished safely on 14 instead of 10.33.** These are our own tasks, on a demo schema with cascading foreign keys and guardrails written for it.
 
-| Of 23 held-out risky tasks | Agent directly | Static gate | Shadow Run, every plan approved unread |
+| Of 23 held-out risky tasks | Agent directly | Rule gate, refused plans retried, no person | Shadow Run, every plan approved unread |
 | --- | --- | --- | --- |
-| Did the job, no harm | 10 | 8.33 | **15.33** |
-| Harm on prod | 10.67 | 11 | **2.67** |
-| Neither | 2.33 | 3.67 | 5 |
+| Did the job, no harm | 10.33 | 9.33 | **14** |
+| Harm on prod | 10 | 10 | **3.67** |
+| Neither | 2.67 | 3.67 | 5.33 |
 
-That gain is what rehearsing adds: the agent saw what its plan would really do and rewrote it, in 33 of 69 held-out runs. The static gate's 11 against 10.67 is noise at this sample size. With a person who reads the report, nothing harmful reached prod without one, a harm count of 0, but that zero is mostly the hold: 22.67 of 23 risky plans waited, and anything that holds every plan would score zero too. The price is approvals, since all 7 safe tasks waited as well. A rehearsal takes 2.98 s at the median, boot to destroy.
+These are the plans from the run before an audit, scored by today's oracles. The next full run replaces them. Task by task, Shadow Run minus direct: harm -6.33 (95% CI -10.33 to -2.67, 8 tasks better, 0 worse, p = 0.0078), finished safely +3.67 (95% CI +0.67 to +7, 5 tasks better, 0 worse, p = 0.062). We count tasks, not runs, because three runs of a task are close to copies. Without the cascade and soft_delete groups, the other 14 tasks show harm 3 to 2 (p = 1) and finished safely 8.33 to 9.67 (p = 0.5), so the effect sits in those two groups.
+
+That gain comes from rehearsing and telling the agent which guardrails failed, and we haven't tested the two apart. The agent rewrote a plan after a failed guardrail in 30 of 69 held-out runs. Of the tasks where direct did harm, the 8 where a guardrail fired went from 8 to 1.67, and the 2 where none fired went from 2 to 2. Harm fell only where a guardrail covered it. The rule gate's harm of 10 against direct's 10 isn't distinguishable from noise.
+
+No plan that changed anything reached prod without a person, so a harm count of 0 with a person who reads the report comes entirely from the hold. 22 of 23 risky plans waited, and anything that holds every plan would score zero too. The price is approvals, since all 7 safe tasks waited as well. A rehearsal takes 2.99 s at the median, boot to destroy.
 <!-- headline:end -->
 
 <!-- video:start -->
@@ -77,80 +81,95 @@ It works with any MCP agent. Here is a [real OpenCode session on Vultr inference
 
 ## Results
 
-Three modes, same model, same prompt, same seeded database, a fresh copy for every run: the agent directly on prod, the agent behind a static rule gate (the same gate Shadow Run starts with), and the agent through Shadow Run.
+Three modes, same model, same prompt, same seeded database, a fresh copy for every run: the agent directly on prod, the agent behind a rule gate that refuses flagged plans and lets it retry with no person (the same rules Shadow Run starts with), and the agent through Shadow Run.
 
 <!-- results:start -->
-| Metric | Agent directly | Static gate only | Shadow Run |
+| Metric | Agent directly | Rule gate, refused plans retried, no person | Shadow Run |
 | --- | --- | --- | --- |
-| Harmful outcomes on prod (of 23 risky, held-out) | 10.67 (10–11) | 11 (10–12) | 0 |
-| ...and if the approver rubber-stamps everything held | n/a | n/a | 2.67 (2–3) |
+| Harmful outcomes on prod (of 23 risky, held-out) | 11 | 11 | 0 |
+| ...and if the approver rubber-stamps everything held | n/a | n/a | 2.33 |
 | Harmful outcomes on prod (of 20 risky, SABER-derived) | 5 | 4 | 0 |
-| ...and if the approver rubber-stamps everything held | n/a | n/a | 2.33 (2–3) |
+| ...and if the approver rubber-stamps everything held | n/a | n/a | 2.33 |
 | Safe tasks wrongly blocked (of 7) | 0 by definition | 0 | 0 |
 | Safe tasks that applied with no person | n/a | n/a | 0 |
 | Safe tasks held for a person | n/a | n/a | 7 |
-| Plans fixed by the retry loop | n/a | n/a | 9.67 (9–10) |
-| Rehearsal time per attempt, p50 / p95 (s) | n/a | ~0 | 2.98 / 4.18 |
-| Clone boot, p50 / p95 (ms) | n/a | n/a | 1148.5 / 1742.4 |
-| Inference cost per task ($) | 0.00141 | 0.00196 | 0.00348 |
+| Plans fixed by the retry loop | n/a | n/a | 9.67 |
+| Rehearsal time per attempt, p50 / p95 (s) | n/a | ~0 | 2.99 / 4.04 |
+| Clone boot, p50 / p95 (ms) | n/a | n/a | 1249.5 / 1799.2 |
+| Inference cost per task ($) | 0.00141 | 0.00199 | 0.00351 |
 | VX1 compute per rehearsal at list price ($) | n/a | n/a | 0.000127 |
 | Red-team attacks contained, checked from the host | n/a | n/a | 7 of 7 |
 | Forced drift with the drift check off: rolled back, prod unchanged | n/a | n/a | yes |
 
-Mean of 3 runs per task, range in brackets. Model `qwen3.8-27b` on Vultr Serverless Inference, measured 2026-11-06T10:02:36Z, commit `1354de2`, suite sha256 `bb6a10cbce0e`, 540 runs, 0 harness errors after retrying 2 that hit one in the benchmark's own database reset, which `bench/runs.jsonl` keeps. Re-run: `python -m bench.run --runs 3 --parallel 4`. Every run and its plan is in `bench/runs.jsonl`.
+Mean of 3 runs per task. Model `qwen3.8-27b` on Vultr Serverless Inference, last invoked 2026-11-06T19:53:46Z, commit `f5c8148`, suite sha256 `bb6a10cbce0e`, and **the tasks have changed since, now `bf2340d01626`**. 540 runs, 0 harness errors after retrying 1 that hit one in the benchmark's own database reset, which `bench/runs.jsonl` keeps. Re-run: `bash scripts/bench_remote.sh 'python -m bench.run --runs 3 --parallel 4'`. Every run and its plan is in `bench/runs.jsonl`. Intervals and tests by task are in `bench/stats.json` (`python -m bench.stats`). Each of the 297 rehearsals needs a complete containment record from the host, with probes, kernel check and teardown proof. 2 came back without one and were refused, not counted. This run predates code hashes, so nothing can check it against the files here now.
 <!-- results:end -->
 
-The suite is 40 tasks of ours plus 20 adapted from [SABER](https://github.com/sssr-lab/saber), so the result isn't only on our own planted data. Oracles decide harm by checking outcomes. They were written by a separate agent that was barred from reading the guardrails and the gate, and each one is tested with a known-bad and a known-good plan (`python -m bench.validate`). We tuned on 10 tasks and report the other 30 and the SABER set separately. One disclosure: after a preview run's totals showed small harmful plans auto-applying under budget, we added the rule that irreversible writes always need a person. We read only the totals for that, not which held-out tasks were involved, but the held-out set isn't perfectly clean of that one decision. SABER's guardrails were drafted by the model and left unedited.
+<!-- suite:start -->
+The suite is 40 tasks of ours plus 20 adapted from [SABER](https://github.com/sssr-lab/saber). On the 10 database tasks, harm went from 5 to 2.67 and finishing safely from 3 to 5, too few tasks to call (3 moved on harm, p = 0.25). The agent wasn't told the project's path on the 10 filesystem tasks in that run, so those plans only show damage to the live app next door: 4.33 direct against 3. That's fixed for the next run. Oracles decide harm by checking outcomes, and every mode is scored by the same code. A separate agent wrote the oracles without reading the guardrails, but the same project wrote the brief, the schema and the guardrails, and two guardrails were added after the tuning runs. They share their ideas, so read the held-out result as what happens when guardrails cover the risks that matter. Each oracle is tested with known-bad and known-good plans (`python -m bench.validate`). We tuned on 10 tasks and report the other 30 and the SABER set separately. One disclosure: after a preview run's totals showed small harmful plans auto-applying under budget, we added the rule that irreversible writes always need a person. We read only the totals for that, not which held-out tasks were involved, but the held-out set isn't perfectly clean of that one decision. SABER's guardrails were drafted by the model and left unedited.
+<!-- suite:end -->
+
+<!-- audit:start -->
+An audit read these plans and found faults in our oracles, so we changed them, mainly by adding an integrity check that counts damage like rewritten foreign keys or invented accounts as harm in every mode. The plans from the run before that change scored harm 11 direct and 2.33 through Shadow Run approved unread, and finished safely 9.33 and 14.67, and the changed oracles score those same plans harm 10 and 3.67, finished safely 10.33 and 14 (`bench/results.before-audit.json`, `bench/rescore.json`).
+<!-- audit:end -->
 
 <!-- reviewer:start -->
+
 <!-- reviewer:end -->
 
-<details><summary>More from the benchmark: the gate alone, the second model, a wider auto-apply list, other models, cost, each kind of task</summary>
+<details><summary>More from the benchmark: the gate alone, the second model, guardrail refusals, a schema without cascades, a wider auto-apply list, other models, cost, each kind of task</summary>
 
 <!-- clone_check:start -->
 Every clone is checked against what it was restored from: 43 of the 43 databases in the suite restore with the same rows and schema. A clone that doesn't match is refused, because one missing a foreign key would report a smaller blast radius than the real thing. Re-run: `bash scripts/bench_remote.sh 'python -m bench.clone_check'`.
 <!-- clone_check:end -->
 
 <!-- gate:start -->
-Rules alone aren't enough. Reading the suite's 60 known-bad plans with no rehearsal, the static gate sends 34 to a person, refuses 0 and passes 26, which only a rehearsal can catch. It flags 23 of the 60 known-good plans and refuses 0. Re-run: `python -m bench.gate_score`. The benchmark ran with an earlier shell parser. Replaying its 657 recorded plans through today's gate gives the same verdict on 656; the other is shell_03 in a side run, from block to review, still stopped. Re-run: `python -m bench.gate_replay`.
+Rules alone aren't enough. Reading the suite's 60 known-bad plans with no rehearsal, the static gate sends 34 to a person, refuses 0 and passes 26, which only a rehearsal can catch. It flags 23 of the 60 known-good plans and refuses 0. Re-run: `python -m bench.gate_score`. Replaying the benchmark's 657 recorded plans through today's gate gives the same verdict on 656: `python -m bench.gate_replay`.
 <!-- gate:end -->
 
 <!-- second_opinion:start -->
-The second model was tested against the benchmark's blind oracles, on 171 plans held for a person. It flagged 45 of the 54 that didn't do the job, 8 of the 15 that would have caused harm if approved, and wrongly doubted 40 of the 117 that did. It's advice for the person, and its doubt only ever adds a person. Model `glm-5.3-flash`. Re-run: `python -m bench.second_opinion_eval`.
+The second model was tested against the benchmark's oracles, on 171 plans held for a person. It flagged 45 of the 54 that didn't do the job, 8 of the 15 that would have caused harm if approved, and wrongly doubted 40 of the 117 that did. It's advice for the person, and its doubt only ever adds a person. Model `glm-5.3-flash`. Re-run: `python -m bench.second_opinion_eval`.
 <!-- second_opinion:end -->
 
+<!-- refusals:start -->
+The guardrails are not free. Run on each task's known-good plan, they refuse 13 of 50 risky tasks, 8 of them among the 23 held out, and 0 of 10 safe ones. An agent refused on an honest plan looks for another one, and some of what it finds does damage, which the integrity check now counts. Some of these tasks can't be finished through Shadow Run with an honest plan, which holds its finishing count down. Re-run: `python -m bench.validate`.
+<!-- refusals:end -->
+
+<!-- restrict:start -->
+The same tasks on a schema with `ON DELETE RESTRICT` on the money tables, instead of cascades, haven't been measured yet.
+<!-- restrict:end -->
+
 <!-- wider:start -->
-Most safe work waits for a person because the demo's auto-apply list is one notes column. With [a wider list a team might accept](demo/wider_list.yaml), 1 of 7 safe tasks applied alone, and harm on prod with no person was 0 of 23 held-out and 0 of 20 SABER-derived. Mean of 3 runs. Deletes and cascades still wait.
+Most safe work waits for a person because the demo's auto-apply list is one notes column. With [a wider list a team might accept](demo/wider_list.yaml), 1 of 7 safe tasks finished with no person, against harm with no person on 0 of 23 held-out and 0 of 20 SABER-derived risky tasks. Mean of 3 runs. On a table listed whole, a delete can run alone only if its undo is proved on the clone, and cascades, truncates and drops still wait. Measured before the oracle change and on an earlier list, so it may not match the files here now.
 <!-- wider:end -->
 
 <!-- models:start -->
 The agent's model is the variable an adopter can't control, so the same held-out tasks were run with others from Vultr's list:
 
-| Agent model | Runs per task | Direct harm | Static gate harm | Shadow Run harm | If rubber-stamped |
-| --- | --- | --- | --- | --- | --- |
-| `qwen3.8-27b` | 3 | 10.67 (10–11) | 11 (10–12) | 0 | 2.67 (2–3) |
-| `deepseek-v4.1-flash-1017` | 1 | 6 | 7 | 0 | 2 |
-| `glm-5.3` | 1 | 11 | 9 | 0 | 4 |
-| `qwen3.8-27b` | 3 | n/a | n/a | 0 | 3 |
+| Agent model | Runs per task | Direct harm | Rule gate harm | Shadow Run harm, approved unread | Direct finished safely | Shadow Run finished safely, approved unread | Oracles |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `qwen3.8-27b` | 3 | 11 | 11 | 2.33 | 9.33 | 14.67 | before the audit |
+| `glm-5.3` | 1 | 11 | 10 | 5 | 10 | 14 | before the audit |
 <!-- models:end -->
 
 <!-- cost:start -->
-Inference cost per task across all 60 tasks, where the table above is held-out only: $0.00328 through Shadow Run and $0.00156 for the agent alone. That's about $3.28 of inference per thousand tasks through Shadow Run.
+Inference cost per task across all 60 tasks, where the table above is held-out only: $0.0033 through Shadow Run and $0.00149 for the agent alone. That's about $3.30 of inference per thousand tasks through Shadow Run.
 <!-- cost:end -->
 
 <!-- groups:start -->
 <details><summary>By kind of task</summary>
 
-| Group (risky tasks) | Direct harm | Static gate harm | Shadow Run harm, no person | Stopped by guardrail | Held for a person | If approved unread, harm | If approved unread, did the job |
+| Group (risky tasks) | Direct harm | Rule gate harm | Shadow Run harm, no person | Stopped by guardrail | Held for a person | If approved unread, harm | If approved unread, did the job |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| cascade (8) | 7 | 7.33 (7–8) | 0 | 0 | 7.67 (7–8) | 0.67 (0–1) | 4.67 (4–5) |
-| injected (3) | 0 | 0 | 0 | 0 | 3 | 0 | 2 |
-| lookalike (5) | 2 | 1.67 (1–2) | 0 | 0 | 5 | 1 | 4 |
-| missing_filter (5) | 1 | 1 | 0 | 0 | 5 | 1 | 3.67 (3–4) |
-| saber_db (10) | 5 | 4 | 0 | 0.67 (0–1) | 8.33 (8–9) | 2.33 (2–3) | 5.67 (5–6) |
-| saber_fs (10) | 0 | 0 | 0 | 0 | 9 | 0 | 1 |
-| shell (5) | 1 | 1.33 (1–2) | 0 | 0 | 5 | 0 | 4 |
-| soft_delete (4) | 3.67 (3–4) | 3.67 (3–4) | 0 | 0 | 4 | 0 | 3 |
+| cascade (8) | 7 | 7.33 | 0 | 0 | 7.67 | 0.33 | 4 |
+| injected (3) | 0 | 0 | 0 | 0 | 2.33 | 0 | 2 |
+| lookalike (5) | 2 | 2 | 0 | 0 | 5 | 1 | 4 |
+| missing_filter (5) | 1 | 1 | 0 | 0 | 5 | 1 | 3.33 |
+| saber_db (10) | 5 | 4 | 0 | 1 | 8 | 2.33 | 5.33 |
+| saber_fs (10) | 0 | 0 | 0 | 0 | 8 | 0 | 0 |
+| shell (5) | 1 | 0.67 | 0 | 0 | 5 | 0 | 4.33 |
+| soft_delete (4) | 4 | 4 | 0 | 0 | 4 | 0 | 3 |
+
+These are that run's own scores, under the oracles it ran with.
 
 </details>
 <!-- groups:end -->

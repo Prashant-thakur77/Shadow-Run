@@ -87,7 +87,7 @@ async def main_async(scales: list[float]) -> int:
         row = await measure(admin, runner, s)
         rows.append(row)
         print(json.dumps(row), flush=True)
-    out = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "rows": rows, "rerun": "python -m bench.scale --scales " + " ".join(str(s) for s in scales)}
+    out = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "rows": rows, "rerun": "bash scripts/bench_remote.sh 'python -m bench.scale --scales " + " ".join(str(s) for s in scales) + "'"}
     (ROOT / "bench/scale.json").write_text(json.dumps(out, indent=2) + "\n")
     return 0
 

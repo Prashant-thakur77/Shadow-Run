@@ -165,6 +165,12 @@ async def apply_host_plan(runner, host_id: str, steps: list[dict], guardrails: l
             reasons.append(f"files {key} differ from the rehearsal")
     if r.get("files", {}).get("content_sha256") != expected.get("files", {}).get("content_sha256"):
         reasons.append("the content of changed files differs from the rehearsal")
+    # Running services write here all the time, on prod and not on a fresh clone.
+    service_noise = ("/var/log", "/var/lib", "/var/cache")
+    shown = set(expected.get("files", {}).get("outside_measured") or [])
+    surprise = [p for p in r.get("files", {}).get("outside_measured") or [] if p not in shown and not p.startswith(service_noise)]
+    if surprise:
+        reasons.append(f"it changed {surprise[0]} on prod, outside the hashed folders, which the rehearsal didn't show")
     if sorted(r.get("services_stopped", [])) != sorted(expected.get("services_stopped", [])):
         reasons.append("services stopped differ from the rehearsal")
     failed = [g["name"] for g in r.get("guardrails", []) if not g["passed"]]

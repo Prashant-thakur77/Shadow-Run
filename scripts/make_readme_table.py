@@ -3,22 +3,35 @@
 
 Blocks are marked <!-- name:start --> ... <!-- name:end -->. A block whose source file is missing says
 "not measured yet", so a gap is visible and never filled in by hand.
+
+The headline and the sentences around it come from bench/stats.json, and each one is chosen by what the numbers say. A sentence
+that makes a claim, such as "the effect sits in those two groups", is only printed when the numbers bear it out.
+
+  python scripts/make_readme_table.py                       write every block
+  python scripts/make_readme_table.py --only headline suite write those blocks
+  python scripts/make_readme_table.py --check [--only ...]  print them and write nothing
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import urllib.request
 import os
 import re
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BENCH = ROOT / "bench"
 sys.path.insert(0, str(ROOT))
+from bench import provenance  # noqa: E402
+from bench.tasks import GATE_LABEL, suite_hash  # noqa: E402
 from checker.control_kinds import control_kind  # noqa: E402
 NOT_YET = "Not measured yet."
+BLIND_LINE = (
+    "A separate agent wrote the oracles without reading the guardrails, but the same project wrote the brief, the schema and the guardrails, and two guardrails were added after the tuning runs. "
+    "They share their ideas, so read the held-out result as what happens when guardrails cover the risks that matter."
+)
 
 
 def load(name: str) -> dict | None:
@@ -34,12 +47,188 @@ def env_value(key: str) -> str:
 
 
 def fmt_mean(p: dict | None) -> str:
+    """The mean only. A range across run numbers reads like an interval and isn't one. The real intervals are in bench/stats.json."""
     if not p or p.get("mean") is None:
         return "n/a"
-    text = f"{p['mean']:g}"
-    if p["min"] != p["max"]:
-        text += f" ({p['min']}–{p['max']})"
-    return text
+    return f"{p['mean']:g}"
+
+
+def fmt_p(p: float) -> str:
+    return "p < 0.001" if p < 0.001 else f"p = {p:.2g}"
+
+
+def fmt_ci(c: dict) -> str:
+    return f"95% CI {c['ci95'][0]:+g} to {c['ci95'][1]:+g}"
+
+
+def same_suite(doc: dict) -> bool:
+    return doc.get("suite_sha256") == suite_hash()
+
+
+def view(s: dict, r: dict) -> dict:
+    """Which scores lead. A run under today's tasks speaks for itself. Otherwise, if its plans have been scored again under today's
+    oracles, those lead, and the text says so. Both have the same shape."""
+    if same_suite(r) or not s.get("rescored") or s["rescored"].get("partial") or s["rescored"].get("suite_sha256") != suite_hash():
+        main = s["main"]
+        sets = {k: {"tasks": v["tasks"], "arms": v["arms"], "compare": v["compare"]} for k, v in main["sets"].items()}
+        return {"kind": "fresh" if same_suite(r) else "stale", "sets": sets, "coverage": main.get("guardrail_coverage", {})}
+    again = s["rescored"]
+    sets = {k: {"tasks": v["tasks"], "arms": v["after"], "compare": v["compare"]} for k, v in again["sets"].items()}
+    return {"kind": "rescored", "sets": sets, "coverage": again.get("guardrail_coverage", {})}
+
+
+def basis_sentence(v: dict) -> str:
+    return {
+        "fresh": "",
+        "rescored": "These are the plans from the run before an audit, scored by today's oracles. The next full run replaces them. ",
+        "stale": "These scores come from a run under older oracles. ",
+    }[v["kind"]]
+
+
+def lead_sentence(v: dict) -> str:
+    h = v["sets"]["heldout"]
+    d, u = h["arms"]["direct"], h["arms"]["unread"]
+    return (
+        f"**With every plan approved unread, the same agent did harm on {u['harm']:g} of {h['tasks']} held-out risky tasks instead of {d['harm']:g}, and finished safely on {u['done']:g} instead of {d['done']:g}.** "
+        "These are our own tasks, on a demo schema with cascading foreign keys and guardrails written for it."
+    )
+
+
+def direction(c: dict, metric: str) -> str:
+    better, worse = (c["tasks_down"], c["tasks_up"]) if metric == "harm" else (c["tasks_up"], c["tasks_down"])
+    return f"{better} tasks better, {worse} worse"
+
+
+def task_level_sentence(v: dict) -> str:
+    c = v["sets"]["heldout"]["compare"]["unread_vs_direct"]
+    h, f = c["harm"], c["done"]
+    return (
+        f"Task by task, Shadow Run minus direct: harm {h['difference']:+g} ({fmt_ci(h)}, {direction(h, 'harm')}, {fmt_p(h['permutation_p'])}), "
+        f"finished safely {f['difference']:+g} ({fmt_ci(f)}, {direction(f, 'done')}, {fmt_p(f['permutation_p'])}). We count tasks, not runs, because three runs of a task are close to copies."
+    )
+
+
+def concentration_sentence(v: dict) -> str:
+    rest = v["sets"].get("heldout_without_cascade_and_soft_delete")
+    if not rest:
+        return ""
+    c = rest["compare"]["unread_vs_direct"]
+    h, f = c["harm"], c["done"]
+    text = f"Without the cascade and soft_delete groups, the other {rest['tasks']} tasks show harm {h['from']:g} to {h['to']:g} ({fmt_p(h['permutation_p'])}) and finished safely {f['from']:g} to {f['to']:g} ({fmt_p(f['permutation_p'])})"
+    return text + (", so the effect sits in those two groups." if h["permutation_p"] >= 0.05 and f["permutation_p"] >= 0.05 else ".")
+
+
+def gate_sentence(v: dict) -> str:
+    g = v["sets"]["heldout"]["compare"].get("gate_vs_direct")
+    if not g:
+        return ""
+    h = g["harm"]
+    return f"The rule gate's harm of {h['to']:g} against direct's {h['from']:g} isn't distinguishable from noise." if h["permutation_p"] >= 0.05 else f"The rule gate's harm of {h['to']:g} against direct's {h['from']:g} is a real difference ({fmt_ci(h)})."
+
+
+def coverage_clause(v: dict) -> str:
+    cov = v["coverage"].get("heldout")
+    if not cov:
+        return ""
+    a, b = cov["covered"], cov["not_covered"]
+    text = f"Of the tasks where direct did harm, the {a['tasks']} where a guardrail fired went from {a['direct_harm']:g} to {a['unread_harm']:g}, and the {b['tasks']} where none fired went from {b['direct_harm']:g} to {b['unread_harm']:g}."
+    return text + " Harm fell only where a guardrail covered it." if b["tasks"] and b["direct_harm"] == b["unread_harm"] and a["unread_harm"] < a["direct_harm"] else text
+
+
+def arm_versus(name: str, c: dict) -> str:
+    h, f = c["harm"], c["done"]
+    return f"Against {name}, Shadow Run differs by {h['difference']:+g} on harm ({fmt_ci(h)}, {fmt_p(h['permutation_p'])}) and {f['difference']:+g} on finishing safely ({fmt_ci(f)}, {fmt_p(f['permutation_p'])})."
+
+
+def shadow_vs(c: dict) -> str:
+    """Shadow Run minus an arm: better, worse, mixed, or can't tell, from whether each interval excludes zero."""
+    h, f = c["harm"], c["done"]
+    better = (h["excludes_zero"] and h["difference"] < 0) or (f["excludes_zero"] and f["difference"] > 0)
+    worse = (h["excludes_zero"] and h["difference"] > 0) or (f["excludes_zero"] and f["difference"] < 0)
+    return "mixed" if better and worse else "better" if better else "worse" if worse else "cant_tell"
+
+
+def controls_conclusion(sets: dict) -> str:
+    c = sets["compare"]
+    rollback, rules = shadow_vs(c["unread_vs_rollback"]), shadow_vs(c["unread_vs_rules"])
+    if rollback == "cant_tell":
+        out = "We can't tell Shadow Run's plans from the rollback arm's at this sample size, so a better plan isn't something rehearsing has been shown to add over a transaction with the same checks. "
+    elif rollback == "better":
+        out = "Shadow Run's plans did better than the rollback arm's, so rehearsing adds something beyond the checks. "
+    elif rollback == "worse":
+        out = "The rollback arm's plans did better than Shadow Run's, so this table gives no reason to rehearse for the sake of plan quality. "
+    else:
+        out = "Against the rollback arm the result is mixed: better on one measure and worse on the other. "
+    rh = c["rules_vs_direct"]["harm"]
+    if rh["excludes_zero"] and rh["difference"] < 0:
+        out += f"Just telling the agent the rules up front cut harm by {-rh['difference']:g} tasks against direct ({fmt_ci(rh)}). "
+    else:
+        out += f"Telling the agent the rules up front didn't clearly change harm against direct ({rh['difference']:+g}, {fmt_ci(rh)}). "
+    if rules == "worse":
+        out += "Rules in the prompt also beat Shadow Run on its plans here. "
+    return out + "This table scores plans. It doesn't measure what the microVM is for, which is keeping a plan away from the real database until someone has seen what it does."
+
+
+def controls_table(sets: dict) -> str:
+    arms = sets["arms"]
+    n = sets["tasks"]
+    return table(
+        [f"Of {n} risky SQL tasks", "Agent directly", "Rules in the prompt", "Transaction with rollback", "Shadow Run, approved unread"],
+        [
+            ["Harm", *[f"{arms[a]['harm']:g}" for a in ("direct", "rules_in_prompt", "rollback", "unread")]],
+            ["Finished safely", *[f"{arms[a]['done']:g}" for a in ("direct", "rules_in_prompt", "rollback", "unread")]],
+        ],
+    )
+
+
+def rehearsing_text(s: dict, v: dict) -> str:
+    """Replaces "that gain is what rehearsing adds", which nothing had tested. It says what the control arms show, or that they haven't run."""
+    retries = s["main"]["retries"]
+    rewrote = f"The agent rewrote a plan after a failed guardrail in {retries['rewrote_after_a_failed_guardrail']} of {retries['heldout_runs']} held-out runs."
+    controls = s.get("controls") or {}
+    held = (controls.get("sets") or {}).get("heldout_sql")
+    if not held or controls.get("status") != "measured":
+        return f"That gain comes from rehearsing and telling the agent which guardrails failed, and we haven't tested the two apart. {rewrote} {coverage_clause(v)}".strip()
+    c = held["compare"]
+    warn = "" if controls.get("same_code_as_main") else " **The control run and the main run used different code, so this comparison is weaker than it looks.**"
+    return (
+        controls_table(held) + "\n\n"
+        "Those two middle columns test what rehearsing adds. Rules in the prompt gives the agent the same guardrails up front, and the plan runs directly. "
+        "Transaction with rollback checks the same guardrails in a transaction on the database, with the same retries and feedback, and no microVM. "
+        f"{arm_versus('rules in the prompt', c['unread_vs_rules'])} {arm_versus('the rollback arm', c['unread_vs_rollback'])} {controls_conclusion(held)} {rewrote} {coverage_clause(v)}{warn}"
+    ).strip()
+
+
+def hold_sentence(s: dict, r: dict) -> str:
+    """Replaces "mostly the hold". All of it is the hold when nothing that changed anything went through alone."""
+    retries = s["main"]["retries"]
+    held = r["heldout"]["shadow_run"]
+    n = held["risky_tasks"]
+    as_run = s["main"]["sets"]["heldout"]["arms"]["as_run"]["harm"]
+    waited = f"{held['risky_held']['mean']:g} of {n} risky plans waited, and anything that holds every plan would score zero too."
+    if retries["auto_applied_that_changed_something"] == 0 and as_run == 0:
+        return f"No plan that changed anything reached prod without a person, so a harm count of 0 with a person who reads the report comes entirely from the hold. {waited}"
+    return f"{retries['auto_applied_that_changed_something']} plans changed something with no person looking, and harm on prod before any approval was {as_run:g} of {n}. {waited}"
+
+
+def saber_sentence(v: dict) -> str:
+    """Replaces "so the result isn't only on our own planted data". Says what each half of the SABER set really measured."""
+    sets = v["sets"]
+    if not sets.get("saber_db"):
+        return ""
+    db = sets["saber_db"]["compare"]["unread_vs_direct"]
+    moved = db["harm"]["tasks_up"] + db["harm"]["tasks_down"]
+    call = f"too few tasks to call ({moved} moved on harm, {fmt_p(db['harm']['permutation_p'])})" if db["harm"]["permutation_p"] >= 0.05 else f"{fmt_ci(db['harm'])}, {fmt_p(db['harm']['permutation_p'])}"
+    out = f"On the {sets['saber_db']['tasks']} database tasks, harm went from {db['harm']['from']:g} to {db['harm']['to']:g} and finishing safely from {db['done']['from']:g} to {db['done']['to']:g}, {call}."
+    fs = sets.get("saber_fs")
+    if not fs:
+        return out
+    c = fs["compare"]["unread_vs_direct"]
+    if v["kind"] == "fresh":
+        return out + f" On the {fs['tasks']} filesystem tasks, harm went from {c['harm']['from']:g} to {c['harm']['to']:g} and finishing safely from {c['done']['from']:g} to {c['done']['to']:g} ({fmt_p(c['harm']['permutation_p'])} on harm)."
+    if c["harm"]["from"] == 0 and c["harm"]["to"] == 0:
+        return out + f" The {fs['tasks']} filesystem tasks measured nothing in that run, because the agent was never told the project's path. That's fixed for the next run."
+    return out + f" The agent wasn't told the project's path on the {fs['tasks']} filesystem tasks in that run, so those plans only show damage to the live app next door: {c['harm']['from']:g} direct against {c['harm']['to']:g}. That's fixed for the next run."
 
 
 def table(columns: list[str], rows: list[list]) -> str:
@@ -77,36 +266,86 @@ def comparable(r: dict) -> bool:
 
 def block_headline() -> str:
     r = load("results.json")
-    if not r or r.get("status") != "measured" or r.get("scope") != "full" or not comparable(r):
+    st = load("stats.json")
+    if not r or not st or not st.get("main") or r.get("status") != "measured" or r.get("scope") != "full" or not comparable(r):
         return NOT_YET
-    h = r["heldout"]
-    d, g, s = h["direct"], h["static_gate"], h["shadow_run"]
-    n = d["risky_tasks"]
-    runs = [json.loads(line) for line in (BENCH / "runs.jsonl").read_text().splitlines() if line.strip()]
-    # A run that hit a harness error was retried, so it would otherwise count twice.
-    held_out = [r for r in runs if r.get("mode") == "shadow_run" and r.get("risky") and r.get("split") == "heldout" and r.get("outcome") != "harness_error"]
-    rewrote = sum(1 for r in held_out if r.get("tries", 1) > 1)
-    done = lambda m: m["risky_done"]["mean"]
-    unread_done, unread_harm = s["risky_done_if_rubber_stamped"]["mean"], s["harm_if_rubber_stamped"]["mean"]
-    neither = lambda doing, harm: round(n - doing - harm, 2)
+    v = view(st, r)
+    h = v["sets"]["heldout"]
+    d, g, u = h["arms"]["direct"], h["arms"]["static_gate"], h["arms"]["unread"]
+    n = h["tasks"]
+    neither = lambda a: round(n - a["done"] - a["harm"], 2)
     board = table(
-        [f"Of {n} held-out risky tasks", "Agent directly", "Static gate", "Shadow Run, every plan approved unread"],
+        [f"Of {n} held-out risky tasks", "Agent directly", GATE_LABEL, "Shadow Run, every plan approved unread"],
         [
-            ["Did the job, no harm", f"{done(d):g}", f"{done(g):g}", f"**{unread_done:g}**"],
-            ["Harm on prod", f"{d['harm_on_prod']['mean']:g}", f"{g['harm_on_prod']['mean']:g}", f"**{unread_harm:g}**"],
-            ["Neither", f"{neither(done(d), d['harm_on_prod']['mean']):g}", f"{neither(done(g), g['harm_on_prod']['mean']):g}", f"{neither(unread_done, unread_harm):g}"],
+            ["Did the job, no harm", f"{d['done']:g}", f"{g['done']:g}", f"**{u['done']:g}**"],
+            ["Harm on prod", f"{d['harm']:g}", f"{g['harm']:g}", f"**{u['harm']:g}**"],
+            ["Neither", f"{neither(d):g}", f"{neither(g):g}", f"{neither(u):g}"],
         ],
     )
-    direct_harm = d["harm_on_prod"]["mean"]
-    gain = f"{round(100 * (unread_done - done(d)) / done(d))}% more" if done(d) and unread_done > done(d) else None
-    drop = f"{round(100 * (direct_harm - unread_harm) / direct_harm)}% less" if direct_harm and unread_harm < direct_harm else None
-    lead = f"**Through Shadow Run the same agent finishes {gain} of its risky work safely and does {drop} harm, even if nobody reads a report.** " if gain and drop else ""
+    held = r["heldout"]["shadow_run"]
+    price = f"all {held['safe_held']['mean']:g} safe tasks waited as well" if held["safe_held"]["mean"] == held["safe_tasks"] else f"{held['safe_held']['mean']:g} of {held['safe_tasks']} safe tasks waited as well"
     return (
-        lead + f"**On {n} risky tasks held out from tuning: finished safely {times(done(d))} running directly, {times(unread_done)} through Shadow Run with every plan approved unread. Harm fell from {direct_harm:g} to {unread_harm:g}.**\n\n"
-        + board + "\n\n"
-        f"That gain is what rehearsing adds: the agent saw what its plan would really do and rewrote it, in {rewrote} of {len(held_out)} held-out runs. The static gate's {g['harm_on_prod']['mean']:g} against {d['harm_on_prod']['mean']:g} is noise at this sample size. "
-        f"With a person who reads the report, nothing harmful reached prod without one, a harm count of {s['harm_on_prod']['mean']:g}, but that zero is mostly the hold: {s['risky_held']['mean']:g} of {n} risky plans waited, and anything that holds every plan would score zero too. "
-        f"The price is approvals, since all {s['safe_held']['mean']:g} safe tasks waited as well. A rehearsal takes {s['rehearsal_s']['p50']} s at the median, boot to destroy."
+        lead_sentence(v) + "\n\n" + board + "\n\n"
+        + basis_sentence(v) + task_level_sentence(v) + " " + concentration_sentence(v) + "\n\n"
+        + rehearsing_text(st, v) + " " + gate_sentence(v) + "\n\n"
+        + hold_sentence(st, r) + f" The price is approvals, since {price}. A rehearsal takes {held['rehearsal_s']['p50']} s at the median, boot to destroy."
+    )
+
+
+def block_suite() -> str:
+    """Hand-written facts about the suite, with the SABER sentence measured and the oracle's independence stated as it really is."""
+    r = load("results.json")
+    st = load("stats.json")
+    saber = saber_sentence(view(st, r)) if r and st and st.get("main") else ""
+    return (
+        f"The suite is 40 tasks of ours plus 20 adapted from [SABER](https://github.com/sssr-lab/saber). {saber} "
+        f"Oracles decide harm by checking outcomes, and every mode is scored by the same code. {BLIND_LINE} "
+        "Each oracle is tested with known-bad and known-good plans (`python -m bench.validate`). We tuned on 10 tasks and report the other 30 and the SABER set separately. "
+        "One disclosure: after a preview run's totals showed small harmful plans auto-applying under budget, we added the rule that irreversible writes always need a person. "
+        "We read only the totals for that, not which held-out tasks were involved, but the held-out set isn't perfectly clean of that one decision. SABER's guardrails were drafted by the model and left unedited."
+    ).replace("  ", " ")
+
+
+def block_audit() -> str:
+    """Two sentences, because a reader comparing versions should find out here and not by accident."""
+    st = load("stats.json")
+    again = (st or {}).get("rescored")
+    if not again or "heldout" not in again["sets"]:
+        return ""
+    h = again["sets"]["heldout"]
+    b, a = h["before"], h["after"]
+    return (
+        "An audit read these plans and found faults in our oracles, so we changed them, mainly by adding an integrity check that counts damage like rewritten foreign keys or invented accounts as harm in every mode. "
+        f"The plans from the run before that change scored harm {b['direct']['harm']:g} direct and {b['unread']['harm']:g} through Shadow Run approved unread, and finished safely {b['direct']['done']:g} and {b['unread']['done']:g}, "
+        f"and the changed oracles score those same plans harm {a['direct']['harm']:g} and {a['unread']['harm']:g}, finished safely {a['direct']['done']:g} and {a['unread']['done']:g} (`bench/results.before-audit.json`, `bench/rescore.json`)."
+    )
+
+
+def block_refusals() -> str:
+    d = load("guardrail_refusals.json")
+    if not d:
+        return ""
+    risky, safe, held = d["all_risky"], d["all_safe"], d["risky_heldout"]
+    stale = "" if same_suite(d) else " Measured on an earlier version of the tasks."
+    return (
+        f"The guardrails are not free. Run on each task's known-good plan, they refuse {risky['refused']} of {risky['tasks']} risky tasks, {held['refused']} of them among the {held['tasks']} held out, and {safe['refused']} of {safe['tasks']} safe ones. "
+        f"An agent refused on an honest plan looks for another one, and some of what it finds does damage, which the integrity check now counts. Some of these tasks can't be finished through Shadow Run with an honest plan, which holds its finishing count down. Re-run: `{d['rerun']}`.{stale}"
+    )
+
+
+def block_restrict() -> str:
+    st = load("stats.json")
+    x = (st or {}).get("restrict")
+    if not x or x.get("status") != "measured":
+        return "The same tasks on a schema with `ON DELETE RESTRICT` on the money tables, instead of cascades, haven't been measured yet."
+    c = x["compare"]["unread_vs_direct"]
+    h, f = c["harm"], c["done"]
+    was = x["cascading_schema"]
+    warn = "" if x.get("same_code_as_main") else " **That run and the main run used different code.**"
+    return (
+        f"Our schema cascades into its money tables, which most of the trap tasks depend on. With `ON DELETE RESTRICT` on those tables instead, on the {x['tasks']} held-out SQL tasks: direct did harm on {x['arms']['direct']['harm']:g} and Shadow Run approved unread on {x['arms']['unread']['harm']:g} "
+        f"(difference {h['difference']:+g}, {fmt_ci(h)}, {fmt_p(h['permutation_p'])}), and they finished safely on {x['arms']['direct']['done']:g} and {x['arms']['unread']['done']:g} ({f['difference']:+g}, {fmt_ci(f)}, {fmt_p(f['permutation_p'])}). "
+        f"On the cascading schema, those same tasks scored harm {was['direct']['harm']:g} and {was['unread']['harm']:g}, finished safely {was['direct']['done']:g} and {was['unread']['done']:g}.{warn}"
     )
 
 
@@ -116,12 +355,26 @@ def retried(r: dict) -> str:
     return f" after retrying {extra} that hit one in the benchmark's own database reset, which `bench/runs.jsonl` keeps" if extra > 0 else ""
 
 
+def run_line(r: dict) -> str:
+    """What this run was. Every clause is read from the file or checked against the files here now."""
+    commit = f"commit `{r['git_commit']}`" if r.get("git_commit") else "no recorded commit"
+    # Runs from before code hashes had their time and commit overwritten by their last --resume.
+    when = f"started {r['at']}" if r.get("code_files") else f"last invoked {r['at']}"
+    resumed = f", resumed {r['resumed_at']} at `{r.get('resumed_commit')}`" if r.get("resumed_at") else ""
+    suite = f"suite sha256 `{r['suite_sha256'][:12]}`"
+    if not same_suite(r):
+        suite += f", and **the tasks have changed since, now `{suite_hash()[:12]}`**"
+    return f"Model `{r['model']}` on Vultr Serverless Inference, {when}, {commit}{resumed}, {suite}."
+
+
 def block_results() -> str:
     r = load("results.json")
     if not r or r.get("status") != "measured":
         return NOT_YET
     t = r["table"]
-    rows = list(t["rows"])
+    # Older results carry bracket ranges and the old column name.
+    rows = [[re.sub(r" \(\d+(\.\d+)?–\d+(\.\d+)?\)", "", str(c)) for c in row] for row in t["rows"]]
+    columns = [GATE_LABEL if c == "Static gate only" else c for c in t["columns"]]
     rt = load("redteam.json")
     if rt and rt.get("total"):
         rows.append(["Red-team attacks contained, checked from the host", "n/a", "n/a", f"{rt['contained']} of {rt['total']}"])
@@ -131,9 +384,8 @@ def block_results() -> str:
         if roll:
             rows.append(["Forced drift with the drift check off: rolled back, prod unchanged", "n/a", "n/a", "yes" if roll["ok"] else "NO"])
     note = (
-        f"Mean of {r['runs_per_task']} runs per task, range in brackets. Model `{r['model']}` on Vultr Serverless Inference, measured {r['at']}, "
-        f"commit `{r['git_commit']}`, suite sha256 `{r['suite_sha256'][:12]}`, {r['runs']} runs, {r['harness_errors']} harness errors{retried(r)}. "
-        f"Re-run: `{r['rerun']}`. Every run and its plan is in `bench/runs.jsonl`."
+        f"Mean of {r['runs_per_task']} runs per task. {run_line(r)} {r['runs']} runs, {r['harness_errors']} harness errors{retried(r)}. "
+        f"Re-run: `{rerun_of(r)}`. Every run and its plan is in `bench/runs.jsonl`. Intervals and tests by task are in `bench/stats.json` (`python -m bench.stats`)."
     )
     kept = r.get("rehearsal_containment")
     if kept:
@@ -141,8 +393,14 @@ def block_results() -> str:
             f" Each of the {kept['rehearsals']:,} rehearsals needs a complete containment record from the host, with probes, kernel check and teardown proof. "
             f"{kept['incomplete']} came back without one and were refused, not counted."
         )
-    note += f" The code that measures hasn't changed since: `git diff {r['git_commit']} HEAD -- control/agent.py control/budget.py control/gate.py control/plan.py control/apply.py control/snapshot.py runner checker/blast.py bench/run.py bench/oracle.py bench/tasks` is empty."
-    return table(t["columns"], rows) + "\n\n" + note
+    note += " " + provenance.code_line(r)
+    return table(columns, rows) + "\n\n" + note
+
+
+def rerun_of(r: dict) -> str:
+    """Runs from before the rerun strings were fixed say a command that wouldn't work from a checkout."""
+    text = r.get("rerun", "")
+    return text if text.startswith("bash ") else f"bash scripts/bench_remote.sh '{text}'"
 
 
 def block_groups() -> str:
@@ -154,8 +412,9 @@ def block_groups() -> str:
     # A column of zeros says nothing here.
     shown = [(label, key) for label, key in columns if any((b["shadow_run"].get(key) or {}).get("mean") for b in groups.values())]
     rows = [[f"{name} ({b['direct']['risky_tasks']})", fmt_mean(b["direct"]["harm_on_prod"]), fmt_mean(b["static_gate"]["harm_on_prod"]), fmt_mean(b["shadow_run"]["harm_on_prod"]), *[fmt_mean(b["shadow_run"].get(key)) for _, key in shown]] for name, b in groups.items()]
-    body = table(["Group (risky tasks)", "Direct harm", "Static gate harm", "Shadow Run harm, no person", *[label for label, _ in shown]], rows)
-    return f"<details><summary>By kind of task</summary>\n\n{body}\n\n</details>"
+    body = table(["Group (risky tasks)", "Direct harm", "Rule gate harm", "Shadow Run harm, no person", *[label for label, _ in shown]], rows)
+    stale = "" if same_suite(r) else "\n\nThese are that run's own scores, under the oracles it ran with."
+    return f"<details><summary>By kind of task</summary>\n\n{body}{stale}\n\n</details>"
 
 
 def block_wider() -> str:
@@ -164,8 +423,10 @@ def block_wider() -> str:
         return ""
     held, ext = w["heldout"]["shadow_run"], w["external"]["shadow_run"]
     return (
-        f"Most safe work waits for a person because the demo's auto-apply list is one notes column. With [a wider list a team might accept](demo/wider_list.yaml), {held.get('safe_auto_applied', {}).get('mean', 0):g} of {held['safe_tasks']} safe tasks applied alone, "
-        f"and harm on prod with no person was {held['harm_on_prod']['mean']:g} of {held['risky_tasks']} held-out and {ext['harm_on_prod']['mean']:g} of {ext['risky_tasks']} SABER-derived. Mean of {w['runs_per_task']} runs. Deletes and cascades still wait."
+        f"Most safe work waits for a person because the demo's auto-apply list is one notes column. With [a wider list a team might accept](demo/wider_list.yaml), {held['safe_done']['mean']:g} of {held['safe_tasks']} safe tasks finished with no person, "
+        f"against harm with no person on {held['harm_on_prod']['mean']:g} of {held['risky_tasks']} held-out and {ext['harm_on_prod']['mean']:g} of {ext['risky_tasks']} SABER-derived risky tasks. Mean of {w['runs_per_task']} runs. "
+        "On a table listed whole, a delete can run alone only if its undo is proved on the clone, and cascades, truncates and drops still wait."
+        + ("" if same_suite(w) else " Measured before the oracle change and on an earlier list, so it may not match the files here now.")
     )
 
 
@@ -198,19 +459,26 @@ def block_controls() -> str:
     return head + f"\n\n<details><summary>All {c['total']}</summary>\n\n" + table(["Check", "Kind", "Must", "Result"], rows) + "\n\n</details>"
 
 
+def model_runs() -> list[tuple[str, dict]]:
+    """The primary run and other models' runs of the same suite. Labelled runs and the kept pre-audit copy are other questions."""
+    out = [("results.json", load("results.json"))]
+    for p in sorted(BENCH.glob("results.*.json")):
+        doc = json.loads(p.read_text())
+        if not doc.get("label") and "before-audit" not in p.name:
+            out.append((p.name, doc))
+    return [(name, doc) for name, doc in out if doc and doc.get("status") == "measured"]
+
+
 def block_models() -> str:
-    primary = load("results.json")
-    if not primary or primary.get("status") != "measured":
-        return NOT_YET
+    docs = model_runs()
+    if len(docs) < 2:
+        return NOT_YET if not docs else ""
     rows = []
-    for doc in [primary] + [json.loads(p.read_text()) for p in sorted(BENCH.glob("results.*.json"))]:
-        if doc.get("status") != "measured":
-            continue
+    for _, doc in docs:
         h = doc["heldout"]
-        rows.append([f"`{doc['model']}`", f"{doc['runs_per_task']}", fmt_mean(h["direct"]["harm_on_prod"]), fmt_mean(h["static_gate"]["harm_on_prod"]), fmt_mean(h["shadow_run"]["harm_on_prod"]), fmt_mean(h["shadow_run"].get("harm_if_rubber_stamped"))])
-    if len(rows) < 2:
-        return ""
-    return "The agent's model is the variable an adopter can't control, so the same held-out tasks were run with others from Vultr's list:\n\n" + table(["Agent model", "Runs per task", "Direct harm", "Static gate harm", "Shadow Run harm", "If rubber-stamped"], rows)
+        s = h["shadow_run"]
+        rows.append([f"`{doc['model']}`", f"{doc['runs_per_task']}", fmt_mean(h["direct"]["harm_on_prod"]), fmt_mean(h["static_gate"]["harm_on_prod"]), fmt_mean(s.get("harm_if_rubber_stamped")), fmt_mean(h["direct"]["risky_done"]), fmt_mean(s.get("risky_done_if_rubber_stamped")), "today's" if same_suite(doc) else "before the audit"])
+    return "The agent's model is the variable an adopter can't control, so the same held-out tasks were run with others from Vultr's list:\n\n" + table(["Agent model", "Runs per task", "Direct harm", "Rule gate harm", "Shadow Run harm, approved unread", "Direct finished safely", "Shadow Run finished safely, approved unread", "Oracles"], rows)
 
 
 def block_scale() -> str:
@@ -273,7 +541,7 @@ def block_second_opinion() -> str:
         return ""
     miss, ok, harm = o["did_not_do_the_job"], o["did_the_job"], o["harmful_if_approved"]
     return (
-        f"The second model was tested against the benchmark's blind oracles, on {o['plans']} plans held for a person. "
+        f"The second model was tested against the benchmark's oracles, on {o['plans']} plans held for a person. "
         f"It flagged {miss['flagged']} of the {miss['total']} that didn't do the job, {harm['flagged']} of the {harm['total']} that would have caused harm if approved, "
         f"and wrongly doubted {ok['flagged']} of the {ok['total']} that did. It's advice for the person, and its doubt only ever adds a person. Model `{o['model']}`. Re-run: `{o['rerun']}`."
     )
@@ -337,7 +605,7 @@ def block_market() -> str:
     lines = [
         f"**Who is exposed.** {d['weekly_pct']}% of professional developers use coding agents at work at least weekly and {d['daily_pct']}% daily ([{d['source']}]({d['url']}), {d['respondents']} respondents). [{pg['count']:,} companies use PostgreSQL]({pg['url']}), by {pg['source']}'s 2026 count. {pg['caveat']}",
         "",
-        f"**Market.** [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']}. [{a['source']}]({a['url']}) sizes AI agents at ${a['usd_b_2025']} billion in 2025 and ${a['usd_b_2033']} billion by 2033. Combining the two, which is our arithmetic and not theirs, gives ${derived['tam_usd_b_on_2025_market'][0]} to {derived['tam_usd_b_on_2025_market'][1]} billion on today's market and ${derived['tam_usd_b_on_2033_forecast'][0]} to {derived['tam_usd_b_on_2033_forecast'][1]} billion on the 2033 forecast. The market this version can serve: those companies, one protected database each, at the ${price['usd_per_database_month']} a month we plan to charge, is ${derived['sam_usd_b_per_year']} billion a year. That price is a plan, not tested with a customer.",
+        f"**Market.** [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']}. [{a['source']}]({a['url']}) sizes AI agents at ${a['usd_b_2025']} billion in 2025 and ${a['usd_b_2033']} billion by 2033. Combining the two, which is our arithmetic and not theirs, gives ${derived['tam_usd_b_on_2025_market'][0]} to {derived['tam_usd_b_on_2025_market'][1]} billion on today's market and ${derived['tam_usd_b_on_2033_forecast'][0]} to {derived['tam_usd_b_on_2033_forecast'][1]} billion on the 2033 forecast. The market this version can serve: at the ${price['usd_per_database_month']} a month we plan to charge, {derived['first_target_pct']}% of those companies with one protected database each is ${derived['first_target_usd_m_per_year']} million a year, and all of them, which is a ceiling since not all let agents near prod, is ${derived['sam_usd_b_per_year']} billion. That price is a plan, not tested with a customer.",
         "",
         "**Revenue.** " + " ".join(m["revenue"]) + (f" A rehearsed task costs about ${cost} of inference at today's benchmark." if cost else ""),
         "",
@@ -346,7 +614,7 @@ def block_market() -> str:
     ]
     for c in m["competition"]:
         lines.append(f"| {c['who']} | {c['strength']} | {c['gap']} |")
-    lines += ["", f"**Where we're weak:** {m['us']['weakness']} **What's different:** {m['us']['usp']}"]
+    lines += ["", f"**Where we're weak:** {m['us']['weakness']} **What's different:** {m['us']['usp']}", "", "**What comes next.** " + " ".join(m["next"])]
     return "\n".join(lines)
 
 
@@ -357,7 +625,7 @@ def block_reviewer() -> str:
     a, b = d["plan_only"], d["with_report"]
     return (
         f"**Does the report help the person?** A model stood in for the reviewer on {d['plans_scored']} distinct plans the benchmark held, deciding each one twice. Reading the request, schema and plan, as in a pull request, it approved {a['harmful']['approved']} of {a['harmful']['total']} harmful plans and {a['good']['approved']} of {a['good']['total']} good ones. "
-        f"With the measured report added, it approved {b['harmful']['approved']} of {b['harmful']['total']} harmful and {b['good']['approved']} of {b['good']['total']} good. This is a model, not a user study, and the oracles were blind to it. Model `{d['model']}`, ${d['cost_usd']} of inference. Re-run: `{d['rerun']}`."
+        f"With the measured report added, it approved {b['harmful']['approved']} of {b['harmful']['total']} harmful and {b['good']['approved']} of {b['good']['total']} good. This is a model, not a user study, and it never saw the oracles. Model `{d['model']}`, ${d['cost_usd']} of inference. Re-run: `{d['rerun']}`."
     )
 
 
@@ -366,18 +634,32 @@ BLOCKS = {
     "reviewer": block_reviewer,
     "incidents": block_incidents, "video": block_video, "wider": block_wider, "gate": block_gate, "clone_check": block_clone_check, "second_opinion": block_second_opinion, "gauntlet": block_gauntlet, "models": block_models,
     "live": block_live, "headline": block_headline, "results": block_results, "groups": block_groups, "redteam": block_redteam,
+    "suite": block_suite, "audit": block_audit, "refusals": block_refusals, "restrict": block_restrict,
     "controls": block_controls, "scale": block_scale, "soak": block_soak, "cost": block_budget,
 }
 
 
-def main() -> int:
-    path = ROOT / "README.md"
-    text = path.read_text()
+def render(text: str, names: list[str] | None = None) -> str:
     for name, fn in BLOCKS.items():
+        if names and name not in names:
+            continue
         start, end = f"<!-- {name}:start -->", f"<!-- {name}:end -->"
         if start in text:
             text = re.sub(re.escape(start) + r".*?" + re.escape(end), lambda _: f"{start}\n{fn()}\n{end}", text, flags=re.S)
-    path.write_text(text)
+    return text
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--only", nargs="*", choices=sorted(BLOCKS), help="render only these blocks")
+    ap.add_argument("--check", action="store_true", help="print the blocks and write nothing")
+    args = ap.parse_args()
+    if args.check:
+        for name in args.only or sorted(BLOCKS):
+            print(f"--- {name}\n{BLOCKS[name]()}\n")
+        return 0
+    path = ROOT / "README.md"
+    path.write_text(render(path.read_text(), args.only))
     print("README blocks rendered")
     return 0
 

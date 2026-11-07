@@ -20,6 +20,8 @@ def main() -> None:
     compared = same = 0
     changed = []
     for path in sorted(glob.glob(str(ROOT / "bench" / "runs*.jsonl"))):
+        if "before-audit" in path:  # a copy kept for the record, not a run of this code
+            continue
         for line in open(path):
             run = json.loads(line)
             recorded = (run.get("gate") or {}).get("verdict") or run.get("gate_verdict")
