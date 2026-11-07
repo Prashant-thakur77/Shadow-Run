@@ -1,0 +1,97 @@
+{
+  "at": "2026-11-06T20:40:28Z",
+  "rows": [
+    {
+      "scale": 1.0,
+      "db_mb": 22,
+      "users": 5234,
+      "seed_s": 4.1,
+      "dump_mb": 1.3,
+      "checksum_s": 0.31,
+      "pg_dump_s": 0.52,
+      "golden_build_s": 0.12,
+      "restore_in_vm_s": 0.0,
+      "golden_cached": true,
+      "clone_boot_ms": 999.1,
+      "rehearsal_total_s": 3.91,
+      "rehearsal_each_s": [
+        3.9,
+        3.91,
+        3.94
+      ],
+      "execute_s": 2.28,
+      "rows_changed": 14819,
+      "rehearsals_ok": 3,
+      "errors": []
+    },
+    {
+      "scale": 8.0,
+      "db_mb": 101,
+      "users": 42021,
+      "seed_s": 25.5,
+      "dump_mb": 9.9,
+      "checksum_s": 3.05,
+      "pg_dump_s": 2.56,
+      "golden_build_s": 5.53,
+      "restore_in_vm_s": 1.89,
+      "golden_cached": false,
+      "clone_boot_ms": 997.5,
+      "rehearsal_total_s": 8.4,
+      "rehearsal_each_s": [
+        8.31,
+        8.4,
+        8.5
+      ],
+      "execute_s": 6.77,
+      "rows_changed": 132770,
+      "rehearsals_ok": 3,
+      "errors": []
+    },
+    {
+      "scale": 90.0,
+      "db_mb": 1019,
+      "users": 469877,
+      "seed_s": 287.6,
+      "dump_mb": 112.9,
+      "checksum_s": 33.74,
+      "pg_dump_s": 25.88,
+      "golden_build_s": 27.74,
+      "restore_in_vm_s": 19.92,
+      "golden_cached": false,
+      "clone_boot_ms": 1014.2,
+      "rehearsal_total_s": 56.8,
+      "rehearsal_each_s": [
+        56.4,
+        56.8,
+        56.87
+      ],
+      "execute_s": 55.06,
+      "rows_changed": 1463901,
+      "rehearsals_ok": 3,
+      "errors": []
+    },
+    {
+      "scale": 320.0,
+      "db_mb": 3610,
+      "users": 1669411,
+      "seed_s": 1040.5,
+      "dump_mb": 406.6,
+      "checksum_s": 258.57,
+      "pg_dump_s": 99.18,
+      "golden_build_s": 72.83,
+      "restore_in_vm_s": 50.73,
+      "golden_cached": false,
+      "clone_boot_ms": null,
+      "rehearsal_total_s": null,
+      "rehearsal_each_s": [],
+      "execute_s": null,
+      "rows_changed": null,
+      "rehearsals_ok": 0,
+      "errors": [
+        "canceling statement due to statement timeout CONTEXT: SQL function \"current_step\" during startup SQL statement \"INSERT INTO shadow.changes (step, relid, tbl, op, depth, old_row, new_row) VALUES ( shad",
+        "canceling statement due to statement timeout CONTEXT: SQL function \"current_step\" during startup SQL statement \"INSERT INTO shadow.changes (step, relid, tbl, op, depth, old_row, new_row) VALUES ( shad"
+      ]
+    }
+  ],
+  "rerun": "python -m bench.scale --scales 1.0 8.0 90.0 320.0"
+}

@@ -14,9 +14,14 @@ export function Close() {
             Break a clone yourself.
           </h2>
           {!guestOff && (
-            <PrimaryButton type="button" className="btn-huge" disabled={busy} onClick={() => void enter()}>
-              {busy ? 'Entering' : 'Continue as guest'}
-            </PrimaryButton>
+            <div className="close-buttons">
+              <PrimaryButton type="button" className="btn-huge" disabled={busy} onClick={() => void enter('/race')}>
+                {busy ? 'Entering' : 'Race the agent'}
+              </PrimaryButton>
+              <button type="button" className="btn btn-large" disabled={busy} onClick={() => void enter()}>
+                Continue as guest
+              </button>
+            </div>
           )}
           <p className="close-note">
             {guestOff
@@ -71,9 +76,6 @@ export function Close() {
             </Fold>
           </div>
         </div>
-      </div>
-      <div className="close-mark" aria-hidden="true">
-        <span className="t-outline">Shadow Run</span>
       </div>
     </section>
   );

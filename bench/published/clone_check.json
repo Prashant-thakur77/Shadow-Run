@@ -1,0 +1,223 @@
+{
+ "at": "2026-11-06T20:01:16Z",
+ "databases": 43,
+ "matched": 43,
+ "rows": [
+  {
+   "task": "cascade_01",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "cascade_02",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "cascade_03",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "cascade_04",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "cascade_05",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "cascade_06",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "cascade_07",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "cascade_08",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "injected_01",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "injected_02",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "injected_03",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "lookalike_01",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "lookalike_02",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "lookalike_03",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "lookalike_04",
+   "matches": true,
+   "tables": 18
+  },
+  {
+   "task": "lookalike_05",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "missing_filter_01",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "missing_filter_02",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "missing_filter_03",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "missing_filter_04",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "missing_filter_05",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "saber_db_01",
+   "matches": true,
+   "tables": 4
+  },
+  {
+   "task": "saber_db_02",
+   "matches": true,
+   "tables": 4
+  },
+  {
+   "task": "saber_db_03",
+   "matches": true,
+   "tables": 4
+  },
+  {
+   "task": "saber_db_04",
+   "matches": true,
+   "tables": 0
+  },
+  {
+   "task": "saber_db_05",
+   "matches": true,
+   "tables": 3
+  },
+  {
+   "task": "saber_db_06",
+   "matches": true,
+   "tables": 3
+  },
+  {
+   "task": "saber_db_07",
+   "matches": true,
+   "tables": 4
+  },
+  {
+   "task": "saber_db_08",
+   "matches": true,
+   "tables": 2
+  },
+  {
+   "task": "saber_db_09",
+   "matches": true,
+   "tables": 2
+  },
+  {
+   "task": "saber_db_10",
+   "matches": true,
+   "tables": 2
+  },
+  {
+   "task": "safe_01",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "safe_02",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "safe_03",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "safe_04",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "safe_05",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "safe_06",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "safe_07",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "safe_08",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "soft_delete_01",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "soft_delete_02",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "soft_delete_03",
+   "matches": true,
+   "tables": 16
+  },
+  {
+   "task": "soft_delete_04",
+   "matches": true,
+   "tables": 16
+  }
+ ],
+ "rerun": "bash scripts/bench_remote.sh 'python -m bench.clone_check'"
+}

@@ -3,6 +3,7 @@ import { api, errorText } from '../api/client';
 import type { PublicInfo } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { LandingContext } from '../landing/context';
+import { ExhibitRail } from '../landing/ExhibitRail';
 import { Hero } from '../landing/Hero';
 import '../landing/landing.css';
 import { matches, PHONE, REDUCED } from '../lib/media';
@@ -179,8 +180,8 @@ export function SignInPage({ linkedPage = false }: { linkedPage?: boolean }) {
               {theme === 'dark' ? 'Light' : 'Dark'}
             </button>
             {!guestOff && (
-              <PrimaryButton type="button" className="land-nav-cta" disabled={busy} onClick={() => void enter()} style={{ visibility: ctaOffscreen ? 'visible' : 'hidden' }}>
-                {busy ? 'Entering' : 'Continue as guest'}
+              <PrimaryButton type="button" className="land-nav-cta" disabled={busy} onClick={() => void enter('/race')} style={{ visibility: ctaOffscreen ? 'visible' : 'hidden' }}>
+                {busy ? 'Entering' : 'Race the agent'}
               </PrimaryButton>
             )}
           </div>
@@ -191,6 +192,7 @@ export function SignInPage({ linkedPage = false }: { linkedPage?: boolean }) {
             Sign in to see the page you were linked to. <a href="#sign-in">Sign in with a password</a>.
           </p>
         )}
+        <ExhibitRail />
         <Hero ctaRef={ctaRef} ctaOffscreen={ctaOffscreen} />
         {showChapters && (
           <Suspense fallback={null}>

@@ -1,0 +1,48 @@
+.vb-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+.vb {
+  display: grid;
+  align-content: start;
+  gap: var(--s-2);
+  padding: var(--s-5) var(--s-5) var(--s-4);
+  background: var(--bg);
+}
+.vb-eyebrow {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  letter-spacing: 0.04em;
+}
+.vb-figure {
+  font-family: var(--font-mono);
+  font-size: clamp(56px, 7vw, 112px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.vb.is-good .vb-figure {
+  color: var(--good);
+}
+.vb.is-bad .vb-figure {
+  color: var(--bad);
+}
+.vb-label {
+  max-width: 34ch;
+  color: var(--ink);
+  font-size: var(--fs-m);
+  line-height: 1.35;
+}
+.vb-test {
+  color: var(--ink-3);
+  font-size: var(--fs-s);
+  line-height: 1.4;
+}
+.vb.is-good .vb-test,
+.vb.is-bad .vb-test {
+  color: var(--ink-2);
+}

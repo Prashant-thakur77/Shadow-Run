@@ -174,7 +174,8 @@ const NAV = [
 
 function useIsActive() {
   const { path } = useLocation();
-  return (href: string) => (href === '/' ? path === '/' || path.startsWith('/runs/') : path === href);
+  // A run page belongs to no tab: it may have started from New task, the Race, a pull request or the API.
+  return (href: string) => path === href;
 }
 
 export function Wordmark() {

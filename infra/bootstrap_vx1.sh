@@ -61,6 +61,8 @@ Environment=SHADOWRUN_CANARY_DIR=/var/lib/shadowrun/canary
 Environment=SHADOWRUN_VM_PARALLEL=4
 EnvironmentFile=/etc/shadowrun/runner.env
 ExecStart=$APP/.venv/bin/python -m runner.service
+# Each sandbox leaves a process handle behind, and the default soft limit of 1024 ran out after about 1,000 of them.
+LimitNOFILE=65536
 Restart=always
 RestartSec=2
 [Install]

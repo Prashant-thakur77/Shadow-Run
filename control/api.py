@@ -38,7 +38,16 @@ log = logging.getLogger("shadowrun.api")
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB_DIST = ROOT / "web" / "dist"
-RESULTS = ROOT / "bench" / "results.json"
+PUBLISHED = ROOT / "bench" / "published"
+
+
+def bench_file(name: str) -> Path:
+    """What the site shows is what was published with the README. A benchmark that is still running writes bench/*.json,
+    and a judge who looks mid-run must not see half a result. scripts/make_readme_table.py fills bench/published/."""
+    p = PUBLISHED / name
+    return p if p.exists() else ROOT / "bench" / name
+
+
 PUBLIC_URL = os.environ.get("SHADOWRUN_PUBLIC_URL", "")
 # Guest access hands out both identities, so it can never sit in front of a team's own database.
 IDLE_RESEED_S = int(os.environ.get("SHADOWRUN_IDLE_RESEED_S", "1200"))
@@ -306,7 +315,7 @@ def run_summary(run: dict) -> dict:
 # ------------------------------------------------------------------ one click into the demo
 
 def bench_json(name: str) -> dict | None:
-    path = RESULTS.parent / name
+    path = bench_file(name)
     try:
         return json.loads(path.read_text()) if path.exists() else None
     except ValueError:
@@ -348,7 +357,8 @@ def evasion_public() -> dict:
 @app.get("/api/public")
 def public_info() -> dict:
     """What the landing page shows before anyone signs in. Numbers only from the benchmark's own file."""
-    r = json.loads(RESULTS.read_text()) if RESULTS.exists() else {}
+    results = bench_file("results.json")
+    r = json.loads(results.read_text()) if results.exists() else {}
     headline = None
     if r.get("status") == "measured" and r.get("scope") == "full" and r.get("harness_errors") == 0:
         h = r["heldout"]
@@ -653,11 +663,6 @@ def gauntlet_list(limit: int = 5, user: str = Depends(auth.current_user)) -> lis
     return hardening().list_gauntlets(min(limit, 20))
 
 
-def bench_json(name: str) -> dict | None:
-    path = SERVICE_ROOT / "bench" / name
-    return json.loads(path.read_text()) if path.exists() else None
-
-
 @app.get("/api/gauntlet/published")
 def gauntlet_published(user: str = Depends(auth.current_user)) -> dict:
     """The measured comparison, as bench/gauntlet.json has it. Null fields mean it hasn't been measured."""
@@ -722,7 +727,7 @@ def receipts() -> dict:
     bench = ROOT / "bench"
 
     def load(name: str) -> dict | None:
-        p = bench / name
+        p = bench_file(name)
         return json.loads(p.read_text()) if p.exists() else None
 
     items: list[dict] = []
@@ -997,9 +1002,10 @@ async def redteam_attacks(user: str = Depends(auth.current_user)) -> list[dict]:
 @app.get("/api/results")
 def results() -> dict:
     """Benchmark results, exactly as written by bench/run.py. Public, like the README table."""
-    if RESULTS.exists():
-        doc = json.loads(RESULTS.read_text())
-        reviewer = RESULTS.parent / "reviewer.json"
+    results = bench_file("results.json")
+    if results.exists():
+        doc = json.loads(results.read_text())
+        reviewer = bench_file("reviewer.json")
         if reviewer.exists():
             doc["reviewer"] = {k: v for k, v in json.loads(reviewer.read_text()).items() if k != "rows"}
         doc["task_level"] = task_level()

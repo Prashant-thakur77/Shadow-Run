@@ -846,3 +846,47 @@
     min-height: 44px;
   }
 }
+
+/* The lead measurement as two figures, the way the hero shows a verdict. */
+.race-answer {
+  flex-wrap: wrap;
+}
+.race-answer-title {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.race-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  flex: 1 1 100%;
+  gap: 1px;
+  margin: var(--s-3) 0 0;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+.race-figure {
+  display: grid;
+  gap: var(--s-1);
+  padding: var(--s-4);
+  background: var(--bg);
+}
+.race-figure dt {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.race-figure dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: clamp(40px, 5.4vw, 84px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.race-figure.is-bad dd {
+  color: var(--bad);
+}
+.race-figure.is-good dd {
+  color: var(--good);
+}

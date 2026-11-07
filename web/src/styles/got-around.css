@@ -151,3 +151,75 @@
 .ga-source {
   margin: 0;
 }
+
+/* Two halves on the page's seam: what the agent did on the left, the verdict on the right. */
+.ga-grid {
+  display: grid;
+  gap: var(--s-6);
+}
+@media (min-width: 1100px) {
+  .ga-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: calc(var(--s-6) * 2);
+  }
+  .ga-tiles {
+    position: sticky;
+    top: 104px;
+    align-self: start;
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The stamp. Tamper red, printed in four hard steps, once. */
+.ga-step.has-stamp {
+  padding-right: 0;
+}
+.ga-stamp {
+  justify-self: end;
+  margin-top: var(--s-2);
+  padding: 6px 14px 4px;
+  border: 2px solid var(--bad);
+  color: var(--bad);
+  font-family: var(--font-display, var(--font-sans));
+  font-stretch: 75%;
+  font-weight: 800;
+  font-size: clamp(20px, 2.2vw, 30px);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+  opacity: 0;
+}
+.ga-step.is-seen .ga-stamp {
+  animation: ga-stamp 560ms steps(4, end) forwards;
+}
+@keyframes ga-stamp {
+  0% {
+    opacity: 0;
+    transform: rotate(-3deg) scale(1.9);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-3deg) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ga-stamp,
+  .ga-step.is-seen .ga-stamp {
+    animation: none;
+    opacity: 1;
+  }
+}
+@media (min-width: 1100px) {
+  /* The page's seam runs down the middle, so the source line stays in the left half. */
+  .ga-source {
+    max-width: calc(50% - var(--s-6));
+  }
+}
+@media (max-width: 760px) {
+  /* On a phone the plan wraps rather than hiding behind a scroll nobody can see. */
+  .ga-plan {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}

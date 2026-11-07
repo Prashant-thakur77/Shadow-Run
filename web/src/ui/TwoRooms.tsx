@@ -599,7 +599,7 @@ export function TwoRooms({
     return () => observer.disconnect();
   }, [finish]);
 
-  const hand = useHand(control, script, stageRef);
+  const { hand } = useHand(control, script, stageRef);
   if (!script) return null;
 
   const steps = script.windows.filter((w) => w.end <= cue);
@@ -873,16 +873,26 @@ export function ReplayControls({ control, reduced, children }: { control: Rehear
 }
 
 /** A tick that runs down the seam with the clock, in step with the measured time. */
+/** The hand that travels down the seam, and the clock riding on it. Both follow the replay frame by frame, written straight
+ * to the DOM so nothing re-renders. The clock reads the replay's own milliseconds: the run's time, not a timer of ours. */
 function useHand(control: RehearsalControl, script: Script | null, stage: React.RefObject<HTMLDivElement>) {
   const hand = useRef<HTMLElement | null>(null);
+  const clock = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (!script) return;
     const fns = control.onFrame.current;
     const move = (t: number) => {
       const el = hand.current;
-      if (!el) return;
+      const c = clock.current;
       const h = stage.current?.clientHeight ?? 0;
       const k = Math.min(1, t / script.end);
+      if (c) {
+        // Only while the replay runs. It skips waits the ledger records, so a final reading would disagree with it.
+        c.style.opacity = k <= 0 || k >= 1 ? '0' : '1';
+        c.style.transform = `translate(-50%, ${(Math.max(0, Math.min(1, k)) * Math.max(0, h - 70)).toFixed(1)}px)`;
+        c.textContent = `T+${(Math.max(0, Math.min(t, script.end)) / 1000).toFixed(3)} s`;
+      }
+      if (!el) return;
       if (k <= 0 || k >= 1) {
         el.style.opacity = '0';
         return;
@@ -895,7 +905,7 @@ function useHand(control: RehearsalControl, script: Script | null, stage: React.
       fns.delete(move);
     };
   }, [control.onFrame, script, stage]);
-  return hand;
+  return { hand, clock };
 }
 
 /** No measurement stored: two empty frames and the words. No dots, because dots imply row counts. */

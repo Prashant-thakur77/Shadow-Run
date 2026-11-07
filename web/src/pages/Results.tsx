@@ -12,6 +12,7 @@ import { Label } from '../ui/Label';
 import { Measured } from '../ui/Measured';
 import type { ControlArms, EvasionFacts, TaskLevel } from '../api/types';
 import { GotAround } from '../ui/GotAround';
+import { VerdictPair } from '../ui/VerdictBlock';
 import { finishesMore, HoldQueueAnswer, Outcomes, type OutcomeMode } from '../ui/Outcomes';
 import { PageHead, useFirstSight } from './_evidence';
 
@@ -110,7 +111,6 @@ const outcomesSource = (runs: number | undefined) => `${SOURCE} · mean of ${num
 
 /** A difference the paired test over tasks can tell from chance. Without the test, nothing is called clear. */
 export const clear = (c: TaskLevel['harm']) => !!c?.excludes_zero;
-const ci = (c: TaskLevel['harm']) => (c?.ci95 ? `95% interval ${num(c.ci95[0])} to ${num(c.ci95[1])}, p = ${num(c.permutation_p)}` : '');
 
 /** The strongest result on the page, and the answer to the first objection. Stopping harm alone could be a queue. The
  * title claims more work done only when the paired test over tasks says so, not when one mean is higher than another. */
@@ -132,14 +132,7 @@ function Lead({ block, measured, runs, tests }: { block: Block; measured: number
           </>
         )}
       </h2>
-      {tests?.harm && tests?.done ? (
-        <p className="ev-lead-line">
-          Of <span className="mono">{num(total)}</span> risky tasks held out from tuning, harm went from <span className="mono">{num(tests.harm.from)}</span> to{' '}
-          <span className="mono">{num(tests.harm.to)}</span> with a person approving every plan unread ({ci(tests.harm)}). Work done safely went from{' '}
-          <span className="mono">{num(tests.done.from)}</span> to <span className="mono">{num(tests.done.to)}</span>
-          {clear(tests.done) ? ` (${ci(tests.done)}).` : `, and that one could be chance at this sample (${ci(tests.done)}).`}
-        </p>
-      ) : null}
+      <VerdictPair harm={tests?.harm} done={tests?.done} tasks={total} />
       <Outcomes total={total} modes={modes} showRuns aside={<HoldQueueAnswer total={total} modes={modes} harmAlone={block.shadow_run?.harm_on_prod?.mean} held={block.shadow_run?.risky_held?.mean} doneIsClear={clear(tests?.done)} />} />
     </Figure>
   );

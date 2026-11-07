@@ -186,6 +186,18 @@ function VerdictHead({ words, started }: { words: Verdict | null; started: boole
       <div className={`race-answer tone-${words.tone}`} role="status">
         <Mark tone={words.tone} size={22} />
         <p className="race-answer-title">{words.title}</p>
+        {words.figures && (
+          <dl className="race-figures">
+            <div className="race-figure is-bad">
+              <dt>Agent alone · {words.figures.label}</dt>
+              <dd>{words.figures.alone}</dd>
+            </div>
+            <div className={`race-figure ${words.figures.better ? 'is-good' : ''}`}>
+              <dt>Through Shadow Run · {words.figures.label}</dt>
+              <dd>{words.figures.through}</dd>
+            </div>
+          </dl>
+        )}
       </div>
     );
   }

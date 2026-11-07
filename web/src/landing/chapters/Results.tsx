@@ -1,3 +1,4 @@
+import { VerdictPair } from '../../ui/VerdictBlock';
 import type { PublicInfo, Receipt } from '../../api/types';
 import { controlSplit } from '../../lib/controls';
 import { asText, isNum, num, whenAny } from '../../lib/format';
@@ -52,6 +53,7 @@ function Benchmark({ headline }: { headline: Headline | null }) {
   const total = headline.risky_tasks;
   return (
     <div className="results-measured">
+      <VerdictPair harm={headline.task_level?.harm ?? undefined} done={headline.task_level?.done ?? undefined} tasks={total} />
       <h3 className="t-h3 results-title">
         What happened on <span className="mono">{num(total)}</span> risky tasks held out from tuning
       </h3>

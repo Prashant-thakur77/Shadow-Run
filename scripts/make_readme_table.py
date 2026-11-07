@@ -19,6 +19,7 @@ import sys
 import urllib.request
 import os
 import re
+import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -725,7 +726,23 @@ def main() -> int:
     path = ROOT / "README.md"
     path.write_text(render(path.read_text(), args.only))
     print("README blocks rendered")
+    publish()
     return 0
+
+
+def publish() -> None:
+    """Copies the files the README was just rendered from into bench/published/, which is what the live site reads. Only
+    a complete, measured run is published, so a judge never sees a benchmark that is still writing its files."""
+    r = load("results.json") or {}
+    complete = r.get("status") == "measured" and r.get("harness_errors") == 0 and r.get("runs") == r.get("expected_runs")
+    if not complete:
+        print(f"not published: results.json is {r.get('status')!r} with {r.get('harness_errors')} harness errors; the site keeps bench/published/")
+        return
+    out = ROOT / "bench" / "published"
+    out.mkdir(exist_ok=True)
+    for f in sorted((ROOT / "bench").glob("*.json")):
+        shutil.copy2(f, out / f.name)
+    print(f"published {len(list(out.glob('*.json')))} files to bench/published/")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,5 @@
 import { useCallback, useState, type RefObject } from 'react';
 import { STACKED, useMedia, useReducedMotion } from '../lib/media';
-import { Link } from '../lib/router';
 import { sourceLine } from '../ui/Figure';
 import { PrimaryButton } from '../ui/Halftone';
 import { ReplayControls, TwoRooms, TwoRoomsEmpty, useRehearsal } from '../ui/TwoRooms';
@@ -35,14 +34,14 @@ export function Hero({ ctaRef, ctaOffscreen }: { ctaRef: RefObject<HTMLButtonEle
       <div className="hero-bar">
         <div className="hero-bar-side">
           {!guestOff && (
-            <PrimaryButton type="button" className="btn-large" ref={ctaRef} disabled={busy} onClick={() => void enter()} onFocus={preloadHome} onMouseOver={preloadHome} style={{ visibility: ctaOffscreen ? 'hidden' : 'visible' }}>
-              {busy ? 'Entering' : 'Continue as guest'}
+            <PrimaryButton type="button" className="btn-large hero-race" ref={ctaRef} disabled={busy} onClick={() => void enter('/race')} style={{ visibility: ctaOffscreen ? 'hidden' : 'visible' }}>
+              {busy ? 'Entering' : 'Race the agent'}
             </PrimaryButton>
           )}
           {!guestOff && (
-            <Link href="/race" className="btn btn-large hero-race">
-              Race the agent
-            </Link>
+            <button type="button" className="btn btn-large" disabled={busy} onClick={() => void enter()} onFocus={preloadHome} onMouseOver={preloadHome}>
+              Continue as guest
+            </button>
           )}
           <p className="hero-note">
             {guestOff ? (
@@ -84,7 +83,7 @@ export function Hero({ ctaRef, ctaOffscreen }: { ctaRef: RefObject<HTMLButtonEle
         <p className="t-caption hero-caption">
           {sourceLine({ n: 1, run: hero.run_id, measured: hero.measured_at, scale, extra: script && script.factor > 1 ? `compressed ×${script.factor.toFixed(1)}` : null })}
           {' · '}
-          Replay of this run at {reduced ? 'its measured phase lengths' : 'real speed'}. Phase lengths are measured. Order inside a phase follows the foreign keys, not a clock.
+          Replay of this run at {reduced ? 'its measured phase lengths' : 'real speed'}. Phase lengths are measured. A time with + is from the start of the run; one without is how long that step took. Order inside a phase follows the foreign keys, not a clock.
           {hero.incident.who && (
             <>
               {' '}

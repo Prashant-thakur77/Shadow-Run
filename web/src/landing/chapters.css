@@ -1190,3 +1190,29 @@
 .whopays-page .ch-inner {
   padding: 0;
 }
+.close-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+/* Uppercase is for verdicts. A chapter title is a sentence, and it reads as one. */
+.ch-title {
+  text-transform: none;
+  letter-spacing: -0.02em;
+  line-height: 1.02;
+}
+/* An incident's command is evidence: its exact characters, in mono, never recased. */
+.stmt {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: clamp(26px, 3.4vw, 52px);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  text-transform: none;
+}
+.run-line {
+  text-transform: none;
+  letter-spacing: -0.015em;
+}

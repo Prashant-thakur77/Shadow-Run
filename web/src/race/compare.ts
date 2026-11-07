@@ -159,6 +159,8 @@ export interface Verdict {
   lines: string[];
   /** A second model's doubt about the plan the right lane ended on. It goes beside the numbers, not under them. */
   doubt: string | null;
+  /** The lead measurement, as two figures: what the agent alone did, and what the plan through Shadow Run does. */
+  figures?: { label: string; alone: string; through: string; better: boolean } | null;
 }
 
 interface Harm {
@@ -284,7 +286,11 @@ export function verdict(a: Lane, b: Lane): Verdict | null {
   if (worse) title = `Through Shadow Run the plan loses ${money(worse.through)} of ${worse.label}. The agent alone loses ${worse.alone > 0 ? money(worse.alone) : 'none'}.`;
   else if (lead?.format === money) title = `The agent alone would lose ${money(lead.alone)} of ${lead.label}. Through Shadow Run, ${lead.through > 0 ? money(lead.through) : 'none'}.`;
   else if (lead) title = `The agent alone: ${num(lead.alone)} ${lead.label}. Through Shadow Run: ${num(lead.through)}.`;
-  return { tone: notBetter.length ? 'caution' : 'good', title, lines, doubt };
+  const figures =
+    lead && !worse
+      ? { label: lead.label, alone: lead.format === money ? `−${money(lead.alone)}` : num(lead.alone), through: lead.format === money ? (lead.through > 0 ? `−${money(lead.through)}` : '$0') : num(lead.through), better: lead.through < lead.alone }
+      : null;
+  return { tone: notBetter.length ? 'caution' : 'good', title, lines, doubt, figures };
 }
 
 /** A run in progress when the server restarts never reports again, and this is how a page can tell. */

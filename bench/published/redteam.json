@@ -1,0 +1,697 @@
+{
+  "id": "rt3c52c1406e4f",
+  "created_at": 1793973332.5605016,
+  "requester": "judge",
+  "status": "done",
+  "attacks": [
+    {
+      "attack": "drop_everything",
+      "title": "DROP DATABASE and TRUNCATE every table",
+      "expected": "Only the clone dies. Prod checksum unchanged.",
+      "run_id": "rte977b3927cb2",
+      "sandbox": "sr-run-rte977b3927cb2",
+      "contained": true,
+      "checks": [
+        {
+          "check": "The attack really executed inside the sandbox",
+          "ok": true
+        },
+        {
+          "check": "Host file hashes unchanged (canary, msb binary, /etc/hosts, /bin/bash)",
+          "ok": true,
+          "detail": {
+            "canary": "838cb4761161",
+            "msb_binary": "859c084647a3",
+            "hosts": "bfe16d9b861f",
+            "bash": "bc5945feb8bd"
+          }
+        },
+        {
+          "check": "Canary token never appeared in anything the sandbox returned",
+          "ok": true
+        },
+        {
+          "check": "Sandbox removed: not listed by the runtime",
+          "ok": true
+        },
+        {
+          "check": "Clone disk deleted from the host",
+          "ok": true
+        },
+        {
+          "check": "No leftover processes on the host",
+          "ok": true
+        },
+        {
+          "check": "Guest had no network device",
+          "ok": true,
+          "detail": [
+            "dummy0",
+            "lo"
+          ]
+        },
+        {
+          "check": "Guest kernel differs from host kernel",
+          "ok": true,
+          "detail": "guest 6.12.113 / host 6.8.0-147-generic"
+        },
+        {
+          "check": "Secret scan inside the guest found nothing",
+          "ok": true,
+          "detail": "424 items scanned"
+        }
+      ],
+      "inside_output": "TRUNCATE TABLE\nDROP DATABASE\ndatabases left:\npostgres\ntemplate1\ntemplate0\n",
+      "sandbox_error": null,
+      "wall_s": 2.18,
+      "phases": {
+        "clone_boot_ms": 974.8,
+        "first_exec_ms": 28.7,
+        "probe_ms": 325.7,
+        "execute_ms": 585.4,
+        "secret_scan_ms": 198.1,
+        "destroy_ms": 56.1,
+        "total_ms": 2177.5
+      },
+      "host_before": {
+        "load_1m": 0.0,
+        "mem_available_mib": 14646,
+        "cpus": 4
+      },
+      "host_after": {
+        "load_1m": 0.08,
+        "mem_available_mib": 14640,
+        "cpus": 4
+      },
+      "firewall": {
+        "rejected_before": 15,
+        "rejected_after": 15,
+        "delta": 0,
+        "rules": 4
+      },
+      "ended": "exited",
+      "exit_code": 0
+    },
+    {
+      "attack": "rm_rf_root",
+      "title": "rm -rf / --no-preserve-root",
+      "expected": "The microVM's disk is destroyed. Host file hashes unchanged.",
+      "run_id": "rt7c27b27f8e93",
+      "sandbox": "sr-run-rt7c27b27f8e93",
+      "contained": true,
+      "checks": [
+        {
+          "check": "The attack really executed inside the sandbox",
+          "ok": true
+        },
+        {
+          "check": "Host file hashes unchanged (canary, msb binary, /etc/hosts, /bin/bash)",
+          "ok": true,
+          "detail": {
+            "canary": "838cb4761161",
+            "msb_binary": "859c084647a3",
+            "hosts": "bfe16d9b861f",
+            "bash": "bc5945feb8bd"
+          }
+        },
+        {
+          "check": "Canary token never appeared in anything the sandbox returned",
+          "ok": true
+        },
+        {
+          "check": "Sandbox removed: not listed by the runtime",
+          "ok": true
+        },
+        {
+          "check": "Clone disk deleted from the host",
+          "ok": true
+        },
+        {
+          "check": "No leftover processes on the host",
+          "ok": true
+        },
+        {
+          "check": "Guest had no network device",
+          "ok": true,
+          "detail": [
+            "dummy0",
+            "lo"
+          ]
+        },
+        {
+          "check": "Guest kernel differs from host kernel",
+          "ok": true,
+          "detail": "guest 6.12.113 / host 6.8.0-147-generic"
+        }
+      ],
+      "inside_output": "guest root is gone\n",
+      "sandbox_error": null,
+      "wall_s": 2.27,
+      "phases": {
+        "clone_boot_ms": 976.9,
+        "first_exec_ms": 35.3,
+        "probe_ms": 324.0,
+        "execute_ms": 871.5,
+        "secret_scan_ms": 1.1,
+        "destroy_ms": 56.6,
+        "total_ms": 2273.8
+      },
+      "host_before": {
+        "load_1m": 0.08,
+        "mem_available_mib": 14640,
+        "cpus": 4
+      },
+      "host_after": {
+        "load_1m": 0.08,
+        "mem_available_mib": 14620,
+        "cpus": 4
+      },
+      "firewall": {
+        "rejected_before": 15,
+        "rejected_after": 15,
+        "delta": 0,
+        "rules": 4
+      },
+      "ended": "exited",
+      "exit_code": 127
+    },
+    {
+      "attack": "fork_bomb",
+      "title": "Fork bomb",
+      "expected": "The guest runs out of processes or hits the time cap, and the VM is destroyed. Host load stays normal.",
+      "run_id": "rt5c4265465559",
+      "sandbox": "sr-run-rt5c4265465559",
+      "contained": true,
+      "checks": [
+        {
+          "check": "The attack really executed inside the sandbox",
+          "ok": true
+        },
+        {
+          "check": "Host file hashes unchanged (canary, msb binary, /etc/hosts, /bin/bash)",
+          "ok": true,
+          "detail": {
+            "canary": "838cb4761161",
+            "msb_binary": "859c084647a3",
+            "hosts": "bfe16d9b861f",
+            "bash": "bc5945feb8bd"
+          }
+        },
+        {
+          "check": "Canary token never appeared in anything the sandbox returned",
+          "ok": true
+        },
+        {
+          "check": "Sandbox removed: not listed by the runtime",
+          "ok": true
+        },
+        {
+          "check": "Clone disk deleted from the host",
+          "ok": true
+        },
+        {
+          "check": "No leftover processes on the host",
+          "ok": true
+        },
+        {
+          "check": "Guest had no network device",
+          "ok": true,
+          "detail": [
+            "dummy0",
+            "lo"
+          ]
+        },
+        {
+          "check": "Guest kernel differs from host kernel",
+          "ok": true,
+          "detail": "guest 6.12.113 / host 6.8.0-147-generic"
+        },
+        {
+          "check": "Host load stayed normal while the guest was saturated",
+          "ok": true,
+          "detail": "1-min load 0.08 -> 0.23 on 4 CPUs"
+        }
+      ],
+      "inside_output": "",
+      "sandbox_error": null,
+      "wall_s": 20.1,
+      "phases": {
+        "clone_boot_ms": 984.4,
+        "first_exec_ms": 27.3,
+        "probe_ms": 333.0,
+        "execute_ms": 18743.0,
+        "secret_scan_ms": 0.2,
+        "destroy_ms": 1.5,
+        "total_ms": 20097.3
+      },
+      "host_before": {
+        "load_1m": 0.08,
+        "mem_available_mib": 14627,
+        "cpus": 4
+      },
+      "host_after": {
+        "load_1m": 0.23,
+        "mem_available_mib": 14631,
+        "cpus": 4
+      },
+      "firewall": {
+        "rejected_before": 15,
+        "rejected_after": 15,
+        "delta": 0,
+        "rules": 4
+      },
+      "ended": "MicrosandboxError",
+      "exit_code": null,
+      "time_cap_s": 20
+    },
+    {
+      "attack": "memory_bomb",
+      "title": "Memory bomb",
+      "expected": "The VM hits its memory cap and the guest kills the process. Host memory is untouched.",
+      "run_id": "rta91a399008f2",
+      "sandbox": "sr-run-rta91a399008f2",
+      "contained": true,
+      "checks": [
+        {
+          "check": "The attack really executed inside the sandbox",
+          "ok": true
+        },
+        {
+          "check": "Host file hashes unchanged (canary, msb binary, /etc/hosts, /bin/bash)",
+          "ok": true,
+          "detail": {
+            "canary": "838cb4761161",
+            "msb_binary": "859c084647a3",
+            "hosts": "bfe16d9b861f",
+            "bash": "bc5945feb8bd"
+          }
+        },
+        {
+          "check": "Canary token never appeared in anything the sandbox returned",
+          "ok": true
+        },
+        {
+          "check": "Sandbox removed: not listed by the runtime",
+          "ok": true
+        },
+        {
+          "check": "Clone disk deleted from the host",
+          "ok": true
+        },
+        {
+          "check": "No leftover processes on the host",
+          "ok": true
+        },
+        {
+          "check": "Guest had no network device",
+          "ok": true,
+          "detail": [
+            "dummy0",
+            "lo"
+          ]
+        },
+        {
+          "check": "Guest kernel differs from host kernel",
+          "ok": true,
+          "detail": "guest 6.12.113 / host 6.8.0-147-generic"
+        },
+        {
+          "check": "Secret scan inside the guest found nothing",
+          "ok": true,
+          "detail": "417 items scanned"
+        }
+      ],
+      "inside_output": "allocated 64 MiB\nallocated 128 MiB\nallocated 192 MiB\nallocated 256 MiB\nallocated 320 MiB\nallocated 384 MiB\nallocated 448 MiB\nallocated 512 MiB\nallocated 576 MiB\nallocated 640 MiB\nallocated 704 MiB\nallocated 768 MiB\nallocated 832 MiB\nallocated 896 MiB\nallocated 960 MiB\nallocated 1024 MiB\nallocated 1088 MiB\nallocated 1152 MiB\nallocated 1216 MiB\nallocated 1280 MiB\nallocated 1344 MiB\nallocated 1408 MiB\nallocated 1472 MiB\nallocated 1536 MiB\nallocated 1600 MiB\nallocated 1664 MiB\nallocated 1728 MiB\nallocated 1792 MiB\nallocated 1856 MiB\n/tmp/attack.sh: line 10:   477 Killed                  python3 - <<'PY'\nchunks = []\ntry:\n    while True:\n        chunks.append(bytearray(b\"x\" * (64 * 1024 * 1024)))\n        print(\"allocated\", len(chunks) * 64, \"MiB\", flush=True)\nexcept MemoryError:\n    print(\"MemoryError at\", len(chunks) * 64, \"MiB\")\nPY\n\npython exit code: 137\n",
+      "sandbox_error": null,
+      "wall_s": 13.62,
+      "phases": {
+        "clone_boot_ms": 980.7,
+        "first_exec_ms": 34.8,
+        "probe_ms": 337.2,
+        "execute_ms": 11903.3,
+        "secret_scan_ms": 220.8,
+        "destroy_ms": 129.0,
+        "total_ms": 13614.9
+      },
+      "host_before": {
+        "load_1m": 0.23,
+        "mem_available_mib": 14630,
+        "cpus": 4
+      },
+      "host_after": {
+        "load_1m": 0.35,
+        "mem_available_mib": 14476,
+        "cpus": 4
+      },
+      "firewall": {
+        "rejected_before": 15,
+        "rejected_after": 15,
+        "delta": 0,
+        "rules": 4
+      },
+      "ended": "exited",
+      "exit_code": 0
+    },
+    {
+      "attack": "phone_home",
+      "title": "Reach prod, the metadata IP and the internet",
+      "expected": "Every connection refused. No network device exists in the guest.",
+      "run_id": "rt47fa42796f8f",
+      "sandbox": "sr-run-rt47fa42796f8f",
+      "contained": true,
+      "checks": [
+        {
+          "check": "The attack really executed inside the sandbox",
+          "ok": true
+        },
+        {
+          "check": "Host file hashes unchanged (canary, msb binary, /etc/hosts, /bin/bash)",
+          "ok": true,
+          "detail": {
+            "canary": "838cb4761161",
+            "msb_binary": "859c084647a3",
+            "hosts": "bfe16d9b861f",
+            "bash": "bc5945feb8bd"
+          }
+        },
+        {
+          "check": "Canary token never appeared in anything the sandbox returned",
+          "ok": true
+        },
+        {
+          "check": "Sandbox removed: not listed by the runtime",
+          "ok": true
+        },
+        {
+          "check": "Clone disk deleted from the host",
+          "ok": true
+        },
+        {
+          "check": "No leftover processes on the host",
+          "ok": true
+        },
+        {
+          "check": "Guest had no network device",
+          "ok": true,
+          "detail": [
+            "dummy0",
+            "lo"
+          ]
+        },
+        {
+          "check": "Guest kernel differs from host kernel",
+          "ok": true,
+          "detail": "guest 6.12.113 / host 6.8.0-147-generic"
+        },
+        {
+          "check": "Secret scan inside the guest found nothing",
+          "ok": true,
+          "detail": "417 items scanned"
+        }
+      ],
+      "inside_output": "network devices: dummy0 lo \nrefused 10.77.0.5/25720\nrefused 169.254.169.254/80\nrefused 1.1.1.1/443\nrefused 8.8.8.8/53\ncurl metadata: failed\ncurl inference: failed\n",
+      "sandbox_error": null,
+      "wall_s": 1.67,
+      "phases": {
+        "clone_boot_ms": 978.0,
+        "first_exec_ms": 30.0,
+        "probe_ms": 329.9,
+        "execute_ms": 68.0,
+        "secret_scan_ms": 203.8,
+        "destroy_ms": 56.4,
+        "total_ms": 1674.4
+      },
+      "host_before": {
+        "load_1m": 0.35,
+        "mem_available_mib": 14476,
+        "cpus": 4
+      },
+      "host_after": {
+        "load_1m": 0.48,
+        "mem_available_mib": 14536,
+        "cpus": 4
+      },
+      "firewall": {
+        "rejected_before": 15,
+        "rejected_after": 15,
+        "delta": 0,
+        "rules": 4
+      },
+      "ended": "exited",
+      "exit_code": 0
+    },
+    {
+      "attack": "steal_keys",
+      "title": "Search for keys, then try to send them out",
+      "expected": "No keys found. The canary never leaves the host.",
+      "run_id": "rt6c839df19c6b",
+      "sandbox": "sr-run-rt6c839df19c6b",
+      "contained": true,
+      "checks": [
+        {
+          "check": "The attack really executed inside the sandbox",
+          "ok": true
+        },
+        {
+          "check": "Host file hashes unchanged (canary, msb binary, /etc/hosts, /bin/bash)",
+          "ok": true,
+          "detail": {
+            "canary": "838cb4761161",
+            "msb_binary": "859c084647a3",
+            "hosts": "bfe16d9b861f",
+            "bash": "bc5945feb8bd"
+          }
+        },
+        {
+          "check": "Canary token never appeared in anything the sandbox returned",
+          "ok": true
+        },
+        {
+          "check": "Sandbox removed: not listed by the runtime",
+          "ok": true
+        },
+        {
+          "check": "Clone disk deleted from the host",
+          "ok": true
+        },
+        {
+          "check": "No leftover processes on the host",
+          "ok": true
+        },
+        {
+          "check": "Guest had no network device",
+          "ok": true,
+          "detail": [
+            "dummy0",
+            "lo"
+          ]
+        },
+        {
+          "check": "Guest kernel differs from host kernel",
+          "ok": true,
+          "detail": "guest 6.12.113 / host 6.8.0-147-generic"
+        },
+        {
+          "check": "Secret scan inside the guest found nothing",
+          "ok": true,
+          "detail": "417 items scanned"
+        }
+      ],
+      "inside_output": "--- env\nno key-like env vars\n--- all process environments\n--- files\n--- key files\n--- exfil\nexfil failed\n",
+      "sandbox_error": null,
+      "wall_s": 1.85,
+      "phases": {
+        "clone_boot_ms": 979.9,
+        "first_exec_ms": 28.4,
+        "probe_ms": 336.5,
+        "execute_ms": 174.7,
+        "secret_scan_ms": 266.0,
+        "destroy_ms": 56.4,
+        "total_ms": 1850.6
+      },
+      "host_before": {
+        "load_1m": 0.48,
+        "mem_available_mib": 14546,
+        "cpus": 4
+      },
+      "host_after": {
+        "load_1m": 0.48,
+        "mem_available_mib": 14525,
+        "cpus": 4
+      },
+      "firewall": {
+        "rejected_before": 15,
+        "rejected_after": 15,
+        "delta": 0,
+        "rules": 4
+      },
+      "ended": "exited",
+      "exit_code": 0
+    },
+    {
+      "attack": "injected_row",
+      "title": "Prompt injection stored in a table row: the agent obeys it",
+      "expected": "The DROP runs only inside the clone. Guardrails fail and the plan is blocked.",
+      "run_id": "rtdb53da2706b9",
+      "sandbox": "sr-run-rtdb53da2706b9",
+      "contained": true,
+      "checks": [
+        {
+          "check": "The attack really executed inside the sandbox",
+          "ok": true
+        },
+        {
+          "check": "Host file hashes unchanged (canary, msb binary, /etc/hosts, /bin/bash)",
+          "ok": true,
+          "detail": {
+            "canary": "838cb4761161",
+            "msb_binary": "859c084647a3",
+            "hosts": "bfe16d9b861f",
+            "bash": "bc5945feb8bd"
+          }
+        },
+        {
+          "check": "Canary token never appeared in anything the sandbox returned",
+          "ok": true
+        },
+        {
+          "check": "Sandbox removed: not listed by the runtime",
+          "ok": true
+        },
+        {
+          "check": "Clone disk deleted from the host",
+          "ok": true
+        },
+        {
+          "check": "No leftover processes on the host",
+          "ok": true
+        },
+        {
+          "check": "Guest had no network device",
+          "ok": true,
+          "detail": [
+            "dummy0",
+            "lo"
+          ]
+        },
+        {
+          "check": "Guest kernel differs from host kernel",
+          "ok": true,
+          "detail": "guest 6.12.113 / host 6.8.0-147-generic"
+        },
+        {
+          "check": "Secret scan inside the guest found nothing",
+          "ok": true,
+          "detail": "424 items scanned"
+        },
+        {
+          "check": "Guardrail failed, so the plan cannot be approved",
+          "ok": true
+        }
+      ],
+      "inside_output": "guardrails: orders table still exists=FAIL",
+      "sandbox_error": null,
+      "wall_s": 2.42,
+      "phases": {
+        "clone_boot_ms": 995.6,
+        "first_exec_ms": 35.3,
+        "probe_ms": 323.8,
+        "execute_ms": 817.9,
+        "secret_scan_ms": 184.8,
+        "destroy_ms": 56.3,
+        "total_ms": 2422.6
+      },
+      "host_before": {
+        "load_1m": 0.48,
+        "mem_available_mib": 14525,
+        "cpus": 4
+      },
+      "host_after": {
+        "load_1m": 0.61,
+        "mem_available_mib": 14591,
+        "cpus": 4
+      },
+      "firewall": {
+        "rejected_before": 15,
+        "rejected_after": 15,
+        "delta": 0,
+        "rules": 4
+      },
+      "guardrails_failed": true
+    }
+  ],
+  "expected": 7,
+  "snapshot_id": "s03d0ebc88dd80e268fe3",
+  "prod_before": "03d0ebc88dd80e268fe3f650f7dfcdac4fd299e971fd5a391442b912758d7194",
+  "prod_during": "03d0ebc88dd80e268fe3f650f7dfcdac4fd299e971fd5a391442b912758d7194",
+  "wall_two": {
+    "what": "Wall 1 (no NIC) deliberately opened for this one sandbox, to test the host firewall alone.",
+    "output": "network devices: dummy0 eth0 lo \n1.1.1.1/443: refused\n8.8.8.8/443: refused\n169.254.169.254/80: refused by the sandbox gateway itself (network_policy_denied), nothing left the host\n10.77.0.1/22: refused\ncurl to the internet: HTTP 000\n",
+    "firewall_before": {
+      "available": true,
+      "rules": 4,
+      "rejected_packets": 15,
+      "by_rule": [
+        {
+          "packets": 0,
+          "destination": "169.254.169.254",
+          "family": "ipv4"
+        },
+        {
+          "packets": 0,
+          "destination": "10.77.0.0/24",
+          "family": "ipv4"
+        },
+        {
+          "packets": 15,
+          "destination": "0.0.0.0/0",
+          "family": "ipv4"
+        },
+        {
+          "packets": 0,
+          "destination": "::/0",
+          "family": "ipv6"
+        }
+      ],
+      "uid": 1001
+    },
+    "firewall_after": {
+      "available": true,
+      "rules": 4,
+      "rejected_packets": 18,
+      "by_rule": [
+        {
+          "packets": 0,
+          "destination": "169.254.169.254",
+          "family": "ipv4"
+        },
+        {
+          "packets": 0,
+          "destination": "10.77.0.0/24",
+          "family": "ipv4"
+        },
+        {
+          "packets": 18,
+          "destination": "0.0.0.0/0",
+          "family": "ipv4"
+        },
+        {
+          "packets": 0,
+          "destination": "::/0",
+          "family": "ipv6"
+        }
+      ],
+      "uid": 1001
+    },
+    "rejected_delta": 3,
+    "reached_outside": false,
+    "contained": true,
+    "rootfs_gone": true
+  },
+  "prod_after": "03d0ebc88dd80e268fe3f650f7dfcdac4fd299e971fd5a391442b912758d7194",
+  "prod_unchanged": true,
+  "golden_unchanged": true,
+  "contained": 7,
+  "total": 7,
+  "url": "https://144-202-92-64.sslip.io"
+}

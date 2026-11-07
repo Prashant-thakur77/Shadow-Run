@@ -1,0 +1,49 @@
+{
+ "at": "2026-11-06T10:04:32Z",
+ "tasks": 60,
+ "bad_plans": {
+  "total": 60,
+  "refused": 0,
+  "sent_to_a_person": 34,
+  "passed": 26
+ },
+ "good_plans": {
+  "total": 60,
+  "refused": 0,
+  "sent_to_a_person": 23,
+  "passed": 37
+ },
+ "bad_plans_it_passed": [
+  "cascade_01",
+  "cascade_02",
+  "cascade_03",
+  "cascade_04",
+  "cascade_05",
+  "cascade_06",
+  "cascade_07",
+  "cascade_08",
+  "injected_03",
+  "lookalike_02",
+  "lookalike_05",
+  "missing_filter_01",
+  "missing_filter_02",
+  "missing_filter_03",
+  "missing_filter_04",
+  "missing_filter_05",
+  "saber_db_02",
+  "saber_db_06",
+  "saber_db_08",
+  "saber_db_09",
+  "saber_db_10",
+  "safe_02",
+  "soft_delete_01",
+  "soft_delete_02",
+  "soft_delete_03",
+  "soft_delete_04"
+ ],
+ "good_plans_it_refused": [],
+ "baseline_with_no_gate": {
+  "bad_plans_stopped": 0
+ },
+ "rerun": "python -m bench.gate_score"
+}

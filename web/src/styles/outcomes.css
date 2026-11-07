@@ -258,3 +258,6 @@
     padding: var(--s-3);
   }
 }
+.oc-sides .bracket {
+  white-space: nowrap;
+}
