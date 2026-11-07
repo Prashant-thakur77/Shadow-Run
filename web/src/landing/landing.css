@@ -60,6 +60,22 @@
   padding: 18px var(--margin) 10px;
   gap: 12px;
 }
+/* Each part keeps its own row, so the live strip arriving a moment later can't move the stage into another row. */
+.hero > .hero-title {
+  grid-row: 1;
+}
+.hero > .live-strip {
+  grid-row: 2;
+}
+.hero > .hero-stage {
+  grid-row: 3;
+}
+.hero > .hero-bar {
+  grid-row: 4;
+}
+.hero > .hero-caption {
+  grid-row: 5;
+}
 .hero-title {
   white-space: nowrap;
 }
@@ -237,10 +253,11 @@
   opacity: 0;
   pointer-events: none;
 }
+/* While rows are being destroyed the clone's frame turns red: a measurement's mark, not an atmosphere. */
 .rooms-glow {
   position: absolute;
   inset: 0;
-  background: radial-gradient(closest-side, var(--bad), transparent);
+  box-shadow: inset 0 0 0 2px var(--bad);
   opacity: 0;
   pointer-events: none;
 }
@@ -916,11 +933,43 @@
 .live-v {
   color: var(--ink);
 }
+/* A service that is down is a fact about the demo, not harm a measurement found, so it isn't red. */
 .live-v.is-off {
-  color: var(--bad);
+  color: var(--ink-3);
+}
+.live-strip.is-waiting {
+  width: min(560px, 100%);
+  height: 32px;
+}
+/* On a narrow screen the strip stays one line and scrolls inside itself, so it never pushes the replay down. */
+@media (max-width: 999px) {
+  .live-strip {
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+  .live-strip::-webkit-scrollbar {
+    display: none;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .live-dot {
     animation: none;
   }
+}
+/* The two numbers that matter, on the first screen, from the published results. */
+.hero-numbers {
+  color: var(--ink-2);
+}
+.hero-numbers b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.hero-numbers b.is-bad {
+  color: var(--bad);
+}
+.hero-numbers b.is-good {
+  color: var(--good);
 }

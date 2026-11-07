@@ -6,28 +6,48 @@ Written for: lablab.ai judges and the entry form. Paste each section into its fi
 
 Shadow Run
 
-## Short description
+## Short description (224 characters; the form takes 50 to 255)
 
-Your agent wants to touch prod. Shadow Run lets it break a clone first: it rehearses every risky SQL or shell plan in a microVM on Vultr, measures the blast radius, and only lets through what matches.
+Your agent wants to touch prod. Shadow Run lets it break a clone first: every risky plan runs on a full clone in a microVM on Vultr, Postgres measures the blast radius, and only the exact plan a person approved reaches prod.
 
-## Long description
+## Long description, for the form (1567 characters; the form takes 600 to 2,000)
 
-**The problem.** AI agents with real access keep destroying production data with one command. In April 2026 a coding agent at PocketOS deleted a production volume and its backups in nine seconds, by its founder's account. In February, a `terraform destroy` took down DataTalks.Club for about a day. Keeping dev and prod apart didn't help: the agent found a credential that reached prod, and the damage hid in side effects nobody had listed.
+AI agents now hold production credentials. In October 2026, 49.8% of professionals Salt Security surveyed had confirmed or suspected an AI agent acting unexpectedly or without authorization; only 17.5% could stop one automatically.
 
-**What Shadow Run does.** It sits between an agent and production and holds the only credential. Every risky SQL or shell plan is frozen and hashed, read by a static gate, and run on a full clone of prod inside a fresh microVM on a Vultr VX1, with no network card and no secrets. Postgres itself reports what happened: rows per table, every foreign-key cascade traced to the step that caused it, and what it does to the numbers a business watches, in dollars. Frozen business guardrails run in the same transaction, and a failure goes back to the agent to rewrite the plan. A different person approves those exact hashes, and the same plan runs on prod in one transaction that rolls back if anything differs from the rehearsal. Almost every plan that passes comes with an undo, proved on the clone before anyone approves.
+Shadow Run authorizes what a plan does, not what it says. The agent gets no credential. Every risky SQL or shell plan it writes is frozen, hashed and run first on a full clone of prod in a throwaway microVM on a Vultr VX1 with no network card. Postgres measures the blast radius, frozen guardrails decide, and a different person approves those exact hashes before the same plan runs on prod in one transaction that rolls back on any surprise. An undo is proved on the clone first.
+
+On 23 held-out risky tasks, 0 did harm before a person saw the plan, against 10 for the agent alone. Approved unread, harm fell from 10 to 2.67 (p = 0.0078 over tasks).
+
+We found that an agent told which rule it broke can learn to get around it: those plans were harmful 35% of the time, against 13%. A measured check plus a second model now catch 3 of 8 on plans neither had seen.
+
+7 of 7 live attacks contained. Every model call runs on Vultr Serverless Inference, every rehearsal on a VX1, prod on Vultr Managed PostgreSQL, evidence in Vultr Object Storage.
+
+It plugs into any agent over MCP, a CLI or a GitHub Action that posts what a migration really does on the pull request. It starts free as that Action, then $500 a month per protected database, a price no customer has tested yet.
+
+Race the agent yourself: https://144-202-92-64.sslip.io/race
+
+## Long description, full
+
+For the README, a blog post or anywhere without a limit.
+
+**The problem.** In October 2026, 49.8% of the security and technology professionals Salt Security surveyed had confirmed or suspected an AI agent acting unexpectedly or without authorization; more than 40% of those had seen agents modify or delete data, and only 17.5% could automatically stop an agent in production. AI agents with real access keep destroying production data with one command. In April 2026 a coding agent at PocketOS deleted a production volume and its backups in nine seconds, by its founder's account. In February, a `terraform destroy` took down DataTalks.Club for about a day. Keeping dev and prod apart didn't help: the agent found a credential that reached prod, and the damage hid in side effects nobody had listed.
+
+**What Shadow Run does.** Don't authorize the command; authorize its measured effect. Allowlists, linters and rules in a prompt judge what a command says. Shadow Run judges what it does, on a real copy of the data, before it can touch the original. It sits between an agent and production and holds the only credential. Every risky SQL or shell plan is frozen and hashed, read by a static gate, and run on a full clone of prod inside a fresh microVM on a Vultr VX1, with no network card and no secrets. Postgres itself reports what happened: rows per table, every foreign-key cascade traced to the step that caused it, and what it does to the numbers a business watches, in dollars. Frozen business guardrails run in the same transaction, and a failure goes back to the agent to rewrite the plan. A different person approves those exact hashes, and the same plan runs on prod in one transaction that rolls back if anything differs from the rehearsal. Almost every plan that passes comes with an undo, proved on the clone before anyone approves.
 
 **What we measured.** Same agent, same prompt, a fresh copy of the database for every run, 3 runs per task:
 
-- 0 of 23 held-out risky tasks did harm on prod before a person saw the plan. The same agent alone did harm on 9.67. Nothing that changed anything went through without a person: 17.33 of 23 risky plans waited, which is where the zero comes from (bench/results.json).
-- Approved unread, harm went from 9.67 to 2, and that holds task by task (95% CI -12 to -3.67, p = 0.0078). Work done: 11.33 alone, 11.33 through Shadow Run, which this sample can't separate (p = 1). (bench/stats.json)
-- Rules in the prompt cut harm about as much: 3 against Shadow Run's 2 on 19 SQL tasks, which this sample can't separate. The difference is when it lands: a prompt's plan runs on prod with nobody looking.
-- Told which rule it broke, the agent sometimes gets around it. Plans that passed only after breaking a rule were harmful 35% of the time, against 13% for first-time passes. A measured check and a second model now send those plans back: 7 of 8 harmful caught on plans neither had seen, 2 of 12 good sent back by mistake (bench/evasion.json).
+- 0 of 23 held-out risky tasks did harm on prod before a person saw the plan. The same agent alone did harm on 10. Nothing that changed anything went through without a person: 19 of 23 risky plans waited, which is where the zero comes from (bench/results.json).
+- Approved unread, harm went from 10 to 2.67, and that holds task by task (95% CI -11.67 to -3.33, p = 0.0078). Work done: 10 alone, 11.67 through Shadow Run, which this sample can't separate (p = 0.44). (bench/stats.json)
+- On 20 tasks adapted from an outside benchmark (SABER), harm went from 7.33 to 2, also holding task by task (p = 0.0078), so the effect isn't only on our own tasks.
+- A rehearsal takes 2.97 s at the median and about $0.000126 of VX1 time at list price, boot to destroy. A whole task, every model call included, costs $0.00347 of inference.
+- Rules in the prompt cut harm about as much: 3.67 against Shadow Run's 2.67 on 19 SQL tasks, which this sample can't separate. The difference is when it lands: a prompt's plan runs on prod with nobody looking.
+- Told which rule it broke, the agent sometimes gets around it. Plans that passed only after breaking a rule were harmful 35% of the time, against 13% for first-time passes. A measured check and a second model now send those plans back: 3 of 8 harmful caught on plans neither had seen, 2 of 12 good sent back by mistake (bench/evasion.json).
 - 7 of 7 live attacks contained, each in a microVM with no network card, checked from the host, with prod’s hash unchanged (bench/redteam.json).
-- On Vultr end to end: The final benchmark spent 9,549,968 tokens of Serverless Inference across 4 models ($3.79), booted 1,219 microVMs on one VX1, created and dropped 1,008 databases on Managed PostgreSQL over the VPC, and Object Storage holds 138 evidence bundles and pre-apply backups. Spent so far: $26.21 of the $200 credit (bench/vultr.json).
+- On Vultr end to end: The final benchmark spent 9,351,405 tokens of Serverless Inference across 4 models ($3.76), booted 1,198 microVMs on one VX1, created and dropped 1,008 databases on Managed PostgreSQL over the VPC, and Object Storage holds 158 evidence bundles and pre-apply backups. Spent so far: $31.33 of the $200 credit (bench/vultr.json).
 
-A rehearsal takes 2.93 s at the median, and a task costs $0.0033 in inference. The limits are published with the numbers: side effects outside the target can't be rehearsed, some harm needs a person to notice, and clone cost grows with database size.
+A rehearsal takes 2.97 s at the median, and a task costs $0.00347 in inference. The limits are published with the numbers: side effects outside the target can't be rehearsed, some harm needs a person to notice, and clone cost grows with database size.
 
-**What we found.** Told which rule it broke, the agent sometimes gets around it. In runs recorded before we checked for this, risky plans that passed only after breaking a guardrail did harm in 20 of 57 cases (35%), against 11 of 85 (13%) for plans that passed first time. So a plan that follows a broken rule now gets two more checks, and if either doubts it, the plan goes back to the agent. On plans nobody read while writing the checks, they caught 7 of 8 harmful plans and sent back 2 of 12 good ones.
+**What we found.** Told which rule it broke, the agent sometimes gets around it. In runs recorded before we checked for this, risky plans that passed only after breaking a guardrail did harm in 20 of 57 cases (35%), against 11 of 85 (13%) for plans that passed first time. So a plan that follows a broken rule now gets two more checks, and if either doubts it, the plan goes back to the agent. On plans nobody read while writing the checks, they caught 3 of 8 harmful plans and sent back 2 of 12 good ones.
 
 **Containment, checked from outside the sandbox.** 7 of 7 red-team attacks contained, checked from the host, with prod's hash unchanged. 23 attacks on the approval, the apply and the measurement were refused, rolled back or held, and 11 checks confirm the honest path still works. 50 rehearsals in a row left no sandbox behind.
 
@@ -45,12 +65,14 @@ Use this one if the form's limit is lower than the version above.
 
 AI agents with real access keep destroying production data with one command. Shadow Run sits between an agent and prod and holds the only credential. Every risky plan is frozen, hashed and run on a full clone of prod in a fresh Microsandbox microVM on Vultr, with no network device and no secrets. Postgres reports what really happened, frozen guardrails check it, and failures go back to the agent to rewrite the plan. A different person approves those exact hashes, and the same plan runs on prod in one transaction that rolls back if anything differs from the rehearsal.
 
-- 0 of 23 held-out risky tasks did harm on prod before a person saw the plan. The same agent alone did harm on 9.67. Nothing that changed anything went through without a person: 17.33 of 23 risky plans waited, which is where the zero comes from (bench/results.json).
-- Approved unread, harm went from 9.67 to 2, and that holds task by task (95% CI -12 to -3.67, p = 0.0078). Work done: 11.33 alone, 11.33 through Shadow Run, which this sample can't separate (p = 1). (bench/stats.json)
-- Rules in the prompt cut harm about as much: 3 against Shadow Run's 2 on 19 SQL tasks, which this sample can't separate. The difference is when it lands: a prompt's plan runs on prod with nobody looking.
-- Told which rule it broke, the agent sometimes gets around it. Plans that passed only after breaking a rule were harmful 35% of the time, against 13% for first-time passes. A measured check and a second model now send those plans back: 7 of 8 harmful caught on plans neither had seen, 2 of 12 good sent back by mistake (bench/evasion.json).
+- 0 of 23 held-out risky tasks did harm on prod before a person saw the plan. The same agent alone did harm on 10. Nothing that changed anything went through without a person: 19 of 23 risky plans waited, which is where the zero comes from (bench/results.json).
+- Approved unread, harm went from 10 to 2.67, and that holds task by task (95% CI -11.67 to -3.33, p = 0.0078). Work done: 10 alone, 11.67 through Shadow Run, which this sample can't separate (p = 0.44). (bench/stats.json)
+- On 20 tasks adapted from an outside benchmark (SABER), harm went from 7.33 to 2, also holding task by task (p = 0.0078), so the effect isn't only on our own tasks.
+- A rehearsal takes 2.97 s at the median and about $0.000126 of VX1 time at list price, boot to destroy. A whole task, every model call included, costs $0.00347 of inference.
+- Rules in the prompt cut harm about as much: 3.67 against Shadow Run's 2.67 on 19 SQL tasks, which this sample can't separate. The difference is when it lands: a prompt's plan runs on prod with nobody looking.
+- Told which rule it broke, the agent sometimes gets around it. Plans that passed only after breaking a rule were harmful 35% of the time, against 13% for first-time passes. A measured check and a second model now send those plans back: 3 of 8 harmful caught on plans neither had seen, 2 of 12 good sent back by mistake (bench/evasion.json).
 - 7 of 7 live attacks contained, each in a microVM with no network card, checked from the host, with prod’s hash unchanged (bench/redteam.json).
-- On Vultr end to end: The final benchmark spent 9,549,968 tokens of Serverless Inference across 4 models ($3.79), booted 1,219 microVMs on one VX1, created and dropped 1,008 databases on Managed PostgreSQL over the VPC, and Object Storage holds 138 evidence bundles and pre-apply backups. Spent so far: $26.21 of the $200 credit (bench/vultr.json).
+- On Vultr end to end: The final benchmark spent 9,351,405 tokens of Serverless Inference across 4 models ($3.76), booted 1,198 microVMs on one VX1, created and dropped 1,008 databases on Managed PostgreSQL over the VPC, and Object Storage holds 158 evidence bundles and pre-apply backups. Spent so far: $31.33 of the $200 credit (bench/vultr.json).
 
 Every LLM call goes to Vultr Serverless Inference, on VX1, Cloud Compute, Managed PostgreSQL, Object Storage and a VPC. It ships as a web app, an MCP server, a CLI and a GitHub Action.
 

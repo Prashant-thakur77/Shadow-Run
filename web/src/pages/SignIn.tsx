@@ -117,8 +117,9 @@ export function SignInPage({ linkedPage = false }: { linkedPage?: boolean }) {
     const el = ctaRef.current;
     if (!el) return;
     const box = el.getBoundingClientRect();
-    setCtaOffscreen(box.bottom <= 0 || box.top >= window.innerHeight);
-    const observer = new IntersectionObserver(([entry]) => setCtaOffscreen(!entry.isIntersecting));
+    // Partly below the fold counts as off screen, so on a short laptop the nav's copy of the button shows.
+    setCtaOffscreen(box.top < 0 || box.bottom > window.innerHeight);
+    const observer = new IntersectionObserver(([entry]) => setCtaOffscreen(entry.intersectionRatio < 0.99), { threshold: [0, 0.5, 0.99, 1] });
     observer.observe(el);
     return () => observer.disconnect();
   }, [guestOff]);
@@ -180,6 +181,9 @@ export function SignInPage({ linkedPage = false }: { linkedPage?: boolean }) {
             </a>
             <a href="#results" onClick={jump}>
               Results
+            </a>
+            <a href="#vultr" onClick={jump}>
+              On Vultr
             </a>
             <a href="#who-pays" onClick={jump}>
               Who pays

@@ -1,16 +1,16 @@
 {
-  "at": "2026-11-07T17:44:21Z",
+  "at": "2026-11-07T21:50:34Z",
   "rehearsals": 50,
   "all_contained": true,
   "all_teardown_ok": true,
-  "rehearsal_ms_p50": 3032.2,
-  "clone_boot_ms_p50": 1182.4,
-  "wall_s": 125.2,
+  "rehearsal_ms_p50": 3135.0,
+  "clone_boot_ms_p50": 1194.6,
+  "wall_s": 133.2,
   "statuses": {
-    "blocked": 28,
-    "awaiting_approval": 22
+    "awaiting_approval": 22,
+    "blocked": 28
   },
   "prod_unchanged": true,
-  "leftover_check_raw": "ted_at\": \"2026-11-07T13:34:03.318540322+00:00\",\n    \"image\": \"sr-host:0.1\",\n    \"name\": \"sr-prodhost-bc3a23eaadb80\",\n    \"status\": \"Stopped\"\n  },\n  {\n    \"created_at\": \"2026-11-06T21:52:25.999952962+00:00\",\n    \"image\": \"sr-host:0.1\",\n    \"name\": \"sr-prodhost-demo\",\n    \"status\": \"Stopped\"\n  }\n]\n0\n0",
+  "leftover_check_raw": "\"2026-11-07T13:39:29.965164830+00:00\",\n    \"image\": \"sr-host:0.1\",\n    \"name\": \"sr-prodhost-b7e76fa1b0a8f\",\n    \"status\": \"Stopped\"\n  },\n  {\n    \"created_at\": \"2026-11-07T13:34:03.318540322+00:00\",\n    \"image\": \"sr-host:0.1\",\n    \"name\": \"sr-prodhost-bc3a23eaadb80\",\n    \"status\": \"Stopped\"\n  }\n]\n0\n0",
   "rerun": "python scripts/soak.py --n 50"
 }

@@ -7,6 +7,7 @@ import { num } from '../lib/format';
  * reading that fails shows nothing rather than an old one. */
 export function LiveStrip() {
   const [h, setH] = useState<Health | null>(null);
+  const [read, setRead] = useState(false);
   useEffect(() => {
     let stop = false;
     const read = () => {
@@ -14,7 +15,8 @@ export function LiveStrip() {
       api
         .health()
         .then((x) => !stop && setH(x))
-        .catch(() => !stop && setH(null));
+        .catch(() => !stop && setH(null))
+        .finally(() => !stop && setRead(true));
     };
     read();
     const t = window.setInterval(read, 20000);
@@ -23,6 +25,8 @@ export function LiveStrip() {
       window.clearInterval(t);
     };
   }, []);
+  // Until the first reading, hold the strip's one line so the hero doesn't jump when it arrives.
+  if (!read) return <div className="live-strip is-waiting" aria-hidden="true" />;
   if (!h?.ok) return null;
   const host = h.runner?.host;
   const fw = h.runner?.firewall;

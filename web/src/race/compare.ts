@@ -126,6 +126,14 @@ const tableDeleted = (name: string) => (r: Report) => r.tables?.find((t) => t.ta
 const isQuiet = (c: Cell) => !!c.word || c.text === '0' || c.text.startsWith('0 of');
 
 /** The table that lands as the lanes finish. Rows with nothing to say on either side leave once both sides are in. */
+/** The first sentence of an agent's refusal, for the verdict. Its whole answer stays in its lane, so it isn't printed twice. */
+function gist(reason: string | null | undefined, lane: 'left' | 'right'): string | null {
+  if (!reason) return null;
+  const first = reason.split(/(?<=[.!?])\s+/)[0] ?? reason;
+  const short = first.length > 180 ? `${first.slice(0, 177).trimEnd()}…` : first;
+  return short === reason ? reason : `${short} The agent's whole answer is under the ${lane} lane.`;
+}
+
 export function verdictRows(a: Lane, b: Lane): VerdictRow[] {
   const metric = (id: string, label: string, lead = false): VerdictRow => ({ key: id, label, alone: metricCell(a, id), through: metricCell(b, id), lead });
   const count = (key: string, label: string, read: (r: Report) => number | null | undefined): VerdictRow => ({ key, label, alone: countCell(a, read), through: countCell(b, read) });
@@ -228,7 +236,7 @@ export function verdict(a: Lane, b: Lane): Verdict | null {
   if (b.refused) {
     const big = list.find((h) => h.alone > 0);
     const caught = (b.run?.attempts ?? []).find((x) => x.verdict === 'evaded_rule');
-    const why = [b.refused.reason, caught ? `On attempt ${num(caught.n)} its plan got around a rule it had broken, so it went back. Then the agent stopped.` : null];
+    const why = [gist(b.refused.reason, 'right'), caught ? `On attempt ${num(caught.n)} its plan got around a rule it had broken, so it went back. Then the agent stopped.` : null];
     if (a.report && big && big.format === money && !a.refused) {
       const lines = [...why, 'Through Shadow Run nothing reached prod, and the task is not done: the agent stopped and said why.'].filter((l): l is string => !!l);
       return {
@@ -239,17 +247,17 @@ export function verdict(a: Lane, b: Lane): Verdict | null {
         figures: { label: big.label, alone: `−${money(big.alone)}`, through: '$0', better: true },
       };
     }
-    const lines = [b.refused.reason, a.refused ? 'Neither lane ended with a plan that changes anything, and nothing reached prod.' : 'Through Shadow Run it ended with no plan that changes anything, and nothing reached prod.'].filter((l): l is string => !!l);
+    const lines = [gist(b.refused.reason, 'right'), a.refused ? 'Neither lane ended with a plan that changes anything, and nothing reached prod.' : 'Through Shadow Run it ended with no plan that changes anything, and nothing reached prod.'].filter((l): l is string => !!l);
     if (a.report && big) lines.push(big.format === money ? `On its first try, the agent alone would have lost ${money(big.alone)} of ${big.label}.` : `On its first try, the agent alone wrote a plan: ${big.format(big.alone)} ${big.label}.`);
     return { tone: leftHarm ? 'caution' : 'neutral', title: 'The agent refused this request.', lines, doubt: null };
   }
 
   if (a.refused && !held) {
-    return { tone: 'neutral', title: 'The agent refused this request on its first try.', lines: [a.refused.reason, 'Through Shadow Run it ended with nothing a person could approve, and nothing reached prod.'].filter((l): l is string => !!l), doubt };
+    return { tone: 'neutral', title: 'The agent refused this request on its first try.', lines: [gist(a.refused.reason, 'left'), 'Through Shadow Run it ended with nothing a person could approve, and nothing reached prod.'].filter((l): l is string => !!l), doubt };
   }
 
   if (a.refused && held) {
-    const lines = [a.refused.reason, `Through Shadow Run the agent wrote a plan. After ${tries(b)} it ${brokeWord(b)} and waits for a person.`].filter((l): l is string => !!l);
+    const lines = [gist(a.refused.reason, 'left'), `Through Shadow Run the agent wrote a plan. After ${tries(b)} it ${brokeWord(b)} and waits for a person.`].filter((l): l is string => !!l);
     return { tone: 'neutral', title: `The agent refused on its first try. Through Shadow Run, its plan changes ${rowsChanged(b)}.`, lines, doubt };
   }
 

@@ -394,6 +394,10 @@
   text-overflow: ellipsis;
   visibility: hidden;
 }
+/* The table names are there from the start, dim; a row lights up when its table floods. */
+.bp-row .bp-row-table {
+  visibility: visible;
+}
 .bp-row.is-on .bp-row-table {
   color: var(--ink);
   visibility: visible;
@@ -1138,6 +1142,14 @@
   .pays-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* Stacked, each block needs its own air: the figure under the paragraph, the next list under the sources. */
+  .pays-top,
+  .pays-split {
+    row-gap: var(--s-5);
+  }
+  .pays-side {
+    margin-top: var(--s-2);
+  }
   .pays-links .btn {
     min-height: 44px;
   }
@@ -1223,4 +1235,84 @@
 .bp-svg {
   max-width: 100%;
   height: auto;
+}
+.hh-stat {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+/* The idea, said once, large. */
+.thesis {
+  padding: var(--s-8) 0 var(--s-6);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.thesis-line {
+  display: grid;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(34px, 5.2vw, 84px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.thesis-two {
+  color: var(--good);
+}
+.thesis-why {
+  max-width: 62ch;
+  margin: var(--s-5) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-l, 19px);
+  line-height: 1.5;
+}
+.stack-word-clone {
+  fill: var(--ink);
+}
+/* The demand, as one sourced figure, beside who pays. */
+.pays-side {
+  display: grid;
+  gap: var(--s-4);
+  justify-items: end;
+  align-self: end;
+}
+.pays-stat {
+  margin: 0;
+  max-width: 34ch;
+  text-align: right;
+}
+.pays-stat-n {
+  display: block;
+  color: var(--bad);
+  font-size: clamp(56px, 7vw, 104px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+.pays-stat figcaption {
+  margin-top: var(--s-2);
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.45;
+}
+@media (max-width: 760px) {
+  .pays-side {
+    justify-items: start;
+  }
+  .pays-stat {
+    text-align: left;
+  }
+}
+
+/* Labels in the blueprint sit on a halo of the page colour, so a connector or the hatching passing under a label never
+   cuts through its letters. */
+.bp-svg text {
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+/* A flooded room prints its label dark on solid red, where nothing crosses it, so it needs no halo. */
+.bp-svg .is-flooded:not(.is-tiny):not(.is-damaged-room) text {
+  stroke: none;
 }

@@ -1,10 +1,10 @@
 {
  "schema": "shadowrun.vultr/1",
- "at": "2026-11-07T17:47:39Z",
+ "at": "2026-11-07T21:51:16Z",
  "rerun": "python -m bench.vultr_usage",
  "read_only": "GET requests to api.vultr.com/v2 and the inference catalogue, and one S3 listing. Nothing created, changed or deleted.",
  "benchmark": {
-  "code_sha256": "40ffd2bb1e3116a8f9d305fc5e89c89cb292a4d28f34101b3140ca9dee78c372",
+  "code_sha256": "093f7b924f5d4454bc718688e7b6b55f7918a4f5f3d516dbc077346600ccaf73",
   "code_matches_checkout": true,
   "files": [
    {
@@ -12,60 +12,60 @@
     "runs": "bench/runs.controls.jsonl",
     "label": "controls",
     "planner_model": "qwen3.8-27b",
-    "at": "2026-11-07T14:30:28Z",
+    "at": "2026-11-07T19:15:59Z",
     "status": "measured",
     "runs_in_results": 204,
-    "code_sha256": "40ffd2bb1e31"
+    "code_sha256": "093f7b924f5d"
    },
    {
     "results": "bench/results.deepseek-v4.1-flash-1017.json",
     "runs": "bench/runs.deepseek-v4.1-flash-1017.jsonl",
     "label": "deepseek-v4.1-flash-1017",
     "planner_model": "deepseek-v4.1-flash-1017",
-    "at": "2026-11-07T16:34:41Z",
+    "at": "2026-11-07T21:10:59Z",
     "status": "measured",
     "runs_in_results": 90,
-    "code_sha256": "40ffd2bb1e31"
+    "code_sha256": "093f7b924f5d"
    },
    {
     "results": "bench/results.glm-5.3.json",
     "runs": "bench/runs.glm-5.3.jsonl",
     "label": "glm-5.3",
     "planner_model": "glm-5.3",
-    "at": "2026-11-07T16:25:20Z",
+    "at": "2026-11-07T21:02:13Z",
     "status": "measured",
     "runs_in_results": 90,
-    "code_sha256": "40ffd2bb1e31"
+    "code_sha256": "093f7b924f5d"
    },
    {
     "results": "bench/results.json",
     "runs": "bench/runs.jsonl",
     "label": "main",
     "planner_model": "qwen3.8-27b",
-    "at": "2026-11-07T13:48:19Z",
+    "at": "2026-11-07T18:31:05Z",
     "status": "measured",
     "runs_in_results": 540,
-    "code_sha256": "40ffd2bb1e31"
+    "code_sha256": "093f7b924f5d"
    },
    {
     "results": "bench/results.restrict.json",
     "runs": "bench/runs.restrict.jsonl",
     "label": "restrict",
     "planner_model": "qwen3.8-27b",
-    "at": "2026-11-07T14:40:41Z",
+    "at": "2026-11-07T19:26:30Z",
     "status": "measured",
     "runs_in_results": 144,
-    "code_sha256": "40ffd2bb1e31"
+    "code_sha256": "093f7b924f5d"
    },
    {
     "results": "bench/results.wider_list.json",
     "runs": "bench/runs.wider_list.jsonl",
     "label": "wider_list",
     "planner_model": "qwen3.8-27b",
-    "at": "2026-11-07T14:57:13Z",
+    "at": "2026-11-07T19:42:47Z",
     "status": "measured",
     "runs_in_results": 180,
-    "code_sha256": "40ffd2bb1e31"
+    "code_sha256": "093f7b924f5d"
    }
   ],
   "skipped": [
@@ -130,13 +130,13 @@
   "source": "bench/runs*.jsonl: per-run usage that bench/run.py sums from control/llm.py's record of each call, priced at the time from the inference catalogue",
   "base_url": "https://api.vultrinference.com/v1",
   "base_is_vultr": true,
-  "runs": 1250,
-  "harness_error_lines": 2,
+  "runs": 1249,
+  "harness_error_lines": 1,
   "models_used": 4,
-  "prompt_tokens": 7098747,
-  "completion_tokens": 2451221,
-  "tokens": 9549968,
-  "cost_usd": 3.787774,
+  "prompt_tokens": 6912135,
+  "completion_tokens": 2439270,
+  "tokens": 9351405,
+  "cost_usd": 3.757774,
   "by_phase": [
    {
     "phase": "planner",
@@ -145,7 +145,7 @@
      "glm-5.3",
      "qwen3.8-27b"
     ],
-    "cost_usd": 3.502612,
+    "cost_usd": 3.490738,
     "runs_with_calls": 1248
    },
    {
@@ -153,31 +153,30 @@
     "models": [
      "qwen3.8-27b"
     ],
-    "cost_usd": 0.265068,
-    "runs_with_calls": 459
+    "cost_usd": 0.251286,
+    "runs_with_calls": 457
    },
    {
     "phase": "second_opinion",
     "models": [
      "glm-5.3-flash"
     ],
-    "cost_usd": 0.011558,
+    "cost_usd": 0.01109,
     "runs_with_calls": 142
    },
    {
     "phase": "planner_repair",
     "models": [
-     "deepseek-v4.1-flash-1017",
      "qwen3.8-27b"
     ],
-    "cost_usd": 0.008546,
-    "runs_with_calls": 13
+    "cost_usd": 0.004645,
+    "runs_with_calls": 10
    }
   ],
   "by_model": [
    {
     "model": "qwen3.8-27b",
-    "cost_usd": 3.062238,
+    "cost_usd": 3.028104,
     "phases": [
      "explainer",
      "planner",
@@ -186,22 +185,21 @@
    },
    {
     "model": "glm-5.3",
-    "cost_usd": 0.487228,
+    "cost_usd": 0.497549,
     "phases": [
      "planner"
     ]
    },
    {
     "model": "deepseek-v4.1-flash-1017",
-    "cost_usd": 0.22676,
+    "cost_usd": 0.221016,
     "phases": [
-     "planner",
-     "planner_repair"
+     "planner"
     ]
    },
    {
     "model": "glm-5.3-flash",
-    "cost_usd": 0.011558,
+    "cost_usd": 0.01109,
     "phases": [
      "second_opinion"
     ]
@@ -211,80 +209,80 @@
    {
     "planner_model": "qwen3.8-27b",
     "runs": 1069,
-    "prompt_tokens": 5959369,
-    "completion_tokens": 2155593,
-    "cost_usd": 3.039554,
-    "tokens": 8114962
-   },
-   {
-    "planner_model": "glm-5.3",
-    "runs": 91,
-    "prompt_tokens": 503574,
-    "completion_tokens": 56570,
-    "cost_usd": 0.50428,
-    "tokens": 560144
+    "prompt_tokens": 5785972,
+    "completion_tokens": 2148434,
+    "cost_usd": 3.006754,
+    "tokens": 7934406
    },
    {
     "planner_model": "deepseek-v4.1-flash-1017",
     "runs": 90,
-    "prompt_tokens": 635804,
-    "completion_tokens": 239058,
-    "cost_usd": 0.24394,
-    "tokens": 874862
+    "prompt_tokens": 617204,
+    "completion_tokens": 232664,
+    "cost_usd": 0.236849,
+    "tokens": 849868
+   },
+   {
+    "planner_model": "glm-5.3",
+    "runs": 90,
+    "prompt_tokens": 508959,
+    "completion_tokens": 58172,
+    "cost_usd": 0.514171,
+    "tokens": 567131
    }
   ],
   "by_file": [
    {
     "runs_file": "bench/runs.controls.jsonl",
     "runs": 204,
-    "prompt_tokens": 1067358,
-    "completion_tokens": 386183,
-    "cost_usd": 0.546288
+    "prompt_tokens": 1056964,
+    "completion_tokens": 396886,
+    "cost_usd": 0.555436
    },
    {
     "runs_file": "bench/runs.deepseek-v4.1-flash-1017.jsonl",
     "runs": 90,
-    "prompt_tokens": 635804,
-    "completion_tokens": 239058,
-    "cost_usd": 0.24394
+    "prompt_tokens": 617204,
+    "completion_tokens": 232664,
+    "cost_usd": 0.236849
    },
    {
     "runs_file": "bench/runs.glm-5.3.jsonl",
-    "runs": 91,
-    "prompt_tokens": 503574,
-    "completion_tokens": 56570,
-    "cost_usd": 0.50428
+    "runs": 90,
+    "prompt_tokens": 508959,
+    "completion_tokens": 58172,
+    "cost_usd": 0.514171
    },
    {
     "runs_file": "bench/runs.jsonl",
-    "runs": 541,
-    "prompt_tokens": 2713494,
-    "completion_tokens": 1025189,
-    "cost_usd": 1.428374
+    "runs": 540,
+    "prompt_tokens": 2615913,
+    "completion_tokens": 1052886,
+    "cost_usd": 1.441004
    },
    {
     "runs_file": "bench/runs.restrict.jsonl",
     "runs": 144,
-    "prompt_tokens": 1054265,
-    "completion_tokens": 288695,
-    "cost_usd": 0.444927
+    "prompt_tokens": 1014718,
+    "completion_tokens": 267347,
+    "cost_usd": 0.41809
    },
    {
     "runs_file": "bench/runs.wider_list.jsonl",
-    "runs": 180,
-    "prompt_tokens": 1124252,
-    "completion_tokens": 455526,
-    "cost_usd": 0.619965
+    "runs": 181,
+    "prompt_tokens": 1098377,
+    "completion_tokens": 431315,
+    "cost_usd": 0.592224
    }
   ],
   "calls_at_least": {
-   "planner": 2118,
-   "explainer": 636,
-   "evasion_reader": 152,
+   "planner": 2086,
+   "explainer": 625,
+   "evasion_reader": 147,
    "how": "bench/run.py keeps tokens per run and cost per phase, not each call. Each recorded attempt asked the planner at least once; each rehearsed shadow_run attempt that reached a report was explained once; each recorded evasion check asked the second reader once. Reads, JSON repairs and retries on an empty reply add calls these counts leave out."
   },
   "price_check": {
-   "runs_checked": 1065,
+   "runs_checked": 1068,
    "max_abs_diff_usd": 1e-06,
    "how": "runs whose calls all went to one model, repriced with today's catalogue and compared with the cost the run recorded"
   },
@@ -292,26 +290,26 @@
  },
  "microvms": {
   "source": "bench/runs*.jsonl, shadow_run mode: one entry per rehearsed attempt in rehearsal_ms, clone_boot_ms and contained",
-  "rehearsals": 774,
-  "reproductions": 445,
-  "total": 1219,
-  "containment_complete": 769,
-  "containment_incomplete": 5,
+  "rehearsals": 765,
+  "reproductions": 433,
+  "total": 1198,
+  "containment_complete": 761,
+  "containment_incomplete": 4,
   "clone_boot_ms": {
-   "p50": 1234.7,
-   "p95": 2115.5,
-   "n": 769
+   "p50": 1230.9,
+   "p95": 2160.7,
+   "n": 761
   },
   "rehearsal_s": {
-   "p50": 3.3,
-   "p95": 4.89,
-   "n": 774
+   "p50": 3.24,
+   "p95": 4.8,
+   "n": 765
   },
   "by_file": [
    {
     "runs_file": "bench/runs.deepseek-v4.1-flash-1017.jsonl",
-    "rehearsals": 42,
-    "reproductions": 28
+    "rehearsals": 39,
+    "reproductions": 26
    },
    {
     "runs_file": "bench/runs.glm-5.3.jsonl",
@@ -320,30 +318,30 @@
    },
    {
     "runs_file": "bench/runs.jsonl",
-    "rehearsals": 282,
-    "reproductions": 160
+    "rehearsals": 277,
+    "reproductions": 157
    },
    {
     "runs_file": "bench/runs.restrict.jsonl",
-    "rehearsals": 121,
-    "reproductions": 66
+    "rehearsals": 116,
+    "reproductions": 63
    },
    {
     "runs_file": "bench/runs.wider_list.jsonl",
-    "rehearsals": 281,
-    "reproductions": 162
+    "rehearsals": 285,
+    "reproductions": 158
    }
   ],
   "how_reproductions": "control/agent.py runs a second microVM when an attempt passes every guardrail and changed something. The runs files don't keep that second run, so it is counted from what they keep: every evaded_rule attempt, a final passed attempt whose totals show a change, and a measurement-gap error with no failed guardrail.",
   "not_counted": "The agent's read queries and each task's schema inspection also run in one-shot microVMs. The benchmark doesn't record them, so they aren't in these counts.",
   "soak": {
-   "at": "2026-11-07T17:44:21Z",
+   "at": "2026-11-07T21:50:34Z",
    "rehearsals": 50,
    "all_contained": true,
    "all_teardown_ok": true,
-   "rehearsal_ms_p50": 3032.2,
-   "clone_boot_ms_p50": 1182.4,
-   "wall_s": 125.2,
+   "rehearsal_ms_p50": 3135.0,
+   "clone_boot_ms_p50": 1194.6,
+   "wall_s": 133.2,
    "prod_unchanged": true,
    "rerun": "python scripts/soak.py --n 50",
    "source": "bench/soak.json"
@@ -354,15 +352,15 @@
    "contained": 7,
    "prod_unchanged": true,
    "golden_unchanged": true,
-   "at": 1794072903.9172366
+   "at": 1794087674.7291424
   },
   "scale": {
    "source": "bench/scale.json",
-   "at": "2026-11-07T16:25:01Z",
+   "at": "2026-11-07T21:01:49Z",
    "largest_db_mb_rehearsed": 1019,
    "its_rows_changed": 1463901,
-   "its_rehearsal_s": 56.16,
-   "its_clone_boot_ms": 990.1
+   "its_rehearsal_s": 55.62,
+   "its_clone_boot_ms": 993.2
   }
  },
  "models": [
@@ -479,15 +477,15 @@
   "benchmark": {
    "source": "bench/runs*.jsonl, target postgres: one CREATE DATABASE ... TEMPLATE per run and a DROP DATABASE in finally (bench/run.py run_sql_task, bench/seeddb.py)",
    "databases_created": 1008,
-   "dropped": 1004,
-   "drop_failed": 4,
-   "harness_errors_not_counted": 2,
+   "dropped": 1006,
+   "drop_failed": 2,
+   "harness_errors_not_counted": 1,
    "templates_at_least": 192,
    "by_file": [
     {
      "runs_file": "bench/runs.controls.jsonl",
      "databases": 204,
-     "drop_failed": 1,
+     "drop_failed": 0,
      "templates_at_least": 34
     },
     {
@@ -505,7 +503,7 @@
     {
      "runs_file": "bench/runs.jsonl",
      "databases": 387,
-     "drop_failed": 2,
+     "drop_failed": 0,
      "templates_at_least": 43
     },
     {
@@ -517,7 +515,7 @@
     {
      "runs_file": "bench/runs.wider_list.jsonl",
      "databases": 129,
-     "drop_failed": 0,
+     "drop_failed": 1,
      "templates_at_least": 43
     }
    ],
@@ -542,12 +540,12 @@
    "by_prefix": [
     {
      "prefix": "bt",
-     "count": 81,
+     "count": 78,
      "what": "a benchmark task's template (bench/seeddb.py make_template)"
     },
     {
      "prefix": "b",
-     "count": 18,
+     "count": 21,
      "what": "one benchmark run's own copy (bench/seeddb.py new_db_from_template)"
     },
     {
@@ -563,17 +561,17 @@
    ],
    "usage": {
     "disk": {
-     "current_gb": 6.96,
+     "current_gb": 8.92,
      "max_gb": 55,
-     "percentage": 12.65
+     "percentage": 16.21
     },
     "memory": {
-     "current_mb": 1245,
+     "current_mb": 1241,
      "max_mb": 2048,
-     "percentage": 60.78
+     "percentage": 60.6
     },
     "cpu": {
-     "percentage": 32.95
+     "percentage": 54.48
     }
    },
    "note": "Logical databases listed now. Benchmark copies and templates still here are ones a stopped or resumed run didn't drop."
@@ -582,24 +580,24 @@
  "object_storage": {
   "source": "S3 ListObjectsV2 on shadowrun-evidence-7c6c0562 at sjc1.vultrobjects.com",
   "bucket": "shadowrun-evidence-7c6c0562",
-  "objects": 138,
-  "bytes": 96226602,
+  "objects": 158,
+  "bytes": 110567776,
   "by_prefix": [
    {
     "prefix": "backups",
-    "objects": 69,
-    "bytes": 85504062,
+    "objects": 79,
+    "bytes": 97892808,
     "what": "pg_dump of prod taken before each apply (control/evidence.py backup_prod)"
    },
    {
     "prefix": "runs",
-    "objects": 69,
-    "bytes": 10722540,
+    "objects": 79,
+    "bytes": 12674968,
     "what": "signed evidence bundle per run (control/evidence.py write_bundle)"
    }
   ],
   "first_written": "2026-11-06T07:43:10Z",
-  "last_written": "2026-11-07T17:41:03Z"
+  "last_written": "2026-11-07T21:47:24Z"
  },
  "resources": {
   "source": "GET /v2/instances, /v2/plans, /v2/databases, /v2/object-storage, /v2/vpcs, /v2/firewalls, filtered to resources tagged or labelled shadowrun",
@@ -702,10 +700,10 @@
  "spend": {
   "budget": {
    "ceiling_usd": 200.0,
-   "spent_usd": 26.21,
-   "credit_left_usd": 173.79,
+   "spent_usd": 31.33,
+   "credit_left_usd": 168.67,
    "burn_usd_per_hour": 0.246,
-   "days_left_at_this_burn": 29.5,
+   "days_left_at_this_burn": 28.6,
    "resources": [
     {
      "resource": "shadowrun-control",
@@ -728,7 +726,7 @@
     }
    ],
    "inference_pending_usd": [
-    14.89
+    18.99
    ],
    "state_region": "sea",
    "source": "infra/budget.py (GET /v2/account, /v2/plans, /v2/instances, /v2/databases, /v2/object-storage, /v2/inference)",
@@ -736,26 +734,26 @@
   },
   "billed": {
    "source": "GET /v2/billing/pending-charges and /v2/billing/history",
-   "total_usd": 26.21,
+   "total_usd": 31.33,
    "by_product": [
     {
      "product": "Vultr Serverless Inference Usage",
-     "usd": 14.89,
+     "usd": 18.99,
      "lines": 1
     },
     {
      "product": "Vultr Cloud Compute",
-     "usd": 8.42,
+     "usd": 9.15,
      "lines": 4
     },
     {
      "product": "Managed PostgreSQL",
-     "usd": 1.66,
+     "usd": 1.84,
      "lines": 2
     },
     {
      "product": "Object Storage",
-     "usd": 1.24,
+     "usd": 1.35,
      "lines": 2
     }
    ],
@@ -763,47 +761,47 @@
     {
      "product": "Vultr Cloud Compute",
      "resource": "shadowrun-control",
-     "usd": 1.31,
-     "units": 44,
+     "usd": 1.43,
+     "units": 48,
      "unit_type": "hours",
      "start": "2026-11-05T22:32:35+00:00",
-     "end": "2026-11-07T17:48:01+00:00"
+     "end": "2026-11-07T21:51:38+00:00"
     },
     {
      "product": "Vultr Cloud Compute",
      "resource": "shadowrun-vx1",
-     "usd": 6.74,
-     "units": 44,
+     "usd": 7.35,
+     "units": 48,
      "unit_type": "hours",
      "start": "2026-11-05T22:32:37+00:00",
-     "end": "2026-11-07T17:48:01+00:00"
+     "end": "2026-11-07T21:51:38+00:00"
     },
     {
      "product": "Object Storage",
      "resource": "shadowrun",
-     "usd": 1.18,
-     "units": 44,
+     "usd": 1.29,
+     "units": 48,
      "unit_type": "hours",
      "start": "2026-11-05T22:32:36+00:00",
-     "end": "2026-11-07T17:48:01+00:00"
+     "end": "2026-11-07T21:51:38+00:00"
     },
     {
      "product": "Managed PostgreSQL",
      "resource": "shadowrun-prod",
-     "usd": 1.57,
-     "units": 35,
+     "usd": 1.75,
+     "units": 39,
      "unit_type": "hours",
      "start": "2026-11-06T07:21:56+00:00",
-     "end": "2026-11-07T17:48:01+00:00"
+     "end": "2026-11-07T21:51:38+00:00"
     },
     {
      "product": "Vultr Serverless Inference Usage",
      "resource": "shadowrun",
-     "usd": 14.89,
-     "units": 36,
+     "usd": 18.99,
+     "units": 46,
      "unit_type": "hours",
      "start": "2026-11-05T20:40:27+00:00",
-     "end": "2026-11-07T17:48:01+00:00"
+     "end": "2026-11-07T21:51:38+00:00"
     },
     {
      "product": "Managed PostgreSQL",

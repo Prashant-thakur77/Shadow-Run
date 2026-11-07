@@ -446,3 +446,32 @@ async def test_a_race_id_cant_read_other_stored_values(svc, monkeypatch):
         assert TestClient(api.app).get("/api/race/undo:r:1").status_code == 404
     finally:
         api.app.dependency_overrides.clear()
+
+
+async def test_a_slow_race_can_point_at_a_recorded_one(svc, monkeypatch):
+    monkeypatch.setattr(api, "svc", lambda: svc)
+    api.app.dependency_overrides[auth.current_user] = lambda: "judge"
+    try:
+        c = TestClient(api.app)
+        assert c.get("/api/race/recorded").status_code == 404
+        clean, *_ = await finish(svc, "Nothing breaks")
+        svc.runner.rec = rehearsal(guard_passed=False)
+        broke, *_ = await finish(svc, "Something breaks")
+        svc.runner.rec = rehearsal()
+        await finish(svc, "Newest, nothing breaks")
+        # One still running and one that failed are never offered.
+        running, *_ = await finish(svc, "Still going")
+        failed, *_ = await finish(svc, "Failed")
+        for race, status in ((running, "rehearsing"), (failed, "error")):
+            lane = svc.store.get_run(race["through"])
+            lane["status"] = status
+            svc.store.save_run(lane)
+        got = c.get("/api/race/recorded").json()
+        assert got["id"] == broke["id"] and got["left_lane_broke_a_rule"] is True
+        assert got["races_timed"] == 3 and got["typical_seconds"] is not None
+        assert running["id"] not in {r["id"] for r in api.finished_races(svc.store)}
+        assert clean["id"] in {r["id"] for r in api.finished_races(svc.store)}
+    finally:
+        while svc._tasks:
+            await asyncio.gather(*list(svc._tasks))
+        api.app.dependency_overrides.clear()

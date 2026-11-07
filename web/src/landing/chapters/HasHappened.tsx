@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import type { Incident, Receipt } from '../../api/types';
+import type { Incident, Market, Receipt } from '../../api/types';
 import { asText, whenAny } from '../../lib/format';
 import { Link } from '../../lib/router';
 import { Mark } from '../../ui/bits';
@@ -102,7 +102,7 @@ function Slide({ incident, receipt }: { incident: Incident; receipt: Receipt | u
   );
 }
 
-export function HasHappened({ incidents, receipts, loading }: { incidents: Incident[] | null; receipts: Receipt[] | undefined; loading: boolean }) {
+export function HasHappened({ incidents, receipts, loading, market }: { incidents: Incident[] | null; receipts: Receipt[] | undefined; loading: boolean; market?: Market | null }) {
   const mode = useMode();
   const ref = useRef<HTMLElement>(null);
   const [index, setIndex] = useState(0);
@@ -118,7 +118,27 @@ export function HasHappened({ incidents, receipts, loading }: { incidents: Incid
     },
   });
 
-  const head = <ChapterHead id="happened-title" label="It has happened" title="Real commands. Real systems." />;
+  const ai = market?.agent_incidents;
+  const head = (
+    <ChapterHead
+      id="happened-title"
+      label="It has happened"
+      title="Real commands. Real systems."
+      lead={
+        ai?.unexpected_or_unauthorized_pct ? (
+          <>
+            <span className="mono hh-stat">{ai.unexpected_or_unauthorized_pct}%</span> of the professionals {ai.source?.split(',')[0]} surveyed in October 2026 confirmed or suspected an AI agent acting unexpectedly or without authorization. Only{' '}
+            <span className="mono hh-stat">{ai.can_stop_automatically_pct}%</span> could stop one automatically.{' '}
+            {ai.url && (
+              <a href={ai.url} target="_blank" rel="noreferrer">
+                The survey
+              </a>
+            )}
+          </>
+        ) : undefined
+      }
+    />
+  );
   const none = !loading && chosen.length === 0;
 
   if (mode !== 'pinned' || none) {

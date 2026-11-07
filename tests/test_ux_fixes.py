@@ -493,3 +493,24 @@ def test_a_server_that_isnt_there_is_one_line(monkeypatch, capsys):
     monkeypatch.setattr(cli, "client", fake(down))
     assert cli.main(["status", "r1"]) == 1
     assert "can't reach" in one_line(capsys)
+
+
+def test_runs_in_flight_at_startup_are_marked_interrupted():
+    from control import api
+
+    class Store:
+        def __init__(self):
+            self.runs = [{"id": "a", "status": "rehearsing"}, {"id": "b", "status": "awaiting_approval"}, {"id": "c", "status": "applying"}]
+            self.saved = []
+
+        def list_runs(self, limit):
+            return self.runs
+
+        def save_run(self, run):
+            self.saved.append(run["id"])
+
+    s = Store()
+    assert api.mark_interrupted(s) == 2
+    assert s.saved == ["a", "c"]
+    assert s.runs[0]["status"] == "error" and "restarted" in s.runs[0]["error"]
+    assert s.runs[1]["status"] == "awaiting_approval"

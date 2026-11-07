@@ -154,7 +154,7 @@ function Stack({ hero, svgRef, compact }: { hero: PublicHero | null; svgRef?: Re
       <g className="stack-prod">
         <Slab w={300} d={300} h={36} className="slab slab-prod" />
         <TopDots w={300} d={300} h={36} n={13} className="dots" />
-        <text className="stack-word" x="0" y="30" transform="matrix(.866 .5 -.866 .5 0 -2)" textAnchor="middle">
+        <text className="stack-word" x="40" y="128" transform="matrix(.866 .5 -.866 .5 0 -2)" textAnchor="middle">
           PROD
         </text>
       </g>
@@ -164,6 +164,10 @@ function Stack({ hero, svgRef, compact }: { hero: PublicHero | null; svgRef?: Re
         <g data-l="hurt" style={{ opacity: 0 }}>
           <Slab w={300} d={300} h={10} className="slab slab-hurt" />
         </g>
+        {/* Named on its own face, so the red layer reads as the clone and never as prod. */}
+        <text className="stack-word stack-word-clone" x="40" y="128" transform="matrix(.866 .5 -.866 .5 0 24)" textAnchor="middle">
+          CLONE
+        </text>
       </g>
       {g && g.total > 0 && <Pins passed={g.passed} total={g.total} />}
       <g data-l="gate">

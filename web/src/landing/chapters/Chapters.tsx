@@ -9,6 +9,7 @@ import { GotAroundChapter } from './GotAroundChapter';
 import { HasHappened } from './HasHappened';
 import { Results } from './Results';
 import { TheRun } from './TheRun';
+import { Thesis } from './Thesis';
 import { TryToBreak } from './TryToBreak';
 import { VultrChapter } from './VultrChapter';
 import { WhoPays } from './WhoPays';
@@ -24,7 +25,8 @@ export default function Chapters() {
   const items = receipts.data?.items;
   return (
     <div className="land-rest">
-      <HasHappened incidents={incidents.data} receipts={items} loading={incidents.loading} />
+      <Thesis />
+      <HasHappened incidents={incidents.data} receipts={items} loading={incidents.loading} market={market.data} />
       <Blueprint hero={hero} />
       <TheRun hero={hero} example={info?.applied_example ?? null} />
       <TryToBreak receipts={items} loading={receipts.loading} />

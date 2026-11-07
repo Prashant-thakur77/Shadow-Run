@@ -410,6 +410,14 @@ export interface Race {
   through: string;
 }
 
+/** The newest race that finished, offered when a visitor's own race is slow, with the median time of recent races. */
+export interface RecordedRace extends Race {
+  seconds?: number | null;
+  left_lane_broke_a_rule?: boolean;
+  typical_seconds?: number | null;
+  races_timed?: number;
+}
+
 /** What "change prod behind its back" would write for this run, from what its rehearsal touched. */
 export interface DriftPlan {
   host?: boolean;
@@ -770,6 +778,7 @@ export interface Market {
   agents_market?: { usd_b_2025?: number; usd_b_2033?: number; source?: string; url?: string };
   guardian_share?: { low_pct?: number; high_pct?: number; by_year?: number; source?: string; url?: string };
   developers_using_agents?: { weekly_pct?: number; daily_pct?: number; respondents?: string; source?: string; url?: string };
+  agent_incidents?: { unexpected_or_unauthorized_pct?: number; of_those_modified_or_deleted_data_pct_over?: number; can_stop_automatically_pct?: number; respondents?: string; source?: string; url?: string };
   postgres_companies?: { count?: number; source?: string; url?: string; caveat?: string };
   price?: { usd_per_database_month?: number; label?: string };
   derived?: { tam_how?: string; sam_usd_b_per_year?: number; sam_how?: string; first_target_pct?: number; first_target_usd_m_per_year?: number };

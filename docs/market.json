@@ -21,6 +21,14 @@
   "source": "JetBrains Developer Ecosystem Survey 2026",
   "url": "https://blog.jetbrains.com/research/2026/08/ai-coding-agent-adoption-2026/"
  },
+ "agent_incidents": {
+  "unexpected_or_unauthorized_pct": 49.8,
+  "of_those_modified_or_deleted_data_pct_over": 40,
+  "can_stop_automatically_pct": 17.5,
+  "respondents": "more than 380 security and technology professionals",
+  "source": "Salt Security, State of Agentic AI and API Security 2H 2026",
+  "url": "https://campustechnology.com/articles/2026/10/21/unexpected-ai-agent-activity-reported-by-nearly-half-of-organizations-in-recent-survey.aspx"
+ },
  "postgres_companies": {
   "count": 131339,
   "source": "6sense",

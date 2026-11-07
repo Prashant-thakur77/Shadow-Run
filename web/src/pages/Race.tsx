@@ -123,7 +123,14 @@ function ProdStrip({ raceId, a, b, now }: { raceId: string | null; a: Lane; b: L
 }
 
 function CellView({ cell, lead }: { cell: Cell; lead?: boolean }) {
-  if (cell.pending) return <span className="race-cell-pending">{cell.text}</span>;
+  // Before anything is measured, a dash: sixteen copies of a sentence read as broken. Screen readers still hear the words.
+  if (cell.pending)
+    return (
+      <span className="race-cell-pending">
+        <span aria-hidden="true">–</span>
+        <span className="sr-only">{cell.text}</span>
+      </span>
+    );
   if (cell.word) {
     return (
       <span className={`race-cell-word tone-${cell.tone}`}>
@@ -632,6 +639,43 @@ function Board({ race, a, b, rows, prodNow }: { race: Race | null; a: Lane; b: L
   );
 }
 
+// A race usually settles well inside a minute. Past this, the visitor is told why and given a finished one to watch.
+const SLOW_AFTER_S = 90;
+
+/** Seconds this page has watched a race move, once that passes SLOW_AFTER_S. Counted on this clock, not the server's,
+ *  so a visitor whose clock is off never sees the notice too early. */
+function useSlow(moving: boolean): number | null {
+  const since = useRef(Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!moving) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 5000);
+    return () => window.clearInterval(timer);
+  }, [moving]);
+  const seconds = (now - since.current) / 1000;
+  return moving && seconds >= SLOW_AFTER_S ? seconds : null;
+}
+
+function SlowRace({ race, seconds }: { race: Race; seconds: number }) {
+  const recorded = useAsync(() => api.raceRecorded(), []);
+  const other = recorded.data && recorded.data.id !== race.id ? recorded.data : null;
+  const typical = recorded.data?.typical_seconds;
+  return (
+    <Notice tone="caution" title="This race is slower than usual.">
+      <p>
+        {isNum(typical) ? `The last ${num(recorded.data?.races_timed)} races here finished in about ${Math.round(typical)} s at the median.` : 'A race here usually finishes in under a minute.'} This one has been going for{' '}
+        {Math.round(seconds)} s. It keeps going, each lane shows the step it's on and every attempt as it lands, and neither lane can reach prod.
+      </p>
+      {other && (
+        <p>
+          <Link href={`/race?id=${encodeURIComponent(other.id)}`}>Watch the last race that finished</Link>
+          <span className="muted"> · recorded {when(other.created_at)}{isNum(other.seconds) ? ` · took ${Math.round(other.seconds)} s` : ''}</span>
+        </p>
+      )}
+    </Notice>
+  );
+}
+
 function LiveBoard({ race, rows }: { race: Race; rows: Record<string, number> | null }) {
   const alone = useRun(race.alone, hasStopped);
   const through = useRun(race.through, hasStopped);
@@ -643,6 +687,8 @@ function LiveBoard({ race, rows }: { race: Race; rows: Record<string, number> | 
     return tables ? Object.fromEntries(Object.entries(tables).map(([k, v]) => [k, v.rows ?? 0])) : null;
   }, [rows, alone.run?.snapshot?.tables, through.run?.snapshot?.tables]);
   const lost = alone.error ?? through.error;
+  const moving = Boolean(alone.run && through.run) && !(a.settled && b.settled);
+  const slow = useSlow(moving);
   return (
     <>
       {(alone.notFound || through.notFound) && <Notice tone="bad" title="One of this race's runs could not be found." />}
@@ -651,6 +697,7 @@ function LiveBoard({ race, rows }: { race: Race; rows: Record<string, number> | 
           {lost}
         </Notice>
       )}
+      {slow !== null && !lost && <SlowRace race={race} seconds={slow} />}
       <Board race={race} a={a} b={b} rows={shape} prodNow={null} />
     </>
   );
@@ -679,6 +726,8 @@ export function RacePage() {
   }, [user, enterAsGuest]);
 
   const prod = useAsync(() => (user ? api.prodChecksum(DEFAULT_TARGET) : Promise.resolve(null)), [user?.username, raceId]);
+  // A finished race to watch at once: for a visitor who doesn't want to wait, or when the runner is busy.
+  const recorded = useAsync(() => (user && !raceId ? api.raceRecorded().catch(() => null) : Promise.resolve(null)), [user?.username, raceId]);
   const race = useAsync<Race | null>(() => (raceId && user ? api.race(raceId) : Promise.resolve(null)), [raceId, user?.username]);
   const current = raceId && race.data?.id === raceId ? race.data : null;
 
@@ -753,6 +802,16 @@ export function RacePage() {
             {error}
           </p>
         )}
+        {recorded.data && (
+          <p className="race-recorded">
+            <Link href={`/race?id=${encodeURIComponent(recorded.data.id)}`}>Or watch the last race that finished</Link>
+            <span className="muted">
+              {' '}
+              · {when(recorded.data.created_at)}
+              {isNum(recorded.data.seconds) ? ` · took ${Math.round(recorded.data.seconds)} s` : ''}
+            </span>
+          </p>
+        )}
       </div>
     </form>
   );
@@ -772,6 +831,7 @@ export function RacePage() {
           <div className="race-head-task">
             <Label>The race</Label>
             {current ? <h1 className="race-task">{current.task}</h1> : <h1 className="race-task muted">Reading this race</h1>}
+            {current && isNum(current.created_at) && <p className="t-caption race-started">Started {when(current.created_at)}</p>}
           </div>
           <Link className="btn" href="/race">
             New race

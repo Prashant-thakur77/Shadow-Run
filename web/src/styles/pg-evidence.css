@@ -680,9 +680,11 @@
   line-height: 1;
   text-transform: uppercase;
 }
+/* A number inside the statement stays in the statement's face, so the heading reads as one line. */
 .ev-statement .mono {
-  font-weight: 300;
-  letter-spacing: -0.04em;
+  font: inherit;
+  letter-spacing: inherit;
+  font-variant-numeric: tabular-nums;
 }
 .ev-lead-line {
   max-width: 76ch;

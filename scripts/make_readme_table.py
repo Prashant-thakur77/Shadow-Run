@@ -671,27 +671,33 @@ def block_evasion() -> str:
         out.append(f"One recorded run, task `{ex['task']}`: \"{ex['request']}\"\n\n" + table(["Attempt", "Plan", "Result on the clone"], rows))
         if ex.get("harm"):
             out.append(f"The benchmark's own check, run after approving the last plan, found: {', '.join(ex['harm'])}. Every guardrail had passed.")
-    out.append(
+    # The mechanics fold away, so the finding, its example and what it changed stay on the page.
+    mech: list[str] = []
+    mech.append(
         "The two checks: **measured**, with no model, a column the plan changed that a rule it broke reads, and that the plan which broke the rule didn't change; "
-        f"and a **second model** (`{d['model']}`) reading only the plans. Either one's doubt sends the plan back. A plan a person submits gets one try, so it's never checked this way."
+        f"and a **second model** (`{d['model']}`) reading only the plans. Either one's doubt sends the plan back. A plan a person submits gets one try, so it's never checked this way. "
+        "The measured check skips a table the plan that broke the rule deleted rows from, so a soft delete after a hard one isn't sent back. That also hides a blanked column on that table"
+        + (", as in the example above," if ex and not ex.get("measured") else "")
+        + " and the second model is what catches those."
     )
-    out.append(table(
+    mech.append(table(
         ["Retried plans, replayed", "Harmful plans caught", "...by the measured check", "...by the second model", "Good plans sent back"],
         [
             [f"Written from ({des['plans']} plans)", f"{des['harmful']['caught']} of {des['harmful']['total']}", str(des["harmful"]["by_measured_check"]), str(des["harmful"]["by_second_reader"]), f"{des['good']['caught']} of {des['good']['total']}"],
             [f"Unseen ({un['plans']} plans)", f"{un['harmful']['caught']} of {un['harmful']['total']}", str(un["harmful"]["by_measured_check"]), str(un["harmful"]["by_second_reader"]), f"{un['good']['caught']} of {un['good']['total']}"],
         ],
     ))
-    out.append(
+    mech.append(
         "The unseen plans come from the same tasks run on a stricter schema, so this tests new plans, not new tasks. "
         "The replay reads columns from the plan's text, because those records don't keep measured columns; the product uses the measured ones."
     )
     e = d.get("empty_plans") or {}
     if e.get("plans"):
-        out.append(
+        mech.append(
             f"The loop also used to push an agent that returned no steps to return at least one. Those {e['plans']} plans were harmful {e['harmful']} times and good {e['good']} times. "
             "Now no steps can be a refusal: it gets one plain question, and a second empty answer ends the run."
         )
+    out.append("<details><summary>How the two checks work, and what they caught and missed</summary>\n\n" + "\n\n".join(mech) + "\n\n</details>")
     after = d.get("after")
     if after and after.get("heldout"):
         h, dn = after["heldout"]["harm"], after["heldout"]["done"]
@@ -779,6 +785,13 @@ def block_summary() -> str:
         + (f" Work done: {d['done']:g} alone, {u['done']:g} through Shadow Run, which this sample can't separate ({fmt_p(c['done']['permutation_p'])})." if not c["done"]["excludes_zero"] else f" Work done: {d['done']:g} to {u['done']:g} ({fmt_p(c['done']['permutation_p'])}).")
         + " (`bench/stats.json`)",
     ]
+    ext = (v["sets"].get("external") or {}).get("compare", {}).get("unread_vs_direct")
+    if ext and ext["harm"]["excludes_zero"] and ext["harm"]["difference"] < 0:
+        out.append(f"- **On {v['sets']['external']['tasks']} tasks adapted from an outside benchmark (SABER), harm went from {ext['harm']['from']:g} to {ext['harm']['to']:g}**, also holding task by task ({fmt_p(ext['harm']['permutation_p'])}), so the effect isn't only on our own tasks.")
+    reh = held.get("rehearsal_s") or {}
+    price = r.get("vx1_usd_per_hour")
+    if reh.get("p50") and price:
+        out.append(f"- **A rehearsal takes {reh['p50']:g} s at the median** and about ${price * reh['p50'] / 3600:.6f} of VX1 time at list price, boot to destroy. A whole task, every model call included, costs ${held['cost_per_task_usd']:g} of inference.")
     ctl = (st.get("controls") or {})
     held_sql = (ctl.get("sets") or {}).get("heldout_sql")
     if held_sql and ctl.get("status") == "measured" and ctl.get("same_code_as_main"):

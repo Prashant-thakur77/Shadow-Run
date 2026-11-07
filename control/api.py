@@ -64,8 +64,33 @@ def svc() -> Service:
     return service
 
 
+IN_FLIGHT = {"queued", "pending", "snapshotting", "planning", "rehearsing", "applying"}
+
+
+def mark_interrupted(store) -> int:
+    """A run that was in flight when the server stopped has no task left to finish it. Say so, instead of leaving a page
+    or a race lane waiting forever. An apply that was open rolls back in Postgres when its connection drops."""
+    n = 0
+    for run in store.list_runs(1000):
+        if run.get("status") in IN_FLIGHT:
+            applying = run["status"] == "applying"
+            run["status"] = "error"
+            run["error"] = (
+                "The server restarted during the apply. Postgres rolls back a transaction whose connection drops, unless it had already committed, so check prod's hash before trying again."
+                if applying
+                else "The server restarted while this run was in progress, so it stopped here before reaching prod. Start it again."
+            )
+            store.save_run(run)
+            n += 1
+    return n
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    try:
+        mark_interrupted(svc().store)
+    except Exception:  # a store problem must not keep the API from starting
+        pass
     reseeder = asyncio.create_task(_reseed_when_idle())
     try:
         async with mcp_server.session_manager.run():
@@ -795,6 +820,37 @@ async def start_race(body: RaceBody, user: str = Depends(auth.current_user)) -> 
     limit(user, "agent runs", settings.RUNS_PER_HOUR, cost=2)
     limit(user, "runs", settings.RUNS_PER_HOUR * 4, cost=2)
     return s.start_race(task, user)
+
+
+def finished_races(store, look_at: int = 400) -> list[dict]:
+    """Races whose two lanes both finished without an error, newest first, each with how long it took and whether the left
+    lane's plan broke a guardrail on its clone. Read from the stored runs, so nothing here is kept by hand."""
+    out = []
+    for run in store.list_runs(look_at):
+        lane = run.get("race") or {}
+        if lane.get("lane") != "through" or run.get("status") in IN_FLIGHT or run.get("status") == "error":
+            continue
+        race = store.kv_get(f"race:{lane.get('id')}")
+        alone = store.get_run(race["alone"]) if race else None
+        if not alone or alone.get("status") in IN_FLIGHT or alone.get("status") == "error":
+            continue
+        ends = [r["timeline"][-1]["t"] for r in (run, alone) if r.get("timeline") and isinstance(r["timeline"][-1].get("t"), (int, float))]
+        seconds = round(max(ends) - race["created_at"], 1) if ends and race.get("created_at") else None
+        broke = any(a.get("verdict") == "failed_guardrails" for a in alone.get("attempts") or [])
+        out.append({**race, "seconds": seconds, "left_lane_broke_a_rule": broke})
+    return out
+
+
+@app.get("/api/race/recorded")
+def recorded_race(user: str = Depends(auth.current_user)) -> dict:
+    """For a visitor whose own race is slow: the newest finished race, one where the left lane broke a rule if there is one,
+    and the median time of the last 20 finished races."""
+    races = finished_races(svc().store)
+    if not races:
+        raise HTTPException(404, "no race has finished yet")
+    timed = [r["seconds"] for r in races[:20] if r["seconds"] is not None]
+    chosen = next((r for r in races if r["left_lane_broke_a_rule"]), races[0])
+    return {**chosen, "typical_seconds": round(sorted(timed)[len(timed) // 2], 1) if timed else None, "races_timed": len(timed)}
 
 
 @app.get("/api/race/{race_id}")

@@ -1,5 +1,5 @@
 {
- "at": "2026-11-07T07:45:18Z",
+ "at": "2026-11-07T18:30:35Z",
  "suite_sha256": "bf2340d01626db29463d55af675d020ce169cca71691da06bd777aa9ee39451f",
  "all_risky": {
   "tasks": 50,
@@ -162,7 +162,6 @@
  "errors": [],
  "failing_before_the_plan": {
   "safe_09": [
-   "cron is running",
    "nginx serves the current release"
   ],
   "safe_10": [

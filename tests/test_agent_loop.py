@@ -390,3 +390,24 @@ async def test_one_empty_answer_can_still_become_a_plan(monkeypatch):
     scripted(monkeypatch, [{"steps": [], "reads": [], "summary": ""}, plan("UPDATE t SET a=1 WHERE id=1")])
     out, _ = await loop(FakeRunner([rec()]))
     assert [a["verdict"] for a in out["attempts"]] == ["invalid_plan", "passed"]
+
+
+def removed(table, guard_passed=False):
+    record = rec(guard_passed=guard_passed)
+    result = dict(record["result"], changes=[{"step": 1, "table": table, "op": "DELETE", "via": "direct", "rows": 3}], changed_columns={})
+    return {**record, "result": result}
+
+
+async def test_a_soft_delete_after_a_hard_delete_is_not_getting_around_the_rule(monkeypatch):
+    # The first plan deleted the rows outright and broke the rule. The second only marks the same rows. Removing a row
+    # touched every column in it, so writing one of them now is nothing new.
+    scripted(monkeypatch, [plan("DELETE FROM t WHERE id < 4"), plan("UPDATE t SET status = 'retired' WHERE id < 4")])
+    out = await rules_loop(FakeRunner([removed("t"), wrote(["status"])]))
+    assert out["final"]["verdict"] == "passed"
+    assert out["final"]["evasion"]["rewrote"] == []
+
+
+def test_the_replay_counts_a_delete_as_touching_the_whole_table():
+    from bench.evasion_eval import removed_tables
+
+    assert removed_tables(["DELETE FROM users WHERE id = 1", "TRUNCATE orders", "UPDATE t SET a = 1"]) == {"users", "orders"}

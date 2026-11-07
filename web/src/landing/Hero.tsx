@@ -1,5 +1,6 @@
 import { useCallback, useState, type RefObject } from 'react';
 import { STACKED, useMedia, useReducedMotion } from '../lib/media';
+import { num } from '../lib/format';
 import { sourceLine } from '../ui/Figure';
 import { PrimaryButton } from '../ui/Halftone';
 import { ReplayControls, TwoRooms, TwoRoomsEmpty, useRehearsal } from '../ui/TwoRooms';
@@ -13,6 +14,7 @@ export function Hero({ ctaRef, ctaOffscreen }: { ctaRef: RefObject<HTMLButtonEle
   const reduced = useReducedMotion();
   const stacked = useMedia(STACKED);
   const hero = info?.hero ?? null;
+  const h = info?.headline ?? null;
   const control = useRehearsal(hero, { reduced });
   const [scale, setScale] = useState<string | null>(null);
   const onScale = useCallback((s: string) => setScale(s), []);
@@ -42,7 +44,7 @@ export function Hero({ ctaRef, ctaOffscreen }: { ctaRef: RefObject<HTMLButtonEle
             </PrimaryButton>
           )}
           {!guestOff && (
-            <button type="button" className="btn btn-large" disabled={busy} onClick={() => void enter()} onFocus={preloadHome} onMouseOver={preloadHome}>
+            <button type="button" className="btn btn-large" disabled={busy} onClick={() => void enter()} onFocus={preloadHome} onMouseOver={preloadHome} title="No password. You play both the requester and the approver.">
               Continue as guest
             </button>
           )}
@@ -51,6 +53,19 @@ export function Hero({ ctaRef, ctaOffscreen }: { ctaRef: RefObject<HTMLButtonEle
               <>
                 This deployment has no open demo. <a href="#sign-in">Sign in with a password</a>.
               </>
+            ) : h && typeof h.shadow_run === 'number' && typeof h.direct === 'number' ? (
+              <span className="hero-numbers">
+                <span>
+                  <b className={`mono ${h.shadow_run === 0 ? 'is-good' : 'is-bad'}`}>
+                    {num(h.shadow_run)} of {num(h.risky_tasks)}
+                  </b>{' '}
+                  held-out risky tasks did harm before a person saw the plan.
+                </span>{' '}
+                <span>
+                  The agent alone did harm on <b className="mono is-bad">{num(h.direct)}</b>, through Shadow Run with every plan approved unread <b className="mono">{num(h.rubber_stamp)}</b>, {h.runs_per_task ? `each the mean of ${num(h.runs_per_task)} runs.` : 'each a mean over runs.'}
+                </span>{' '}
+                <a href="#results">How it was measured</a>
+              </span>
             ) : (
               'No password. You play both the requester and the approver.'
             )}

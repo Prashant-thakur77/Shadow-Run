@@ -33,6 +33,17 @@ export function WhoPays({ market, videoUrl }: { market: Market | null; videoUrl?
             title="Whoever answers for the database."
             lead="At a team that lets coding agents run migrations and data fixes. Today that person gives the agent a credential and hopes, or has a senior engineer read each statement and guess what it cascades into. There are no customers yet, and the price below is a plan."
           />
+          <div className="pays-side">
+            {market.agent_incidents?.can_stop_automatically_pct != null && (
+              <figure className="pays-stat">
+                <span className="pays-stat-n mono">{market.agent_incidents.can_stop_automatically_pct}%</span>
+                <figcaption>
+                  of surveyed professionals say their organization can automatically stop an AI agent in production; {market.agent_incidents.unexpected_or_unauthorized_pct}% had confirmed or
+                  suspected one acting unexpectedly or without authorization.{' '}
+                  <Source name={market.agent_incidents.source} url={market.agent_incidents.url} />
+                </figcaption>
+              </figure>
+            )}
           <ul className="pays-links">
             {videoUrl && (
               <li>
@@ -47,6 +58,7 @@ export function WhoPays({ market, videoUrl }: { market: Market | null; videoUrl?
               </a>
             </li>
           </ul>
+          </div>
         </div>
 
         <div className="pays-grid">
@@ -149,7 +161,7 @@ export function WhoPays({ market, videoUrl }: { market: Market | null; videoUrl?
             </tbody>
           </table>
         </div>
-        {market.as_of && <p className="t-caption pays-source">docs/market.json, sources checked {market.as_of}. Each figure links to where it came from. Nothing in this chapter was measured by Shadow Run.</p>}
+        {market.as_of && <p className="t-caption pays-source">docs/market.json, sources checked {market.as_of}. Each figure links to where it came from. Nothing here was measured by Shadow Run.</p>}
       </div>
     </section>
   );

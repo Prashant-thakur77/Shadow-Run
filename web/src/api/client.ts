@@ -1,4 +1,4 @@
-import type { AttackDef, Audit, Candidate, Challenge, EvasionFacts, Gauntlet, GauntletPublished, GuardrailDraft, Health, Incident, Inspect, Market, Me, ProdChecksum, PublicInfo, Race, Receipt, RedTeamRun, Run, RunFeed, RunSummary, Target, VultrUsage } from './types';
+import type { AttackDef, Audit, Candidate, Challenge, EvasionFacts, Gauntlet, GauntletPublished, GuardrailDraft, Health, Incident, Inspect, Market, Me, ProdChecksum, PublicInfo, Race, Receipt, RecordedRace, RedTeamRun, Run, RunFeed, RunSummary, Target, VultrUsage } from './types';
 import { rememberRun } from '../lib/myRuns';
 
 export class ApiError extends Error {
@@ -135,6 +135,7 @@ export const api = {
       return race;
     }),
   race: (id: string) => call<Race>('GET', `/api/race/${encodeURIComponent(id)}`),
+  raceRecorded: () => call<RecordedRace>('GET', '/api/race/recorded'),
   approve: (id: string, c: Pick<Challenge, 'plan_hash' | 'guardrails_hash' | 'report_hash' | 'nonce'>) =>
     call<Run>('POST', `/api/runs/${encodeURIComponent(id)}/approve`, {
       plan_hash: c.plan_hash,

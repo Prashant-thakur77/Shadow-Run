@@ -45,7 +45,12 @@ if not cmp:
     sys.exit('stats.json does not match results.json: run python -m bench.stats')
 hh, dd = cmp['harm'], cmp['done']
 line = f"Approved unread, harm falls from {n(hh['from'])} to {n(hh['to'])}, and that holds task by task (p = {n(hh['permutation_p'])})."
-line += f" Work done rises from {n(dd['from'])} to {n(dd['to'])}" + (f" (p = {n(dd['permutation_p'])})." if dd['excludes_zero'] else ", which could be chance at this sample.")
+if dd['from'] == dd['to']:
+    line += f" Work done stays at {n(dd['to'])}."
+elif dd['excludes_zero']:
+    line += f" Work done goes from {n(dd['from'])} to {n(dd['to'])} (p = {n(dd['permutation_p'])})."
+else:
+    line += f" Work done goes from {n(dd['from'])} to {n(dd['to'])}, which could be chance at this sample."
 ctl = (st.get('controls') or {}).get('sets', {}).get('heldout_sql')
 if ctl and st['controls'].get('same_code_as_main'):
     a = ctl['arms']
@@ -86,10 +91,21 @@ for k, v in {'weekly': mk['developers_using_agents']['weekly_pct'], 'g_low': mk[
              'tam_now_low': der['tam_usd_b_on_2025_market'][0], 'tam_now_high': der['tam_usd_b_on_2025_market'][1], 'sam': der['sam_usd_b_per_year'], 'first_m': der['first_target_usd_m_per_year'], 'first_pct': der['first_target_pct'], 'pg': f"{mk['postgres_companies']['count']:,}", 'price': mk['price']['usd_per_database_month']}.items():
     page = page.replace(f'[{k}]', str(v))
 (OUT / 'slides/market.html').write_text(page)
+ai = mk.get('agent_incidents') or {}
+page = (OUT / 'slides/problem.html').read_text()
+line = (f"<b style=\"color:#F08A7A\">{ai['unexpected_or_unauthorized_pct']}%</b> of the professionals {ai['source'].split(',')[0]} surveyed in October 2026 confirmed or suspected an AI agent acting unexpectedly or without authorization. "
+        f"Only <b>{ai['can_stop_automatically_pct']}%</b> could stop one automatically.") if ai else ''
+page = page.replace('[incidents_line]', line)
+page = page.replace('[survey_source]', f"{ai['source']}, {ai['respondents']}: {ai['unexpected_or_unauthorized_pct']}% confirmed or suspected unexpected or unauthorized agent activity; {ai['can_stop_automatically_pct']}% can automatically stop an agent." if ai else '')
+(OUT / 'slides/problem.html').write_text(page)
 page = (OUT / 'slides/competition.html').read_text()
 cells = ''.join(f"<tr><td>{c['who']}</td><td>{c['strength']}</td><td>{c['gap']}</td></tr>" for c in mk['competition'])
 page = page.replace('[rows]', cells).replace('[usp]', mk['us']['usp']).replace('[weakness]', mk['us']['weakness'])
 (OUT / 'slides/competition.html').write_text(page)
+# The title slide shows the live site's hero, as docs/cover.png has it (scripts/make_cover.cjs renders that from the site).
+import base64
+cover_slide = OUT / 'slides' / 'cover.html'
+cover_slide.write_text(cover_slide.read_text().replace('[cover_image]', 'data:image/png;base64,' + base64.b64encode((ROOT / 'docs' / 'cover.png').read_bytes()).decode()))
 left = [str(p.name) for p in (OUT / 'slides').glob('*.html') if re.search(r'\[[a-z_n]+\]', p.read_text())]
 print('filled', OUT, 'still has placeholders:', left)
 subprocess.run(["node", str(ROOT / "scripts" / "render_slides.cjs"), str(ROOT / "web"), str(OUT), str(ROOT / "docs" / "slides.pdf")], check=True)

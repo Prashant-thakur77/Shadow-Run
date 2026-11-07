@@ -710,7 +710,11 @@ export function ResultsPage() {
 
   return (
     <div className="page results ev-page">
-      <PageHead label="Results" title="Results" lead="Benchmark results, exactly as the benchmark wrote them. The one sum on this page is Neither: the tasks minus the other two." />
+      <PageHead
+        label="Results"
+        title="Results"
+        lead={`Benchmark results, exactly as the benchmark wrote them.${runs ? ` Every task ran ${num(runs)} times and each count is the mean, which is why counts can be fractions.` : ''} The one sum on this page is Neither: the tasks minus the other two.`}
+      />
       {results.error && (
         <Notice tone="bad" title="Could not load results.">
           {results.error}

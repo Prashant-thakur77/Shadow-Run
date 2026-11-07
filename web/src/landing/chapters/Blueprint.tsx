@@ -124,7 +124,8 @@ export function Blueprint({ hero }: { hero: PublicHero | null }) {
     (p: number) => {
       const svg = svgRef.current;
       if (!svg) return;
-      const walls = clamp(p / 0.3);
+      // Half the walls are already up when the chapter arrives, so a visitor who jumps here never lands on a blank page.
+      const walls = clamp(0.5 + (p / 0.3) * 0.5);
       const flood = clamp((p - 0.3) / 0.4);
       const paths = clamp((p - 0.7) / 0.25);
       svg.style.setProperty('--walls', walls.toFixed(3));

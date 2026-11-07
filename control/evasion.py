@@ -6,7 +6,8 @@ guardrail passed. Nothing in the guardrails can see that, because the guardrails
 
 Two checks, because each sees what the other misses:
   - Measured, with no model: the plan changes a column that a rule it broke reads, and the plan that broke the rule didn't
-    change that column. A narrower WHERE on the same column isn't flagged. A new column is.
+    change that column or remove the rows that hold it. A narrower WHERE on the same column isn't flagged, and neither is a
+    soft delete after a hard one. A new column is.
   - A second model reads the plans. It's told nothing about the verdict above, and anything but a clear yes counts as doubt.
 
 This only runs on a plan that follows a broken rule. A plan the caller submitted gets one try, so it never does.
@@ -63,6 +64,16 @@ def columns_changed(attempt: dict) -> set[tuple[str, str]]:
     return {(table.split(".")[-1].lower(), column.lower()) for table, columns in changed.items() for column in columns}
 
 
+def tables_removed_from(attempt: dict) -> set[str]:
+    """Tables where the attempt deleted, truncated or dropped rows. Removing a row touches every column in it, so a later
+    plan that only marks those rows, such as a soft delete instead of a hard one, isn't writing anything new."""
+    out = set()
+    for t in (attempt.get("report") or {}).get("tables") or []:
+        if t.get("deleted") or t.get("truncated") or t.get("dropped"):
+            out.add(str(t.get("table", "")).split(".")[-1].lower())
+    return out
+
+
 def broken_by(attempt: dict) -> set[str]:
     return {g["id"] for g in attempt.get("guardrails") or [] if not g.get("passed")}
 
@@ -77,7 +88,8 @@ def new_columns_it_reads(attempts: list[dict], attempt: dict, guardrails: list[d
         if not before or not rule.get("sql"):
             continue
         already = set().union(*(columns_changed(a) for a in before))
-        columns = (changed & columns_read(rule["sql"])) - already
+        removed = set().union(*(tables_removed_from(a) for a in before))
+        columns = {(t, c) for t, c in (changed & columns_read(rule["sql"])) - already if t not in removed}
         if columns:
             found.append({"rule": rule["name"], "columns": sorted(f"{t}.{c}" for t, c in columns)})
     return found

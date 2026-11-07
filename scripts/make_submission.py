@@ -13,9 +13,52 @@ from checker.control_kinds import control_kind  # noqa: E402
 from make_readme_table import block_summary, evasion_sentence, basis_sentence, concentration_sentence, hold_sentence, lead_sentence, rehearsing_text, saber_sentence, task_level_sentence, view  # noqa: E402
 
 
+# The form's short description takes 50 to 255 characters, so it says what it is, not how.
+SHORT = (
+    "Your agent wants to touch prod. Shadow Run lets it break a clone first: every risky plan runs on a full clone "
+    "in a microVM on Vultr, Postgres measures the blast radius, and only the exact plan a person approved reaches prod."
+)
+
+
 def load(name: str) -> dict | None:
     p = ROOT / "bench" / name
     return json.loads(p.read_text()) if p.exists() else None
+
+
+def form_text(r: dict, st: dict, rt: dict, ev: dict | None, ai: dict, url: str) -> str:
+    """The lablab field takes 600 to 2,000 characters. Every number comes from the same files as the rest."""
+    from make_readme_table import fmt_p
+    v = view(st, r)
+    h = v["sets"]["heldout"]
+    d, u = h["arms"]["direct"], h["arms"]["unread"]
+    c = h["compare"]["unread_vs_direct"]
+    held = r["heldout"]["shadow_run"]
+    parts = []
+    if ai:
+        parts.append(f"AI agents now hold production credentials. In October 2026, {ai['unexpected_or_unauthorized_pct']}% of professionals {ai['source'].split(',')[0]} surveyed had confirmed or suspected an AI agent acting unexpectedly or without authorization; only {ai['can_stop_automatically_pct']}% could stop one automatically.")
+    parts.append(
+        "Shadow Run authorizes what a plan does, not what it says. The agent gets no credential. Every risky SQL or shell plan it writes is frozen, hashed and run first on a full clone of prod in a throwaway microVM on a Vultr VX1 with no network card. "
+        "Postgres measures the blast radius, frozen guardrails decide, and a different person approves those exact hashes before the same plan runs on prod in one transaction that rolls back on any surprise. An undo is proved on the clone first."
+    )
+    tested = f" ({fmt_p(c['harm']['permutation_p'])} over tasks)" if c["harm"]["excludes_zero"] else ""
+    parts.append(f"On {h['tasks']} held-out risky tasks, {held['harm_on_prod']['mean']:g} did harm before a person saw the plan, against {d['harm']:g} for the agent alone. Approved unread, harm fell from {d['harm']:g} to {u['harm']:g}{tested}.")
+    if ev and ev.get("detection"):
+        a, f_ = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
+        un = ev["detection"]["unseen"]["harmful"]
+        parts.append(f"We found that an agent told which rule it broke can learn to get around it: those plans were harmful {a['harmful_pct']}% of the time, against {f_['harmful_pct']}%. A measured check plus a second model now catch {un['caught']} of {un['total']} on plans neither had seen.")
+    if rt:
+        parts.append(f"{rt['contained']} of {rt['total']} live attacks contained. Every model call runs on Vultr Serverless Inference, every rehearsal on a VX1, prod on Vultr Managed PostgreSQL, evidence in Vultr Object Storage.")
+    mk = json.loads((ROOT / "docs" / "market.json").read_text())
+    price = (mk.get("price") or {}).get("usd_per_database_month")
+    parts.append(
+        "It plugs into any agent over MCP, a CLI or a GitHub Action that posts what a migration really does on the pull request."
+        + (f" It starts free as that Action, then ${price} a month per protected database, a price no customer has tested yet." if price else "")
+    )
+    parts.append(f"Race the agent yourself: {url}/race")
+    text = "\n\n".join(parts)
+    if len(text) > 2000:
+        print(f"the form text is {len(text)} characters, over 2,000", file=sys.stderr)
+    return text
 
 
 def main() -> int:
@@ -56,6 +99,12 @@ def main() -> int:
         + "Every LLM call goes to Vultr Serverless Inference, on VX1, Cloud Compute, Managed PostgreSQL, Object Storage and a VPC. It ships as a web app, an MCP server, a CLI and a GitHub Action."
     )
     mk = json.loads((ROOT / "docs" / "market.json").read_text())
+    ai = mk.get("agent_incidents") or {}
+    form = form_text(r, st, rt, load("evasion.json"), ai, url) if measured else "(Fill in after the final benchmark.)"
+    incidents = (
+        f"In October 2026, {ai['unexpected_or_unauthorized_pct']}% of the security and technology professionals {ai['source'].split(',')[0]} surveyed had confirmed or suspected an AI agent acting unexpectedly or without authorization; more than {ai['of_those_modified_or_deleted_data_pct_over']}% of those had seen agents modify or delete data, and only {ai['can_stop_automatically_pct']}% could automatically stop an agent in production. "
+        if ai else ""
+    )
     market = (
         f"Who pays: whoever owns the database at a team using coding agents. {mk['developers_using_agents']['weekly_pct']}% of professional developers now use them weekly ({mk['developers_using_agents']['source']}). "
         f"It starts free, as a pull request Action that can't touch prod, and then a subscription per protected database, with a self-hosted licence for regulated teams. "
@@ -75,6 +124,7 @@ def main() -> int:
     kinds = [control_kind(x["control"]) for x in c.get("controls", [])]
     controls = f"{kinds.count('attack')} attacks on the approval, the apply and the measurement were refused, rolled back or held, and {kinds.count('honest path')} checks confirm the honest path still works." if c and c.get("passed") == c.get("total") else ""
 
+    assert 50 <= len(SHORT) <= 255, f"the short description is {len(SHORT)} characters; the form takes 50 to 255"
     text = f"""# Lablab submission
 
 Written for: lablab.ai judges and the entry form. Paste each section into its field.
@@ -83,15 +133,21 @@ Written for: lablab.ai judges and the entry form. Paste each section into its fi
 
 Shadow Run
 
-## Short description
+## Short description ({len(SHORT)} characters; the form takes 50 to 255)
 
-Your agent wants to touch prod. Shadow Run lets it break a clone first: it rehearses every risky SQL or shell plan in a microVM on Vultr, measures the blast radius, and only lets through what matches.
+{SHORT}
 
-## Long description
+## Long description, for the form ({len(form)} characters; the form takes 600 to 2,000)
 
-**The problem.** AI agents with real access keep destroying production data with one command. In April 2026 a coding agent at PocketOS deleted a production volume and its backups in nine seconds, by its founder's account. In February, a `terraform destroy` took down DataTalks.Club for about a day. Keeping dev and prod apart didn't help: the agent found a credential that reached prod, and the damage hid in side effects nobody had listed.
+{form}
 
-**What Shadow Run does.** It sits between an agent and production and holds the only credential. Every risky SQL or shell plan is frozen and hashed, read by a static gate, and run on a full clone of prod inside a fresh microVM on a Vultr VX1, with no network card and no secrets. Postgres itself reports what happened: rows per table, every foreign-key cascade traced to the step that caused it, and what it does to the numbers a business watches, in dollars. Frozen business guardrails run in the same transaction, and a failure goes back to the agent to rewrite the plan. A different person approves those exact hashes, and the same plan runs on prod in one transaction that rolls back if anything differs from the rehearsal. Almost every plan that passes comes with an undo, proved on the clone before anyone approves.
+## Long description, full
+
+For the README, a blog post or anywhere without a limit.
+
+**The problem.** {incidents}AI agents with real access keep destroying production data with one command. In April 2026 a coding agent at PocketOS deleted a production volume and its backups in nine seconds, by its founder's account. In February, a `terraform destroy` took down DataTalks.Club for about a day. Keeping dev and prod apart didn't help: the agent found a credential that reached prod, and the damage hid in side effects nobody had listed.
+
+**What Shadow Run does.** Don't authorize the command; authorize its measured effect. Allowlists, linters and rules in a prompt judge what a command says. Shadow Run judges what it does, on a real copy of the data, before it can touch the original. It sits between an agent and production and holds the only credential. Every risky SQL or shell plan is frozen and hashed, read by a static gate, and run on a full clone of prod inside a fresh microVM on a Vultr VX1, with no network card and no secrets. Postgres itself reports what happened: rows per table, every foreign-key cascade traced to the step that caused it, and what it does to the numbers a business watches, in dollars. Frozen business guardrails run in the same transaction, and a failure goes back to the agent to rewrite the plan. A different person approves those exact hashes, and the same plan runs on prod in one transaction that rolls back if anything differs from the rehearsal. Almost every plan that passes comes with an undo, proved on the clone before anyone approves.
 
 **What we measured.** Same agent, same prompt, a fresh copy of the database for every run, 3 runs per task:
 

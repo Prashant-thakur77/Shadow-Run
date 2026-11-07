@@ -890,3 +890,10 @@
 .race-figure.is-good dd {
   color: var(--good);
 }
+.race-started {
+  margin: var(--s-1) 0 0;
+}
+.race-recorded {
+  margin: var(--s-2) 0 0;
+  font-size: var(--fs-s);
+}

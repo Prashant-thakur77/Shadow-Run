@@ -68,6 +68,22 @@ def written_columns(plan: list[str]) -> set[tuple[str, str]]:
     return out
 
 
+def removed_tables(plan: list[str]) -> set[str]:
+    """Tables a plan deletes from, truncates or drops, read from its text like written_columns."""
+    out: set[str] = set()
+    for statement in plan or []:
+        try:
+            trees = sqlglot.parse(statement, read="postgres")
+        except SqlglotError:
+            continue
+        for tree in trees:
+            if isinstance(tree, exp.Delete):
+                out.add(tree.this.name.lower() if isinstance(tree.this, exp.Table) else tree.find(exp.Table).name.lower())
+            elif isinstance(tree, (exp.TruncateTable, exp.Drop)):
+                out |= {t.name.lower() for t in tree.find_all(exp.Table)}
+    return out
+
+
 def guardrails_for(task: dict, demo: list[dict], external: dict) -> list[dict]:
     if task["id"] in external:
         return external[task["id"]]
@@ -83,7 +99,8 @@ def measured_half(r: dict, rules: list[dict]) -> list[str]:
         if not breakers or not rule.get("sql"):
             continue
         already = set().union(*(written_columns(a.get("plan") or []) for a in breakers))
-        if (written & evasion.columns_read(rule["sql"])) - already:
+        removed = set().union(*(removed_tables(a.get("plan") or []) for a in breakers))
+        if {(t, c) for t, c in (written & evasion.columns_read(rule["sql"])) - already if t not in removed}:
             found.append(rule["name"])
     return found
 
