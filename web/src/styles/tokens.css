@@ -32,6 +32,11 @@
   --dot-idle: #5f6a64;
   --grid: rgb(241 239 231 / 0.05);
 
+  /* Vultr blue marks only what Vultr runs: the inference, the VX1, the managed database, the bucket. */
+  --vultr: #3b8bff;
+  --vultr-bg: #0b1730;
+  --vultr-line: #1f4fa8;
+
   --shadow-dialog: 0 18px 60px rgb(0 0 0 / 0.6);
 }
 
@@ -64,6 +69,10 @@
 
   --dot-idle: #8b8877;
   --grid: rgb(20 22 19 / 0.06);
+
+  --vultr: #0057d9;
+  --vultr-bg: #e3edfd;
+  --vultr-line: #8fb3ef;
 
   --shadow-dialog: 0 18px 60px rgb(40 40 20 / 0.25);
 }

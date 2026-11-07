@@ -40,3 +40,23 @@ export function VerdictPair({ harm, done, tasks }: { harm: TaskCompare | undefin
     </div>
   );
 }
+
+/** The claim no control arm makes: harm that reached prod before any person saw the plan. Read from bench/results.json. */
+export function HeldVerdict({ direct, alone, held, tasks }: { direct: number | null | undefined; alone: number | null | undefined; held: number | null | undefined; tasks: number | null | undefined }) {
+  if (alone === null || alone === undefined || direct === null || direct === undefined) return null;
+  return (
+    <div className={`vb vb-lead${alone === 0 ? ' is-good' : ' is-bad'}`}>
+      <span className="vb-eyebrow mono">
+        [ {num(direct)} → {num(alone)} before anyone saw it ]
+      </span>
+      <span className="vb-figure">{num(alone)}</span>
+      <span className="vb-label">
+        of {num(tasks)} risky tasks did harm on prod before a person saw the plan. The agent alone: {num(direct)}. A prompt with the rules or a transaction lets a passing plan land with nobody looking.
+      </span>
+      <span className="vb-test">
+        {held !== null && held !== undefined ? `${num(held)} of ${num(tasks)} risky plans waited for a person, which is where the zero comes from` : 'The zero comes from the hold'}
+        <span className="mono"> · bench/results.json</span>
+      </span>
+    </div>
+  );
+}

@@ -145,6 +145,16 @@ export function SignInPage({ linkedPage = false }: { linkedPage?: boolean }) {
   return (
     <LandingContext.Provider value={value}>
       <div className="land">
+        <a
+          href="#top"
+          className="skip-link"
+          onClick={(e) => {
+            e.preventDefault();
+            ctaRef.current?.focus();
+          }}
+        >
+          Skip to Race the agent
+        </a>
         <header className="land-nav">
           <a className="brand" href="#top" aria-label="Shadow Run, top of the page">
             <span className="wordmark">

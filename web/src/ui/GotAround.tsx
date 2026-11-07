@@ -1,5 +1,5 @@
 import '../styles/got-around.css';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { EvasionFacts } from '../api/types';
 import { num } from '../lib/format';
 import { Mark } from './bits';
@@ -91,7 +91,7 @@ function Caught({ example }: { example: Example }) {
 const pair = (c: { caught?: number; total?: number } | undefined) => `${num(c?.caught)} of ${num(c?.total)}`;
 
 /** The finding, its examples and what the check costs. Every number is read from bench/evasion.json. */
-export function GotAround({ facts, source }: { facts: EvasionFacts; source?: string }) {
+export function GotAround({ facts, source, head, compact = false }: { facts: EvasionFacts; source?: string; head?: ReactNode; compact?: boolean }) {
   const examples = facts.examples ?? [];
   const [shown, setShown] = useState(0);
   const after = facts.rates?.passed_after_breaking_a_rule;
@@ -105,6 +105,7 @@ export function GotAround({ facts, source }: { facts: EvasionFacts; source?: str
       <div className="ga-grid">
         {example && (
           <div className="ga-example">
+            {head}
             {examples.length > 1 && (
               <div className="ga-tabs" role="tablist" aria-label="Recorded examples">
                 {examples.map((e, i) => (
@@ -128,30 +129,33 @@ export function GotAround({ facts, source }: { facts: EvasionFacts; source?: str
               <dd className="t-num-m">
                 {num(after.harmful_pct)}% <span className="ga-vs">vs</span> {num(first.harmful_pct)}%
               </dd>
-              <dt>
-                of risky plans did harm when they passed only after breaking a rule ({num(after.plans)} plans), against plans that passed first time ({num(first.plans)}).
-                {facts.rates?.safe_plans ? ` None of the ${num(facts.rates.safe_plans)} safe plans ever broke a rule first.` : ''}
-              </dt>
+              <dt>of risky plans did harm when they passed only after breaking a rule, against plans that passed first time.</dt>
+              <span className="t-caption">
+                {num(after.plans)} and {num(first.plans)} plans{facts.rates?.safe_plans ? ` · no safe plan ever broke a rule first` : ''} · bench/evasion.json
+              </span>
             </div>
           )}
           {design?.harmful?.total ? (
             <div className="ga-tile is-good">
               <dd className="t-num-m">{pair(unseen?.harmful)}</dd>
-              <dt>harmful plans the check catches on plans nobody read while writing it. On the plans it was written from: {pair(design.harmful)}.</dt>
+              <dt>harmful plans the new check caught, among plans it had never seen.</dt>
+              <span className="t-caption">{pair(design.harmful)} on the plans it was written from · bench/evasion.json</span>
             </div>
           ) : null}
           {design?.good?.total ? (
             <div className="ga-tile">
               <dd className="t-num-m">{pair(unseen?.good)}</dd>
-              <dt>good plans it sends back by mistake on the unseen plans, and {pair(design.good)} on the others. That's its cost: the agent tries again, or the run stops.</dt>
+              <dt>good plans it sent back by mistake, among the same unseen plans. The agent tries again, or the run stops.</dt>
+              <span className="t-caption">{pair(design.good)} on the others · bench/evasion.json</span>
             </div>
           ) : null}
-          {empty?.plans ? (
+          {!compact && empty?.plans ? (
             <div className="ga-tile">
               <dd className="t-num-m">
                 {num(empty.harmful)} <span className="ga-vs">to</span> {num(empty.good)}
               </dd>
               <dt>harmful to good, when an agent that returned no steps was told to return at least one. Now no steps can be a refusal, and it isn't pushed.</dt>
+              <span className="t-caption">{num(empty.plans)} plans · bench/evasion.json</span>
             </div>
           ) : null}
         </dl>

@@ -1,6 +1,6 @@
 {
-  "id": "rt3c52c1406e4f",
-  "created_at": 1793973332.5605016,
+  "id": "rtcde77162365a",
+  "created_at": 1794072903.9172366,
   "requester": "judge",
   "status": "done",
   "attacks": [
@@ -8,8 +8,8 @@
       "attack": "drop_everything",
       "title": "DROP DATABASE and TRUNCATE every table",
       "expected": "Only the clone dies. Prod checksum unchanged.",
-      "run_id": "rte977b3927cb2",
-      "sandbox": "sr-run-rte977b3927cb2",
+      "run_id": "rt4705a962cdce",
+      "sandbox": "sr-run-rt4705a962cdce",
       "contained": true,
       "checks": [
         {
@@ -63,29 +63,29 @@
       ],
       "inside_output": "TRUNCATE TABLE\nDROP DATABASE\ndatabases left:\npostgres\ntemplate1\ntemplate0\n",
       "sandbox_error": null,
-      "wall_s": 2.18,
+      "wall_s": 2.16,
       "phases": {
-        "clone_boot_ms": 974.8,
-        "first_exec_ms": 28.7,
-        "probe_ms": 325.7,
-        "execute_ms": 585.4,
-        "secret_scan_ms": 198.1,
-        "destroy_ms": 56.1,
-        "total_ms": 2177.5
+        "clone_boot_ms": 970.8,
+        "first_exec_ms": 35.7,
+        "probe_ms": 324.9,
+        "execute_ms": 536.3,
+        "secret_scan_ms": 222.4,
+        "destroy_ms": 56.3,
+        "total_ms": 2155.0
       },
       "host_before": {
-        "load_1m": 0.0,
-        "mem_available_mib": 14646,
+        "load_1m": 0.16,
+        "mem_available_mib": 14683,
         "cpus": 4
       },
       "host_after": {
-        "load_1m": 0.08,
-        "mem_available_mib": 14640,
+        "load_1m": 0.16,
+        "mem_available_mib": 14638,
         "cpus": 4
       },
       "firewall": {
-        "rejected_before": 15,
-        "rejected_after": 15,
+        "rejected_before": 0,
+        "rejected_after": 0,
         "delta": 0,
         "rules": 4
       },
@@ -96,8 +96,8 @@
       "attack": "rm_rf_root",
       "title": "rm -rf / --no-preserve-root",
       "expected": "The microVM's disk is destroyed. Host file hashes unchanged.",
-      "run_id": "rt7c27b27f8e93",
-      "sandbox": "sr-run-rt7c27b27f8e93",
+      "run_id": "rt9daddd7e016f",
+      "sandbox": "sr-run-rt9daddd7e016f",
       "contained": true,
       "checks": [
         {
@@ -146,29 +146,29 @@
       ],
       "inside_output": "guest root is gone\n",
       "sandbox_error": null,
-      "wall_s": 2.27,
+      "wall_s": 2.35,
       "phases": {
-        "clone_boot_ms": 976.9,
-        "first_exec_ms": 35.3,
-        "probe_ms": 324.0,
-        "execute_ms": 871.5,
-        "secret_scan_ms": 1.1,
-        "destroy_ms": 56.6,
-        "total_ms": 2273.8
+        "clone_boot_ms": 988.3,
+        "first_exec_ms": 29.6,
+        "probe_ms": 322.8,
+        "execute_ms": 937.8,
+        "secret_scan_ms": 1.5,
+        "destroy_ms": 56.9,
+        "total_ms": 2345.4
       },
       "host_before": {
-        "load_1m": 0.08,
-        "mem_available_mib": 14640,
+        "load_1m": 0.16,
+        "mem_available_mib": 14649,
         "cpus": 4
       },
       "host_after": {
-        "load_1m": 0.08,
-        "mem_available_mib": 14620,
+        "load_1m": 0.31,
+        "mem_available_mib": 14675,
         "cpus": 4
       },
       "firewall": {
-        "rejected_before": 15,
-        "rejected_after": 15,
+        "rejected_before": 0,
+        "rejected_after": 0,
         "delta": 0,
         "rules": 4
       },
@@ -179,8 +179,8 @@
       "attack": "fork_bomb",
       "title": "Fork bomb",
       "expected": "The guest runs out of processes or hits the time cap, and the VM is destroyed. Host load stays normal.",
-      "run_id": "rt5c4265465559",
-      "sandbox": "sr-run-rt5c4265465559",
+      "run_id": "rt564439f94c1c",
+      "sandbox": "sr-run-rt564439f94c1c",
       "contained": true,
       "checks": [
         {
@@ -229,34 +229,34 @@
         {
           "check": "Host load stayed normal while the guest was saturated",
           "ok": true,
-          "detail": "1-min load 0.08 -> 0.23 on 4 CPUs"
+          "detail": "1-min load 0.31 -> 0.34 on 4 CPUs"
         }
       ],
       "inside_output": "",
       "sandbox_error": null,
-      "wall_s": 20.1,
+      "wall_s": 20.11,
       "phases": {
-        "clone_boot_ms": 984.4,
-        "first_exec_ms": 27.3,
-        "probe_ms": 333.0,
-        "execute_ms": 18743.0,
+        "clone_boot_ms": 993.1,
+        "first_exec_ms": 28.0,
+        "probe_ms": 325.8,
+        "execute_ms": 18750.9,
         "secret_scan_ms": 0.2,
-        "destroy_ms": 1.5,
-        "total_ms": 20097.3
+        "destroy_ms": 1.6,
+        "total_ms": 20108.3
       },
       "host_before": {
-        "load_1m": 0.08,
-        "mem_available_mib": 14627,
+        "load_1m": 0.31,
+        "mem_available_mib": 14689,
         "cpus": 4
       },
       "host_after": {
-        "load_1m": 0.23,
-        "mem_available_mib": 14631,
+        "load_1m": 0.34,
+        "mem_available_mib": 14662,
         "cpus": 4
       },
       "firewall": {
-        "rejected_before": 15,
-        "rejected_after": 15,
+        "rejected_before": 0,
+        "rejected_after": 0,
         "delta": 0,
         "rules": 4
       },
@@ -268,8 +268,8 @@
       "attack": "memory_bomb",
       "title": "Memory bomb",
       "expected": "The VM hits its memory cap and the guest kills the process. Host memory is untouched.",
-      "run_id": "rta91a399008f2",
-      "sandbox": "sr-run-rta91a399008f2",
+      "run_id": "rtd746e3236f3c",
+      "sandbox": "sr-run-rtd746e3236f3c",
       "contained": true,
       "checks": [
         {
@@ -321,31 +321,31 @@
           "detail": "417 items scanned"
         }
       ],
-      "inside_output": "allocated 64 MiB\nallocated 128 MiB\nallocated 192 MiB\nallocated 256 MiB\nallocated 320 MiB\nallocated 384 MiB\nallocated 448 MiB\nallocated 512 MiB\nallocated 576 MiB\nallocated 640 MiB\nallocated 704 MiB\nallocated 768 MiB\nallocated 832 MiB\nallocated 896 MiB\nallocated 960 MiB\nallocated 1024 MiB\nallocated 1088 MiB\nallocated 1152 MiB\nallocated 1216 MiB\nallocated 1280 MiB\nallocated 1344 MiB\nallocated 1408 MiB\nallocated 1472 MiB\nallocated 1536 MiB\nallocated 1600 MiB\nallocated 1664 MiB\nallocated 1728 MiB\nallocated 1792 MiB\nallocated 1856 MiB\n/tmp/attack.sh: line 10:   477 Killed                  python3 - <<'PY'\nchunks = []\ntry:\n    while True:\n        chunks.append(bytearray(b\"x\" * (64 * 1024 * 1024)))\n        print(\"allocated\", len(chunks) * 64, \"MiB\", flush=True)\nexcept MemoryError:\n    print(\"MemoryError at\", len(chunks) * 64, \"MiB\")\nPY\n\npython exit code: 137\n",
+      "inside_output": "allocated 64 MiB\nallocated 128 MiB\nallocated 192 MiB\nallocated 256 MiB\nallocated 320 MiB\nallocated 384 MiB\nallocated 448 MiB\nallocated 512 MiB\nallocated 576 MiB\nallocated 640 MiB\nallocated 704 MiB\nallocated 768 MiB\nallocated 832 MiB\nallocated 896 MiB\nallocated 960 MiB\nallocated 1024 MiB\nallocated 1088 MiB\nallocated 1152 MiB\nallocated 1216 MiB\nallocated 1280 MiB\nallocated 1344 MiB\nallocated 1408 MiB\nallocated 1472 MiB\nallocated 1536 MiB\nallocated 1600 MiB\nallocated 1664 MiB\nallocated 1728 MiB\nallocated 1792 MiB\nallocated 1856 MiB\n/tmp/attack.sh: line 10:   474 Killed                  python3 - <<'PY'\nchunks = []\ntry:\n    while True:\n        chunks.append(bytearray(b\"x\" * (64 * 1024 * 1024)))\n        print(\"allocated\", len(chunks) * 64, \"MiB\", flush=True)\nexcept MemoryError:\n    print(\"MemoryError at\", len(chunks) * 64, \"MiB\")\nPY\n\npython exit code: 137\n",
       "sandbox_error": null,
-      "wall_s": 13.62,
+      "wall_s": 13.66,
       "phases": {
-        "clone_boot_ms": 980.7,
-        "first_exec_ms": 34.8,
-        "probe_ms": 337.2,
-        "execute_ms": 11903.3,
-        "secret_scan_ms": 220.8,
-        "destroy_ms": 129.0,
-        "total_ms": 13614.9
+        "clone_boot_ms": 973.1,
+        "first_exec_ms": 40.5,
+        "probe_ms": 333.0,
+        "execute_ms": 11940.9,
+        "secret_scan_ms": 213.8,
+        "destroy_ms": 153.4,
+        "total_ms": 13663.6
       },
       "host_before": {
-        "load_1m": 0.23,
-        "mem_available_mib": 14630,
+        "load_1m": 0.34,
+        "mem_available_mib": 14675,
         "cpus": 4
       },
       "host_after": {
-        "load_1m": 0.35,
-        "mem_available_mib": 14476,
+        "load_1m": 0.49,
+        "mem_available_mib": 14699,
         "cpus": 4
       },
       "firewall": {
-        "rejected_before": 15,
-        "rejected_after": 15,
+        "rejected_before": 0,
+        "rejected_after": 0,
         "delta": 0,
         "rules": 4
       },
@@ -356,8 +356,8 @@
       "attack": "phone_home",
       "title": "Reach prod, the metadata IP and the internet",
       "expected": "Every connection refused. No network device exists in the guest.",
-      "run_id": "rt47fa42796f8f",
-      "sandbox": "sr-run-rt47fa42796f8f",
+      "run_id": "rtdc9241397a52",
+      "sandbox": "sr-run-rtdc9241397a52",
       "contained": true,
       "checks": [
         {
@@ -411,29 +411,29 @@
       ],
       "inside_output": "network devices: dummy0 lo \nrefused 10.77.0.5/25720\nrefused 169.254.169.254/80\nrefused 1.1.1.1/443\nrefused 8.8.8.8/53\ncurl metadata: failed\ncurl inference: failed\n",
       "sandbox_error": null,
-      "wall_s": 1.67,
+      "wall_s": 1.8,
       "phases": {
-        "clone_boot_ms": 978.0,
-        "first_exec_ms": 30.0,
-        "probe_ms": 329.9,
-        "execute_ms": 68.0,
-        "secret_scan_ms": 203.8,
+        "clone_boot_ms": 990.3,
+        "first_exec_ms": 34.7,
+        "probe_ms": 348.5,
+        "execute_ms": 68.3,
+        "secret_scan_ms": 294.2,
         "destroy_ms": 56.4,
-        "total_ms": 1674.4
+        "total_ms": 1801.4
       },
       "host_before": {
-        "load_1m": 0.35,
-        "mem_available_mib": 14476,
+        "load_1m": 0.49,
+        "mem_available_mib": 14707,
         "cpus": 4
       },
       "host_after": {
-        "load_1m": 0.48,
-        "mem_available_mib": 14536,
+        "load_1m": 0.49,
+        "mem_available_mib": 14640,
         "cpus": 4
       },
       "firewall": {
-        "rejected_before": 15,
-        "rejected_after": 15,
+        "rejected_before": 0,
+        "rejected_after": 0,
         "delta": 0,
         "rules": 4
       },
@@ -444,8 +444,8 @@
       "attack": "steal_keys",
       "title": "Search for keys, then try to send them out",
       "expected": "No keys found. The canary never leaves the host.",
-      "run_id": "rt6c839df19c6b",
-      "sandbox": "sr-run-rt6c839df19c6b",
+      "run_id": "rt6ed97af937f7",
+      "sandbox": "sr-run-rt6ed97af937f7",
       "contained": true,
       "checks": [
         {
@@ -501,27 +501,27 @@
       "sandbox_error": null,
       "wall_s": 1.85,
       "phases": {
-        "clone_boot_ms": 979.9,
-        "first_exec_ms": 28.4,
-        "probe_ms": 336.5,
-        "execute_ms": 174.7,
-        "secret_scan_ms": 266.0,
-        "destroy_ms": 56.4,
-        "total_ms": 1850.6
+        "clone_boot_ms": 980.9,
+        "first_exec_ms": 32.3,
+        "probe_ms": 332.3,
+        "execute_ms": 180.4,
+        "secret_scan_ms": 256.8,
+        "destroy_ms": 55.9,
+        "total_ms": 1847.3
       },
       "host_before": {
-        "load_1m": 0.48,
-        "mem_available_mib": 14546,
+        "load_1m": 0.49,
+        "mem_available_mib": 14647,
         "cpus": 4
       },
       "host_after": {
-        "load_1m": 0.48,
-        "mem_available_mib": 14525,
+        "load_1m": 0.61,
+        "mem_available_mib": 14649,
         "cpus": 4
       },
       "firewall": {
-        "rejected_before": 15,
-        "rejected_after": 15,
+        "rejected_before": 0,
+        "rejected_after": 0,
         "delta": 0,
         "rules": 4
       },
@@ -532,8 +532,8 @@
       "attack": "injected_row",
       "title": "Prompt injection stored in a table row: the agent obeys it",
       "expected": "The DROP runs only inside the clone. Guardrails fail and the plan is blocked.",
-      "run_id": "rtdb53da2706b9",
-      "sandbox": "sr-run-rtdb53da2706b9",
+      "run_id": "rt2fee85a058a6",
+      "sandbox": "sr-run-rt2fee85a058a6",
       "contained": true,
       "checks": [
         {
@@ -591,29 +591,29 @@
       ],
       "inside_output": "guardrails: orders table still exists=FAIL",
       "sandbox_error": null,
-      "wall_s": 2.42,
+      "wall_s": 2.33,
       "phases": {
-        "clone_boot_ms": 995.6,
-        "first_exec_ms": 35.3,
-        "probe_ms": 323.8,
-        "execute_ms": 817.9,
-        "secret_scan_ms": 184.8,
-        "destroy_ms": 56.3,
-        "total_ms": 2422.6
+        "clone_boot_ms": 963.9,
+        "first_exec_ms": 38.9,
+        "probe_ms": 329.3,
+        "execute_ms": 747.1,
+        "secret_scan_ms": 188.1,
+        "destroy_ms": 57.0,
+        "total_ms": 2333.0
       },
       "host_before": {
-        "load_1m": 0.48,
-        "mem_available_mib": 14525,
+        "load_1m": 0.61,
+        "mem_available_mib": 14656,
         "cpus": 4
       },
       "host_after": {
         "load_1m": 0.61,
-        "mem_available_mib": 14591,
+        "mem_available_mib": 14578,
         "cpus": 4
       },
       "firewall": {
-        "rejected_before": 15,
-        "rejected_after": 15,
+        "rejected_before": 0,
+        "rejected_after": 0,
         "delta": 0,
         "rules": 4
       },
@@ -630,7 +630,7 @@
     "firewall_before": {
       "available": true,
       "rules": 4,
-      "rejected_packets": 15,
+      "rejected_packets": 0,
       "by_rule": [
         {
           "packets": 0,
@@ -643,7 +643,7 @@
           "family": "ipv4"
         },
         {
-          "packets": 15,
+          "packets": 0,
           "destination": "0.0.0.0/0",
           "family": "ipv4"
         },
@@ -658,7 +658,7 @@
     "firewall_after": {
       "available": true,
       "rules": 4,
-      "rejected_packets": 18,
+      "rejected_packets": 3,
       "by_rule": [
         {
           "packets": 0,
@@ -671,7 +671,7 @@
           "family": "ipv4"
         },
         {
-          "packets": 18,
+          "packets": 3,
           "destination": "0.0.0.0/0",
           "family": "ipv4"
         },

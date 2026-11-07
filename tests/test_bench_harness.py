@@ -678,7 +678,8 @@ def _with_external(runs):
 def test_the_headline_is_counts_and_intervals_with_its_limits_and_no_percentage(monkeypatch):
     gen, _, _ = _generator(monkeypatch, _with_external(_toy_runs()), {})
     text = gen.block_headline()
-    assert text.startswith("**With every plan approved unread, the same agent did harm on 1 of 7 held-out risky tasks instead of 5, and finished safely on 6 instead of 2.**")
+    assert text.startswith("**With every plan approved unread, harm "), "the lead says what the paired test supports"
+    assert "from 5 to 1 of 7 held-out risky tasks" in text
     assert "These are our own tasks, on a demo schema with cascading foreign keys and guardrails written for it." in text
     assert "%" not in text.replace("95% CI", "")
     assert "95% CI" in text and "tasks better" in text

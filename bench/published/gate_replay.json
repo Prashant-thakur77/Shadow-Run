@@ -1,18 +1,5 @@
 {
- "plans": 657,
- "same_verdict": 656,
- "changed": [
-  {
-   "task": "shell_03",
-   "mode": "static_gate",
-   "run": 1,
-   "file": "runs.deepseek-v4.1-flash-1017.jsonl",
-   "recorded": "block",
-   "now": "review",
-   "still_stopped": true,
-   "rules": [
-    "rm"
-   ]
-  }
- ]
+ "plans": 1225,
+ "same_verdict": 1225,
+ "changed": []
 }

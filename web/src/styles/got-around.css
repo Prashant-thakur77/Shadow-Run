@@ -223,3 +223,13 @@
     overflow-wrap: anywhere;
   }
 }
+/* The stamp is the verdict on attempt 5, so it carries the weight. */
+.ga-stamp {
+  margin-top: calc(var(--s-2) * -1);
+  padding: 10px 22px 7px;
+  border-width: 3px;
+  font-size: clamp(34px, 4.2vw, 64px);
+}
+.ga-stamp {
+  margin-top: var(--s-3);
+}

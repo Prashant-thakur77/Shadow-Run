@@ -1216,3 +1216,11 @@
   text-transform: none;
   letter-spacing: -0.015em;
 }
+.pays-links {
+  justify-content: flex-end;
+}
+/* The floor plan scales to the phone instead of being cropped. */
+.bp-svg {
+  max-width: 100%;
+  height: auto;
+}

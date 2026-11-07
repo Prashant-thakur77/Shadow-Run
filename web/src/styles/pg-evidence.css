@@ -1958,3 +1958,22 @@ details[open] > .ev-run-row .ev-chevron {
     display: block;
   }
 }
+/* The four arms fit the frame: fixed columns, headers that wrap. */
+.ctl-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.ctl-table th,
+.ctl-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.ctl-table thead th:first-child,
+.ctl-table tbody th {
+  width: 28%;
+}
+.ev-table.data.ctl-table thead th,
+.ev-table.data.ctl-table tbody th,
+.ev-table.data.ctl-table td {
+  white-space: normal;
+}

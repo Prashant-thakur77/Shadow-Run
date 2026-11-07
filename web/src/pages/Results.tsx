@@ -10,9 +10,10 @@ import { Figure, sourceLine } from '../ui/Figure';
 import { Frame } from '../ui/Frame';
 import { Label } from '../ui/Label';
 import { Measured } from '../ui/Measured';
-import type { ControlArms, EvasionFacts, TaskLevel } from '../api/types';
+import type { ControlArms, EvasionFacts, TaskLevel, VultrUsage } from '../api/types';
 import { GotAround } from '../ui/GotAround';
-import { VerdictPair } from '../ui/VerdictBlock';
+import { VultrReceipts } from '../ui/VultrReceipts';
+import { HeldVerdict, VerdictPair } from '../ui/VerdictBlock';
 import { finishesMore, HoldQueueAnswer, Outcomes, type OutcomeMode } from '../ui/Outcomes';
 import { PageHead, useFirstSight } from './_evidence';
 
@@ -132,6 +133,7 @@ function Lead({ block, measured, runs, tests }: { block: Block; measured: number
           </>
         )}
       </h2>
+      <HeldVerdict direct={block.direct?.harm_on_prod?.mean} alone={block.shadow_run?.harm_on_prod?.mean} held={block.shadow_run?.risky_held?.mean} tasks={total} />
       <VerdictPair harm={tests?.harm} done={tests?.done} tasks={total} />
       <Outcomes total={total} modes={modes} showRuns aside={<HoldQueueAnswer total={total} modes={modes} harmAlone={block.shadow_run?.harm_on_prod?.mean} held={block.shadow_run?.risky_held?.mean} doneIsClear={clear(tests?.done)} />} />
     </Figure>
@@ -679,6 +681,7 @@ function why(data: Record<string, unknown>): ReactNode | null {
 
 export function ResultsPage() {
   const results = useAsync<Record<string, unknown>>(() => api.results());
+  const vultr = useAsync<VultrUsage>(() => api.vultr());
   const data = results.data;
   const notMeasured = data && data.status === 'not measured yet';
   const table = data?.table as ResultsTable | undefined;
@@ -752,6 +755,15 @@ export function ResultsPage() {
             <p className="notmeasured">The response has no table to show yet. It is below as it arrived.</p>
           )}
           {!reason && data.by_group !== null && typeof data.by_group === 'object' && <ByKind groups={data.by_group as Record<string, Block>} />}
+          {vultr.data?.at ? (
+            <section id="vultr" className="ev-figure-block vr-section" aria-labelledby="vultr-title">
+              <h2 className="ev-statement" id="vultr-title">
+                Every layer runs on Vultr
+              </h2>
+              <p className="ev-lead-line">Each service Shadow Run uses, what it does here, and what it did during the final benchmark, counted from the runs files and read back from Vultr's own APIs.</p>
+              <VultrReceipts data={vultr.data} n={10} />
+            </section>
+          ) : null}
           {shownFacts.length > 0 && (
             <dl className="kvs results-facts ev-facts">
               {shownFacts.map(([k, v]) => (

@@ -46,3 +46,10 @@
 .vb.is-bad .vb-test {
   color: var(--ink-2);
 }
+.vb-lead {
+  margin-bottom: 1px;
+  border: 1px solid var(--line);
+}
+.vb-lead .vb-label {
+  max-width: 64ch;
+}

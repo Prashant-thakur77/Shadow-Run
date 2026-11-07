@@ -4,6 +4,7 @@ import { sourceLine } from '../ui/Figure';
 import { PrimaryButton } from '../ui/Halftone';
 import { ReplayControls, TwoRooms, TwoRoomsEmpty, useRehearsal } from '../ui/TwoRooms';
 import { useLanding } from './context';
+import { LiveStrip } from './LiveStrip';
 
 const preloadHome = () => void import('../pages/Home');
 
@@ -25,6 +26,8 @@ export function Hero({ ctaRef, ctaOffscreen }: { ctaRef: RefObject<HTMLButtonEle
           Shadow Run lets it break a <span className="t-outline">clone</span> first.
         </span>
       </h1>
+
+      <LiveStrip />
 
       <figure className="hero-stage">
         {/* The hero is always a replay of a database incident, and a database clone has no network device. */}
@@ -83,7 +86,7 @@ export function Hero({ ctaRef, ctaOffscreen }: { ctaRef: RefObject<HTMLButtonEle
         <p className="t-caption hero-caption">
           {sourceLine({ n: 1, run: hero.run_id, measured: hero.measured_at, scale, extra: script && script.factor > 1 ? `compressed ×${script.factor.toFixed(1)}` : null })}
           {' · '}
-          Replay of this run at {reduced ? 'its measured phase lengths' : 'real speed'}. Phase lengths are measured. A time with + is from the start of the run; one without is how long that step took. Order inside a phase follows the foreign keys, not a clock.
+          {reduced ? 'Replay of this run at its measured phase lengths.' : 'Replay of this run at real speed. Phase lengths are measured.'} A time with + is from the start of the run; one without is how long that step took. Order inside a phase follows the foreign keys, not a clock.
           {hero.incident.who && (
             <>
               {' '}

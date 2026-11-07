@@ -82,7 +82,8 @@ function Shell() {
 
   useEffect(() => {
     const base = 'Shadow Run';
-    document.title = runMatch ? `Run ${decodeURIComponent(runMatch[1])} · ${base}` : path === '/race' ? `The race · ${base}` : base;
+    const named = NAV.find((n) => n.href === path && n.href !== '/');
+    document.title = runMatch ? `Run ${decodeURIComponent(runMatch[1])} · ${base}` : path === '/race' ? `The race · ${base}` : named ? `${named.label} · ${base}` : base;
   }, [runMatch?.[1], path]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!ready) {

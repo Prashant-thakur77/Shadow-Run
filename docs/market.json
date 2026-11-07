@@ -62,13 +62,10 @@
  ],
  "competition": [
   {
-   "who": "Migration linting and review: Atlas, Bytebase",
-   "strength": "Mature, fast, fits CI, and covers many databases. Bytebase lints every change against 100+ rules and routes it for approval.",
-   "gap": "Their docs describe linting and policy, not measuring a plan's real effect on a full copy of your data.",
-   "urls": [
-    "https://atlasgo.io/docs",
-    "https://docs.bytebase.com/introduction/what-is-bytebase/"
-   ]
+   "who": "Migration linting and review tools",
+   "strength": "Mature, fast, fit CI, and cover many databases. They check each change against a rule set and route it for approval.",
+   "gap": "A rule reads the statement. It doesn't measure what the plan really does to a full copy of your data.",
+   "urls": []
   },
   {
    "who": "Thin clones and branches: DBLab, Neon",

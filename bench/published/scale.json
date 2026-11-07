@@ -1,25 +1,25 @@
 {
-  "at": "2026-11-06T20:40:28Z",
+  "at": "2026-11-07T16:25:01Z",
   "rows": [
     {
       "scale": 1.0,
       "db_mb": 22,
       "users": 5234,
-      "seed_s": 4.1,
+      "seed_s": 4.0,
       "dump_mb": 1.3,
-      "checksum_s": 0.31,
-      "pg_dump_s": 0.52,
+      "checksum_s": 0.32,
+      "pg_dump_s": 0.62,
       "golden_build_s": 0.12,
       "restore_in_vm_s": 0.0,
       "golden_cached": true,
-      "clone_boot_ms": 999.1,
-      "rehearsal_total_s": 3.91,
+      "clone_boot_ms": 998.8,
+      "rehearsal_total_s": 3.88,
       "rehearsal_each_s": [
-        3.9,
-        3.91,
-        3.94
+        3.82,
+        3.88,
+        3.95
       ],
-      "execute_s": 2.28,
+      "execute_s": 2.25,
       "rows_changed": 14819,
       "rehearsals_ok": 3,
       "errors": []
@@ -28,21 +28,21 @@
       "scale": 8.0,
       "db_mb": 101,
       "users": 42021,
-      "seed_s": 25.5,
+      "seed_s": 29.2,
       "dump_mb": 9.9,
-      "checksum_s": 3.05,
-      "pg_dump_s": 2.56,
-      "golden_build_s": 5.53,
-      "restore_in_vm_s": 1.89,
+      "checksum_s": 2.56,
+      "pg_dump_s": 2.58,
+      "golden_build_s": 5.63,
+      "restore_in_vm_s": 1.83,
       "golden_cached": false,
-      "clone_boot_ms": 997.5,
-      "rehearsal_total_s": 8.4,
+      "clone_boot_ms": 986.9,
+      "rehearsal_total_s": 8.31,
       "rehearsal_each_s": [
+        8.28,
         8.31,
-        8.4,
-        8.5
+        8.36
       ],
-      "execute_s": 6.77,
+      "execute_s": 6.7,
       "rows_changed": 132770,
       "rehearsals_ok": 3,
       "errors": []
@@ -51,21 +51,21 @@
       "scale": 90.0,
       "db_mb": 1019,
       "users": 469877,
-      "seed_s": 287.6,
+      "seed_s": 293.6,
       "dump_mb": 112.9,
-      "checksum_s": 33.74,
-      "pg_dump_s": 25.88,
-      "golden_build_s": 27.74,
-      "restore_in_vm_s": 19.92,
+      "checksum_s": 35.92,
+      "pg_dump_s": 26.28,
+      "golden_build_s": 27.29,
+      "restore_in_vm_s": 19.91,
       "golden_cached": false,
-      "clone_boot_ms": 1014.2,
-      "rehearsal_total_s": 56.8,
+      "clone_boot_ms": 990.1,
+      "rehearsal_total_s": 56.16,
       "rehearsal_each_s": [
-        56.4,
-        56.8,
-        56.87
+        55.79,
+        56.16,
+        56.43
       ],
-      "execute_s": 55.06,
+      "execute_s": 54.47,
       "rows_changed": 1463901,
       "rehearsals_ok": 3,
       "errors": []
@@ -74,12 +74,12 @@
       "scale": 320.0,
       "db_mb": 3610,
       "users": 1669411,
-      "seed_s": 1040.5,
+      "seed_s": 1076.1,
       "dump_mb": 406.6,
-      "checksum_s": 258.57,
-      "pg_dump_s": 99.18,
-      "golden_build_s": 72.83,
-      "restore_in_vm_s": 50.73,
+      "checksum_s": 210.69,
+      "pg_dump_s": 86.75,
+      "golden_build_s": 70.96,
+      "restore_in_vm_s": 49.59,
       "golden_cached": false,
       "clone_boot_ms": null,
       "rehearsal_total_s": null,
@@ -88,10 +88,10 @@
       "rows_changed": null,
       "rehearsals_ok": 0,
       "errors": [
-        "canceling statement due to statement timeout CONTEXT: SQL function \"current_step\" during startup SQL statement \"INSERT INTO shadow.changes (step, relid, tbl, op, depth, old_row, new_row) VALUES ( shad",
+        "canceling statement due to statement timeout CONTEXT: SQL statement \"DELETE FROM ONLY \"public\".\"sessions\" WHERE $1 OPERATOR(pg_catalog.=) \"user_id\"\"",
         "canceling statement due to statement timeout CONTEXT: SQL function \"current_step\" during startup SQL statement \"INSERT INTO shadow.changes (step, relid, tbl, op, depth, old_row, new_row) VALUES ( shad"
       ]
     }
   ],
-  "rerun": "python -m bench.scale --scales 1.0 8.0 90.0 320.0"
+  "rerun": "bash scripts/bench_remote.sh 'python -m bench.scale --scales 1.0 8.0 90.0 320.0'"
 }

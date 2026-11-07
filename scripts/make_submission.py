@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 from checker.control_kinds import control_kind  # noqa: E402
-from make_readme_table import evasion_sentence, basis_sentence, concentration_sentence, hold_sentence, lead_sentence, rehearsing_text, saber_sentence, task_level_sentence, view  # noqa: E402
+from make_readme_table import block_summary, evasion_sentence, basis_sentence, concentration_sentence, hold_sentence, lead_sentence, rehearsing_text, saber_sentence, task_level_sentence, view  # noqa: E402
 
 
 def load(name: str) -> dict | None:
@@ -42,11 +42,17 @@ def main() -> int:
         headline = "(Fill in after the final benchmark: run scripts/make_submission.py again.)"
         external = timing = ""
     containment = f"{rt.get('contained', '?')} of {rt.get('total', '?')} red-team attacks contained, checked from the host, with prod's hash unchanged." if rt else ""
+    plain = lambda t: t.replace("**", "").replace("`", "")
+    summary = plain(block_summary()) if measured else ""
+    vu = load("vultr.json") or {}
+    vultr_measured = f" {plain(vu['headline'])}" if vu.get("headline") else ""
+    soak = load("soak.json") or {}
+    soak_line = f" {soak.get('rehearsals')} rehearsals in a row left no sandbox behind." if soak.get("all_contained") and soak.get("rehearsals") else ""
     brief = (
         "AI agents with real access keep destroying production data with one command. Shadow Run sits between an agent and prod and holds the only credential. "
         "Every risky plan is frozen, hashed and run on a full clone of prod in a fresh Microsandbox microVM on Vultr, with no network device and no secrets. Postgres reports what really happened, frozen guardrails check it, and failures go back to the agent to rewrite the plan. "
         "A different person approves those exact hashes, and the same plan runs on prod in one transaction that rolls back if anything differs from the rehearsal.\n\n"
-        + (f"{lead} {hold_sentence(st, r)}\n\n" if measured else "")
+        + (f"{summary}\n\n" if measured else "")
         + "Every LLM call goes to Vultr Serverless Inference, on VX1, Cloud Compute, Managed PostgreSQL, Object Storage and a VPC. It ships as a web app, an MCP server, a CLI and a GitHub Action."
     )
     mk = json.loads((ROOT / "docs" / "market.json").read_text())
@@ -54,7 +60,7 @@ def main() -> int:
         f"Who pays: whoever owns the database at a team using coding agents. {mk['developers_using_agents']['weekly_pct']}% of professional developers now use them weekly ({mk['developers_using_agents']['source']}). "
         f"It starts free, as a pull request Action that can't touch prod, and then a subscription per protected database, with a self-hosted licence for regulated teams. "
         f"Gartner expects guardian agents to take {mk['guardian_share']['low_pct']} to {mk['guardian_share']['high_pct']}% of the agentic AI market by {mk['guardian_share']['by_year']}. "
-        f"Linters like Atlas and Bytebase read the statement, and thin clones like DBLab and Neon give a copy. {mk['us']['usp']} "
+        f"Migration linters read the statement, and thin clones like DBLab and Neon give a copy. {mk['us']['usp']} "
         f"Where it's weak: {mk['us']['weakness'][0].lower()}{mk['us']['weakness'][1:]}"
     )
     gt = load("gauntlet.json") or {}
@@ -83,25 +89,27 @@ Your agent wants to touch prod. Shadow Run lets it break a clone first: it rehea
 
 ## Long description
 
-AI agents with real access keep destroying production data with one command. In April 2026 a coding agent at PocketOS deleted a production volume and its backups in nine seconds, by its founder's account. In February, a `terraform destroy` took down DataTalks.Club for about a day. In both, keeping dev and prod apart didn't help, because the agent found a credential that reached prod, and the damage hid in side effects nobody had listed.
+**The problem.** AI agents with real access keep destroying production data with one command. In April 2026 a coding agent at PocketOS deleted a production volume and its backups in nine seconds, by its founder's account. In February, a `terraform destroy` took down DataTalks.Club for about a day. Keeping dev and prod apart didn't help: the agent found a credential that reached prod, and the damage hid in side effects nobody had listed.
 
-Shadow Run sits between an agent and production and holds the only credential. The agent gets a few tools, to inspect a clone, rehearse a plan and ask to apply it. A plan is frozen and hashed, read by a static gate, and run on a full clone of prod inside a fresh Microsandbox microVM with no network device and no secrets. Postgres itself reports what happened: rows per table, each foreign-key cascade traced to the step that caused it, schema changes, before and after samples. Business guardrails that the agent can't edit run in the same transaction. On failure, the measurements go back to the agent, and it revises and rehearses again on a new clone.
+**What Shadow Run does.** It sits between an agent and production and holds the only credential. Every risky SQL or shell plan is frozen and hashed, read by a static gate, and run on a full clone of prod inside a fresh microVM on a Vultr VX1, with no network card and no secrets. Postgres itself reports what happened: rows per table, every foreign-key cascade traced to the step that caused it, and what it does to the numbers a business watches, in dollars. Frozen business guardrails run in the same transaction, and a failure goes back to the agent to rewrite the plan. A different person approves those exact hashes, and the same plan runs on prod in one transaction that rolls back if anything differs from the rehearsal. Almost every plan that passes comes with an undo, proved on the clone before anyone approves.
 
-A small change goes through alone only if it stays on a list of tables and columns the team named as low-risk. Everything else waits for a different person, who approves those exact hashes, and a changed or replayed approval gets a 409. The same plan then runs on prod in one transaction, with the touched tables locked and re-checked for drift. If row counts, row content, schema or guardrails differ from the rehearsal at all, it rolls back. A backup and a signed evidence bundle go to Object Storage.
+**What we measured.** Same agent, same prompt, a fresh copy of the database for every run, 3 runs per task:
 
-{headline} {external} {timing} {containment} {controls}
+{summary}
 
-{evasion} The rubber-stamp gap and the other limits are published in the README: side effects outside the target can't be rehearsed, some harm needs a person to notice, and clone cost grows with database size.
+{timing} The limits are published with the numbers: side effects outside the target can't be rehearsed, some harm needs a person to notice, and clone cost grows with database size.
 
-Almost every plan that passes also comes with an undo, written from the row log and proved on the clone before anyone approves: its check is that each touched table's content hash returns to where it started. A second microVM has to reproduce the result. The report states what a plan does to the numbers a business watches, in dollars, not only in rows, and the commands behind real incidents can be replayed on a clone from the web app.
+**What we found.** {evasion}
 
-{attack}
+**Containment, checked from outside the sandbox.** {containment} {controls}{soak_line}
 
-It ships as an MCP server, shown with OpenCode on Vultr inference, plus a web app, a CLI and a GitHub Action that posts what a migration really does on the pull request. Every LLM call goes to Vultr Serverless Inference, and the model never grades itself: it proposes plans and explains results, while Postgres measures and frozen checks decide.
+**We attacked our own policy.** {attack.replace('We attacked our own policy. ', '', 1)}
 
-{market}
+**Built on Vultr, end to end.** Every LLM call goes to Vultr Serverless Inference, and the models never grade themselves: they propose plans, draft guardrails, explain results and read plans a second time, while Postgres measures and frozen checks decide. The microVMs run on a Vultr VX1, the control plane on Vultr Cloud Compute, prod is Vultr Managed PostgreSQL, evidence bundles and backups go to Vultr Object Storage, and the runner sits on a Vultr VPC behind a firewall group. One script creates all of it from zero and one removes it.{vultr_measured}
 
-Built on Vultr: VX1 for the microVMs, Cloud Compute for the control plane, Serverless Inference, Managed PostgreSQL, Object Storage and a VPC, all created from zero by one script and removed by another.
+**Who pays.** {market.replace('Who pays: whoever', 'Whoever', 1)}
+
+**Try it.** {url}: press Race the agent to watch the same task run alone and through Shadow Run, side by side, or Continue as guest to request, approve, break and undo a change yourself. It also ships as an MCP server (shown with OpenCode on Vultr inference), a CLI and a GitHub Action that posts what a migration really does on the pull request.
 
 ## Long description, shorter
 
@@ -125,7 +133,7 @@ GitHub: https://github.com/Prashant-thakur77/Shadow-Run
 
 Demo platform: Vultr (Cloud Compute for the app, VX1 for the sandboxes)
 
-Video presentation (MP4): upload `var/video/shadow-run-demo.mp4`
+Video presentation (MP4): upload `video/final.mp4`
 
 Slide presentation (PDF): upload `docs/slides.pdf`
 

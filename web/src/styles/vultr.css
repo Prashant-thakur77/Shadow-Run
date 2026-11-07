@@ -1,0 +1,162 @@
+/* Each Vultr service as one hairline tile: what it does, its measured figure, the detail, and where the numbers came from. */
+.vr {
+  display: grid;
+  gap: var(--s-5);
+  min-width: 0;
+}
+/* The tiles draw the hairlines, so a row that isn't full leaves page, not a grey block. Six tiles fill 3, 2 and 1 columns. */
+.vr-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+.vr-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
+  padding: var(--s-5) var(--s-5) var(--s-4);
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+@media (min-width: 720px) {
+  .vr-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1100px) {
+  .vr-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.vr-role {
+  max-width: 44ch;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.45;
+}
+.vr-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px var(--s-3);
+  margin: var(--s-1) 0 0;
+  color: var(--ink);
+}
+.vr-unit {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.35;
+}
+.vr-facts {
+  display: grid;
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+.vr-facts > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 2px var(--s-3);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+.vr-facts dt {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.35;
+}
+.vr-facts dd {
+  margin: 0 0 0 auto;
+  color: var(--ink);
+  font-size: var(--fs-s);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.vr-source {
+  margin-top: auto;
+  padding-top: var(--s-1);
+}
+
+.vr-models {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.vr-models-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px var(--s-4);
+}
+.vr-model-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.vr-model {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-5);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-s);
+}
+.vr-model-name {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.vr-model-jobs {
+  color: var(--ink-2);
+}
+.vr-model-price {
+  color: var(--ink-2);
+  text-align: right;
+}
+.vr-foot {
+  margin: 0;
+}
+@media (max-width: 719px) {
+  .vr-tile {
+    padding: var(--s-4);
+  }
+  .vr-model {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .vr-model-price {
+    text-align: left;
+  }
+}
+.vr-section {
+  scroll-margin-top: 96px;
+}
+
+/* Vultr blue marks what Vultr runs: each tile carries it as a bar and in its figure. */
+.vr-tile {
+  position: relative;
+}
+.vr-tile::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  height: 3px;
+  background: var(--vultr);
+}
+.vr-figure {
+  color: var(--vultr);
+}
+.vr-model-name {
+  color: var(--vultr);
+}

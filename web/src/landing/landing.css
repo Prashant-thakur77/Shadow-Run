@@ -55,7 +55,7 @@
    If the stage would fall below 420 px, the page scrolls rather than shrinking it. */
 .hero {
   display: grid;
-  grid-template-rows: auto minmax(420px, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(420px, 1fr) auto auto;
   height: max(calc(100vh - var(--header-h)), 700px);
   padding: 18px var(--margin) 10px;
   gap: 12px;
@@ -849,4 +849,78 @@
 .xr-needle.is-low .xr-read {
   top: auto;
   bottom: 6px;
+}
+/* Until a value lands, its cell says so with a dash instead of sitting empty. */
+.foot-cells .is-pending dd {
+  position: relative;
+}
+.foot-cells .is-pending dd::after {
+  content: '—';
+  position: absolute;
+  left: 0;
+  top: 0;
+  visibility: visible;
+  color: var(--ink-3);
+}
+.prod-hashes .prod-pending {
+  color: var(--ink-3);
+}
+
+/* The live strip: the system as it is now, read from /api/health. */
+.live-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  margin: 0;
+  justify-self: start;
+  padding: 7px 12px;
+  border: 1px solid var(--vultr-line);
+  background: var(--vultr-bg);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+.live-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--vultr);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vultr);
+  box-shadow: 0 0 0 0 var(--vultr);
+  animation: live-pulse 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(59 139 255 / 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgb(59 139 255 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(59 139 255 / 0);
+  }
+}
+.live-k {
+  color: var(--vultr);
+}
+.live-v {
+  color: var(--ink);
+}
+.live-v.is-off {
+  color: var(--bad);
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
 }

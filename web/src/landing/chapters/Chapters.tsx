@@ -1,5 +1,5 @@
 import { api } from '../../api/client';
-import type { EvasionFacts, Incident, Market, Receipt } from '../../api/types';
+import type { EvasionFacts, Incident, Market, Receipt, VultrUsage } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
 import { useLanding } from '../context';
 import '../chapters.css';
@@ -10,6 +10,7 @@ import { HasHappened } from './HasHappened';
 import { Results } from './Results';
 import { TheRun } from './TheRun';
 import { TryToBreak } from './TryToBreak';
+import { VultrChapter } from './VultrChapter';
 import { WhoPays } from './WhoPays';
 
 export default function Chapters() {
@@ -18,6 +19,7 @@ export default function Chapters() {
   const receipts = useAsync<{ items?: Receipt[]; note?: string }>(() => api.receipts());
   const market = useAsync<Market>(() => api.market());
   const evasion = useAsync<EvasionFacts>(() => api.evasion());
+  const vultr = useAsync<VultrUsage>(() => api.vultr());
   const hero = info?.hero ?? null;
   const items = receipts.data?.items;
   return (
@@ -28,6 +30,7 @@ export default function Chapters() {
       <TryToBreak receipts={items} loading={receipts.loading} />
       <GotAroundChapter facts={evasion.data ?? null} />
       <Results headline={info?.headline ?? null} receipts={items} />
+      <VultrChapter usage={vultr.data ?? null} />
       <WhoPays market={market.data} videoUrl={info?.video_url} />
       <Close />
     </div>

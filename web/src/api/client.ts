@@ -1,4 +1,4 @@
-import type { AttackDef, Audit, Candidate, Challenge, EvasionFacts, Gauntlet, GauntletPublished, GuardrailDraft, Health, Incident, Inspect, Market, Me, ProdChecksum, PublicInfo, Race, Receipt, RedTeamRun, Run, RunFeed, RunSummary, Target } from './types';
+import type { AttackDef, Audit, Candidate, Challenge, EvasionFacts, Gauntlet, GauntletPublished, GuardrailDraft, Health, Incident, Inspect, Market, Me, ProdChecksum, PublicInfo, Race, Receipt, RedTeamRun, Run, RunFeed, RunSummary, Target, VultrUsage } from './types';
 import { rememberRun } from '../lib/myRuns';
 
 export class ApiError extends Error {
@@ -116,6 +116,7 @@ export const api = {
   publicInfo: () => call<PublicInfo>('GET', '/api/public', undefined, null),
   market: () => call<Market>('GET', '/api/market', undefined, null),
   evasion: () => call<EvasionFacts>('GET', '/api/evasion', undefined, null),
+  vultr: () => call<VultrUsage>('GET', '/api/vultr', undefined, null),
   demoEnter: () => call<{ username: string; name?: string; token: string; others?: Record<string, string> }>('POST', '/api/demo/enter', {}, null),
   me: (token?: string | null) => call<Me>('GET', '/api/me', undefined, token === undefined ? undefined : token),
 

@@ -44,3 +44,14 @@ def demo_dump(prod_dsn: str, tmp_path_factory) -> Path:
     with open(path, "wb") as f:
         subprocess.run(["pg_dump", "-Fc", "-h", "127.0.0.1", "-p", "55432", "-U", "postgres", "-d", "prod"], stdout=f, env=env, check=True)
     return path
+
+
+@pytest.fixture(autouse=True)
+def second_reader_agrees(request, monkeypatch):
+    """The check for getting around a rule asks a second model, and no test may depend on a live model call. It agrees by
+    default; a test about it sets its own answer, and the KVM tests that run the real loop keep the real one."""
+    if request.node.get_closest_marker("kvm"):
+        return
+    from control import evasion
+
+    monkeypatch.setattr(evasion, "second_reader", lambda *a, **k: {"model": "test", "verdict": "respects_it", "reason": ""})

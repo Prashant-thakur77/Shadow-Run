@@ -901,3 +901,87 @@ export interface EvasionFacts {
   }[];
   after?: Record<string, TaskLevel> & { checked?: number; flagged_at_least_once?: number; stopped?: number; runs?: number } | null;
 }
+
+interface Percentiles {
+  p50?: number | null;
+  p95?: number | null;
+  n?: number;
+}
+
+/** bench/vultr.json, written by bench/vultr_usage.py from the benchmark's runs files and Vultr's own APIs. */
+export interface VultrUsage {
+  at?: string;
+  rerun?: string;
+  read_only?: string;
+  benchmark?: { code_sha256?: string; code_matches_checkout?: boolean; files?: { results: string; runs: string; label?: string; planner_model?: string }[] } | null;
+  inference?: {
+    source?: string;
+    base_url?: string;
+    base_is_vultr?: boolean;
+    runs?: number;
+    models_used?: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    tokens?: number;
+    cost_usd?: number;
+    by_model?: { model: string; cost_usd?: number; phases?: string[] }[];
+    calls_at_least?: { planner?: number; explainer?: number; evasion_reader?: number; how?: string };
+  } | null;
+  models?: {
+    model: string;
+    name?: string | null;
+    listed?: boolean;
+    usd_per_million_prompt?: number | null;
+    usd_per_million_completion?: number | null;
+    jobs: { job: string; what?: string; setting?: string; where?: string }[];
+  }[] | null;
+  catalogue?: { source?: string; models_listed?: number } | null;
+  microvms?: {
+    source?: string;
+    rehearsals?: number;
+    reproductions?: number;
+    total?: number;
+    containment_complete?: number;
+    containment_incomplete?: number;
+    clone_boot_ms?: Percentiles;
+    rehearsal_s?: Percentiles;
+    soak?: { rehearsals?: number; all_contained?: boolean } | null;
+    redteam?: { attacks?: number; contained?: number } | null;
+  } | null;
+  postgres?: {
+    benchmark?: { source?: string; databases_created?: number; dropped?: number; drop_failed?: number } | null;
+    cluster?: {
+      source?: string;
+      engine?: string;
+      version?: string;
+      plan?: string;
+      region?: string;
+      status?: string;
+      vcpus?: number;
+      ram_mb?: number;
+      disk_gb?: number;
+      in_vpc?: boolean;
+      logical_databases?: number;
+    } | null;
+  } | null;
+  object_storage?: {
+    source?: string;
+    bucket?: string;
+    objects?: number;
+    bytes?: number;
+    by_prefix?: { prefix: string; objects: number; bytes: number; what?: string | null }[];
+  } | null;
+  resources?: {
+    source?: string;
+    count?: number;
+    firewall_rules?: number;
+    instances?: { label?: string; plan?: string; region?: string; status?: string; vcpu_count?: number; ram?: number; in_vpc?: boolean }[] | null;
+    vpcs?: { description?: string; region?: string; v4_subnet?: string; v4_subnet_mask?: number }[] | null;
+    firewalls?: { description?: string; rules?: number }[] | null;
+  } | null;
+  spend?: {
+    billed?: { source?: string; total_usd?: number; by_product?: { product: string; usd: number }[]; note?: string } | null;
+    budget?: { ceiling_usd?: number; spent_usd?: number; credit_left_usd?: number } | null;
+  } | null;
+  errors?: Record<string, string>;
+}

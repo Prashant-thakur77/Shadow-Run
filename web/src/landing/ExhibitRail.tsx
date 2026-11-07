@@ -8,6 +8,7 @@ const EXHIBITS: { id: string; name: string }[] = [
   { id: 'break', name: 'Try to break it' },
   { id: 'got-around', name: 'The finding' },
   { id: 'results', name: 'Results' },
+  { id: 'vultr', name: 'On Vultr' },
   { id: 'who-pays', name: 'Who pays' },
 ];
 

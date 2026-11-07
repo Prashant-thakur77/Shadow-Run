@@ -652,7 +652,7 @@ export function TwoRooms({
                 </span>
               ) : (
                 <span className="foot-rows" key="rows">
-                  {rows === null ? <span className="foot-pending">{live?.note ?? 'Nothing measured yet'}</span> : <Measured value={rows} format={num} source="report.tables, running sum" className="t-num-l" />}
+                  {rows === null ? <span className="foot-pending">{live?.note ?? 'Measuring on the clone'}</span> : <Measured value={rows} format={num} source="report.tables, running sum" className="t-num-l" />}
                   {rows !== null && <span className="foot-rows-label">{rows === 1 ? unit.slice(0, -1) : unit} changed</span>}
                 </span>
               )}
@@ -811,6 +811,20 @@ export function TwoRooms({
                   </div>
                 </dl>
                 <p className="prod-note">Measured {plainSource(hero.prod.measured_from)}.</p>
+              </>
+            ) : !prodView && hero.prod.before ? (
+              <>
+                <dl className="prod-hashes">
+                  <div>
+                    <dt>before</dt>
+                    <dd>{short(hero.prod.before, 12)}</dd>
+                  </div>
+                  <div>
+                    <dt>after</dt>
+                    <dd className="prod-pending">checked last</dd>
+                  </div>
+                </dl>
+                <p className="prod-waiting">Prod's hash before the rehearsal. The one after is measured last, outside the sandbox.</p>
               </>
             ) : (
               <p className="prod-waiting">{prodView?.waiting ?? 'Not checked yet in this replay. The hash is measured last.'}</p>

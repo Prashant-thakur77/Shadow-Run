@@ -646,3 +646,24 @@ textarea {
 .dialog-actions {
   margin-top: var(--s-2);
 }
+
+/* The first Tab stop on the landing page, shown only when it has focus. */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  padding: 8px 14px;
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: none;
+}
+/* A bracketed label is one unit: its closing bracket never wraps onto a line of its own. */
+.bracket {
+  white-space: nowrap;
+}

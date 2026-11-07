@@ -354,6 +354,12 @@ def evasion_public() -> dict:
     return evasion_facts() or {}
 
 
+@app.get("/api/vultr")
+def vultr_usage() -> dict:
+    """What each Vultr service did, as bench/vultr_usage.py measured it. Public, like the results it sits next to."""
+    return bench_json("vultr.json") or {}
+
+
 @app.get("/api/public")
 def public_info() -> dict:
     """What the landing page shows before anyone signs in. Numbers only from the benchmark's own file."""

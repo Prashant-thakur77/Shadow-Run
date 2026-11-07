@@ -87,7 +87,8 @@ const PENDING: Cell = { text: 'Not measured yet', tone: 'neutral', pending: true
 /** The cell for a lane that has no number to give, and the reason in a word. */
 function emptyCell(lane: Lane): Cell | null {
   if (!lane.settled) return PENDING;
-  if (lane.refused) return { text: 'Agent refused', tone: 'neutral', word: true };
+  // The agent stopped without a plan, so nothing of this reached anywhere. The verdict line says why.
+  if (lane.refused) return { text: 'none', tone: 'good', word: true };
   if (lane.noPlan) return { text: lane.run?.status === 'no_change' ? 'Changes nothing' : 'No plan', tone: 'neutral', word: true };
   if (!lane.report) return { text: lane.final?.verdict === 'invalid_plan' ? 'No plan' : lane.failure ? 'Errored' : 'Not measured', tone: 'neutral', word: true };
   return null;
@@ -225,8 +226,20 @@ export function verdict(a: Lane, b: Lane): Verdict | null {
   const leftHarm = !!a.report && list.some((h) => h.alone > 0 && h.label !== 'rows deleted');
 
   if (b.refused) {
-    const lines = [b.refused.reason, a.refused ? 'Neither lane ended with a plan that changes anything, and nothing reached prod.' : 'Through Shadow Run it ended with no plan that changes anything, and nothing reached prod.'].filter((l): l is string => !!l);
     const big = list.find((h) => h.alone > 0);
+    const caught = (b.run?.attempts ?? []).find((x) => x.verdict === 'evaded_rule');
+    const why = [b.refused.reason, caught ? `On attempt ${num(caught.n)} its plan got around a rule it had broken, so it went back. Then the agent stopped.` : null];
+    if (a.report && big && big.format === money && !a.refused) {
+      const lines = [...why, 'Through Shadow Run nothing reached prod, and the task is not done: the agent stopped and said why.'].filter((l): l is string => !!l);
+      return {
+        tone: 'good',
+        title: `The agent alone would lose ${money(big.alone)} of ${big.label}. Through Shadow Run, nothing reached prod.`,
+        lines,
+        doubt: null,
+        figures: { label: big.label, alone: `−${money(big.alone)}`, through: '$0', better: true },
+      };
+    }
+    const lines = [b.refused.reason, a.refused ? 'Neither lane ended with a plan that changes anything, and nothing reached prod.' : 'Through Shadow Run it ended with no plan that changes anything, and nothing reached prod.'].filter((l): l is string => !!l);
     if (a.report && big) lines.push(big.format === money ? `On its first try, the agent alone would have lost ${money(big.alone)} of ${big.label}.` : `On its first try, the agent alone wrote a plan: ${big.format(big.alone)} ${big.label}.`);
     return { tone: leftHarm ? 'caution' : 'neutral', title: 'The agent refused this request.', lines, doubt: null };
   }

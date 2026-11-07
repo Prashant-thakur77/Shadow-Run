@@ -1,8 +1,8 @@
 {
-  "at": "2026-11-06T14:01:35Z",
+  "at": "2026-11-07T17:42:06Z",
   "url": "https://144-202-92-64.sslip.io",
-  "passed": 33,
-  "total": 33,
+  "passed": 34,
+  "total": 34,
   "controls": [
     {
       "control": "Requester approves their own run",
@@ -50,13 +50,13 @@
       "control": "Apply the approved plan",
       "must": "committed, counts equal rehearsal",
       "ok": true,
-      "got": "status=applied counts={'sessions': {'ins': 0, 'upd': 0, 'del': 2125}}"
+      "got": "status=applied counts={'sessions': {'ins': 0, 'upd': 0, 'del': 2135}}"
     },
     {
       "control": "Prod really changed after apply",
       "must": "digest differs",
       "ok": true,
-      "got": "03d0ebc88dd8 -> a028bb097115"
+      "got": "03d0ebc88dd8 -> 9e55686feb9f"
     },
     {
       "control": "Evidence bundle written to Object Storage",
@@ -64,8 +64,8 @@
       "ok": true,
       "got": {
         "store": "vultr-object-storage",
-        "key": "runs/r6193afc4320f4f/evidence.json",
-        "bytes": 16151
+        "key": "runs/r7f3bcbc92f474c/evidence.json",
+        "bytes": 16278
       }
     },
     {
@@ -74,8 +74,8 @@
       "ok": true,
       "got": {
         "store": "vultr-object-storage",
-        "key": "backups/r6193afc4320f4f/pre-apply.dump",
-        "bytes": 1243941
+        "key": "backups/r7f3bcbc92f474c/pre-apply.dump",
+        "bytes": 1244036
       }
     },
     {
@@ -94,7 +94,7 @@
       "control": "Prod changed after rehearsal; drift check off",
       "must": "rolled_back on count mismatch, nothing applied",
       "ok": true,
-      "got": "status=rolled_back reason=row content differs from the rehearsal on 1 table(s); row counts differ from the rehearsal on 1 table(s) mismatches=[{'table': 'users', 'rehearsal': {'ins': 0, 'upd': 616, 'del': 0}, 'actual': {'ins': 0, 'upd': 617, 'del': 0}}] prod unchanged=True"
+      "got": "status=rolled_back reason=row content differs from the rehearsal on 1 table(s); row counts differ from the rehearsal on 1 table(s) mismatches=[{'table': 'users', 'rehearsal': {'ins': 0, 'upd': 620, 'del': 0}, 'actual': {'ins': 0, 'upd': 621, 'del': 0}}] prod unchanged=True"
     },
     {
       "control": "Cascade trap via the API: guardrail stops it",
@@ -122,9 +122,15 @@
     },
     {
       "control": "The same trick on a listed column, so no person is looking",
-      "must": "rolled back on row content, prod unchanged",
+      "must": "needs a person, because it asks where it's running",
       "ok": true,
-      "got": "status=rolled_back reason=row content differs from the rehearsal on 1 table(s) prod unchanged=True"
+      "got": "status=awaiting_approval reasons=['static gate verdict is review'] prod unchanged=True"
+    },
+    {
+      "control": "A sequence reset that only fires on prod, riding on a change to a listed column",
+      "must": "needs a person",
+      "ok": true,
+      "got": "status=awaiting_approval reasons=[\"it calls inet_server_addr, which isn't one of the functions that may run with no person\", 'static gate verdict is review'] prod unchanged=True"
     },
     {
       "control": "Column rewrite that fires no row trigger and moves no statistic",
@@ -184,19 +190,19 @@
       "control": "A plan comes with an undo, proved on a clone before anyone approves",
       "must": "verified",
       "ok": true,
-      "got": "verified=True rows restored=2125 reverted=3"
+      "got": "verified=True rows restored=2135 reverted=3"
     },
     {
       "control": "A second clone reproduces the result before anyone approves",
       "must": "reproduced",
       "ok": true,
-      "got": "{'ok': True, 'differs': [], 'sandbox': 'sr-run-r2c683e6b111242a1b', 'ms': 2684.6, 'contained': True}"
+      "got": "{'ok': True, 'differs': [], 'sandbox': 'sr-run-r37636b8b4f184da1b', 'ms': 2588.8, 'contained': True}"
     },
     {
       "control": "Apply a change, then undo it through the same pipeline",
       "must": "prod's hash returns to its exact starting value",
       "ok": true,
-      "got": "03d0ebc88dd8 -> 3856afeb1cd5 -> 03d0ebc88dd8"
+      "got": "03d0ebc88dd8 -> a9a5d04bb7b7 -> 03d0ebc88dd8"
     },
     {
       "control": "A reviewer's rejection becomes a guardrail, proved on a clone, and the same plan then fails",
@@ -210,8 +216,8 @@
       "ok": true,
       "got": {
         "ok": true,
-        "events": 2750,
-        "head": "9ab99af823915d3ae828a708fe0902cb7c41e1f2555e71ec635880b942301329"
+        "events": 4213,
+        "head": "71b2b581f89bbc2fa62c833a85fed5e86dfbffacf07002b287c559944f2eb9a0"
       }
     }
   ]

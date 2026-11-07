@@ -87,7 +87,9 @@ export function WithWithout({ run }: { run: Run }) {
   }
   const byId = (list: Metric[] | undefined, id: string) => list?.find((m) => m.id === id);
   const leftLine = attemptLine(first);
-  const info = statusInfo(run.status);
+  // In the column that shows what Shadow Run did, a stop is the safe outcome, the same meaning as a refused attack.
+  const base = statusInfo(run.status);
+  const info = run.status === 'blocked' ? { ...base, label: 'Stopped before prod', tone: 'good' as const } : base;
 
   const measures: { key: string; label: ReactNode; left: ReactNode; right: ReactNode }[] = isHost
     ? [

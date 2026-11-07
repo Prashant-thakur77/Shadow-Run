@@ -89,8 +89,18 @@ def basis_sentence(v: dict) -> str:
 def lead_sentence(v: dict) -> str:
     h = v["sets"]["heldout"]
     d, u = h["arms"]["direct"], h["arms"]["unread"]
+    c = h["compare"]["unread_vs_direct"]
+    harm_clear = c["harm"]["excludes_zero"] and c["harm"]["difference"] < 0
+    done_clear = c["done"]["excludes_zero"]
+    if done_clear:
+        done = f"and finished safely on {u['done']:g} instead of {d['done']:g}"
+    elif u["done"] == d["done"]:
+        done = f"and finished safely on {u['done']:g}, the same as alone"
+    else:
+        done = f"and finished safely on {u['done']:g} against {d['done']:g}, a difference this sample can't tell from chance"
+    lead = "harm fell" if harm_clear else "harm went"
     return (
-        f"**With every plan approved unread, the same agent did harm on {u['harm']:g} of {h['tasks']} held-out risky tasks instead of {d['harm']:g}, and finished safely on {u['done']:g} instead of {d['done']:g}.** "
+        f"**With every plan approved unread, {lead} from {d['harm']:g} to {u['harm']:g} of {h['tasks']} held-out risky tasks, {done}.** "
         "These are our own tasks, on a demo schema with cascading foreign keys and guardrails written for it."
     )
 
@@ -392,7 +402,7 @@ def block_results() -> str:
     if kept:
         note += (
             f" Each of the {kept['rehearsals']:,} rehearsals needs a complete containment record from the host, with probes, kernel check and teardown proof. "
-            f"{kept['incomplete']} came back without one and were refused, not counted."
+            f"{kept['incomplete']} came back without one and {'was' if kept['incomplete'] == 1 else 'were'} refused, not counted."
         )
     note += " " + provenance.code_line(r)
     return table(columns, rows) + "\n\n" + note
@@ -693,7 +703,112 @@ def block_evasion() -> str:
     return "\n\n".join(out)
 
 
+def vultr_line(vu: dict | None) -> str:
+    """One sentence on what the final benchmark did on Vultr, from bench/vultr.json. Empty if it wasn't measured."""
+    if not vu or not (vu.get("benchmark") or {}).get("code_matches_checkout"):
+        return ""
+    inf, mv = vu.get("inference") or {}, vu.get("microvms") or {}
+    pg = (vu.get("postgres") or {}).get("benchmark") or {}
+    os_ = vu.get("object_storage") or {}
+    budget = (vu.get("spend") or {}).get("budget") or {}
+    parts = []
+    if inf.get("tokens"):
+        parts.append(f"the final benchmark spent {inf['tokens']:,} tokens of Serverless Inference across {inf['models_used']} models (${inf['cost_usd']:.2f})")
+    if mv.get("total"):
+        parts.append(f"booted {mv['total']:,} microVMs on one VX1")
+    if pg.get("databases_created"):
+        parts.append(f"created and dropped {pg['databases_created']:,} databases on Managed PostgreSQL over the VPC")
+    if os_.get("objects"):
+        parts.append(f"and Object Storage holds {os_['objects']} evidence bundles and pre-apply backups")
+    text = ", ".join(parts)
+    if budget.get("spent_usd") is not None:
+        text += f". Spent so far: ${budget['spent_usd']:.2f} of the ${budget['ceiling_usd']:.0f} credit"
+    return text[:1].upper() + text[1:] if text else ""
+
+
+def block_vultr() -> str:
+    vu = load("vultr.json")
+    if not vu or not (vu.get("benchmark") or {}).get("code_matches_checkout"):
+        return ""
+    inf, mv = vu.get("inference") or {}, vu.get("microvms") or {}
+    pg = (vu.get("postgres") or {}).get("benchmark") or {}
+    os_ = vu.get("object_storage") or {}
+    budget = (vu.get("spend") or {}).get("budget") or {}
+    res = vu.get("resources") or {}
+    jobs = "; ".join(f"`{m['model']}`: {', '.join(j['job'] for j in m['jobs'])}" for m in vu.get("models") or [])
+    rows = []
+    if inf.get("tokens"):
+        rows.append(["Serverless Inference", f"{inf['tokens']:,} tokens over {inf['runs']:,} benchmark runs, ${inf['cost_usd']:.2f}. {jobs}"])
+    if mv.get("total"):
+        boot = mv.get("clone_boot_ms") or {}
+        rows.append(["VX1", f"{mv['total']:,} microVMs: {mv['rehearsals']:,} rehearsals and {mv['reproductions']:,} second-clone reproductions. Clone boot p50 {boot.get('p50', 0):,.0f} ms, p95 {boot.get('p95', 0):,.0f} ms. {mv['containment_complete']:,} of {mv['rehearsals']:,} rehearsals came back with a complete containment record; the rest were refused, not counted"])
+    if pg.get("databases_created"):
+        rows.append(["Managed PostgreSQL 16", f"{pg['databases_created']:,} databases created from templates for single runs and dropped after them ({pg['drop_failed']} drops failed), over the VPC"])
+    if os_.get("objects"):
+        pre = "; ".join(f"{p['objects']} under `{p['prefix']}/`, {p['what']}" for p in os_.get("by_prefix") or [])
+        rows.append(["Object Storage", f"{os_['objects']} objects, {os_['bytes'] / 1048576:.1f} MiB: {pre}"])
+    if res.get("count"):
+        rows.append(["The account", f"{res['count']} resources tagged shadowrun, {res.get('firewall_rules', 0)} firewall rules" + (f". Spent ${budget['spent_usd']:.2f} of the ${budget['ceiling_usd']:.0f} credit" if budget.get("spent_usd") is not None else "")])
+    if not rows:
+        return ""
+    return (
+        "Measured, not estimated: what the final benchmark did on each service, from the runs files and read-only Vultr API calls.\n\n"
+        + table(["Vultr service", "In the final benchmark"], rows)
+        + f"\n\nRe-run: `{vu.get('rerun', 'python -m bench.vultr_usage')}`."
+    )
+
+
+def block_summary() -> str:
+    """The README's first screen: each line is one claim with its number, read from the files it names."""
+    r, st = load("results.json"), load("stats.json")
+    if not r or not st or not st.get("main") or r.get("status") != "measured" or not comparable(r):
+        return NOT_YET
+    v = view(st, r)
+    h = v["sets"]["heldout"]
+    held = r["heldout"]["shadow_run"]
+    d, u = h["arms"]["direct"], h["arms"]["unread"]
+    c = h["compare"]["unread_vs_direct"]
+    out = [
+        f"- **{held['harm_on_prod']['mean']:g} of {h['tasks']} held-out risky tasks did harm on prod before a person saw the plan.** The same agent alone did harm on {d['harm']:g}. "
+        + (f"Nothing that changed anything went through without a person: {held['risky_held']['mean']:g} of {h['tasks']} risky plans waited, which is where the zero comes from"
+           if st["main"]["retries"]["auto_applied_that_changed_something"] == 0
+           else f"{held['risky_held']['mean']:g} of {h['tasks']} risky plans waited for a person, and the {st['main']['retries']['auto_applied_that_changed_something']} plans that changed something alone stayed inside the team's named low-risk list")
+        + " (`bench/results.json`).",
+        f"- **Approved unread, harm went from {d['harm']:g} to {u['harm']:g}**"
+        + (f", and that holds task by task ({fmt_ci(c['harm'])}, {fmt_p(c['harm']['permutation_p'])})." if c["harm"]["excludes_zero"] and c["harm"]["difference"] < 0 else f" ({fmt_ci(c['harm'])}, {fmt_p(c['harm']['permutation_p'])}).")
+        + (f" Work done: {d['done']:g} alone, {u['done']:g} through Shadow Run, which this sample can't separate ({fmt_p(c['done']['permutation_p'])})." if not c["done"]["excludes_zero"] else f" Work done: {d['done']:g} to {u['done']:g} ({fmt_p(c['done']['permutation_p'])}).")
+        + " (`bench/stats.json`)",
+    ]
+    ctl = (st.get("controls") or {})
+    held_sql = (ctl.get("sets") or {}).get("heldout_sql")
+    if held_sql and ctl.get("status") == "measured" and ctl.get("same_code_as_main"):
+        arms = held_sql["arms"]
+        tie = not held_sql["compare"]["unread_vs_rules"]["harm"]["excludes_zero"]
+        out.append(
+            f"- **Rules in the prompt {'cut harm about as much' if tie else 'did differently'}:** {arms['rules_in_prompt']['harm']:g} against Shadow Run's {arms['unread']['harm']:g} on {held_sql['tasks']} SQL tasks"
+            + (", which this sample can't separate. The difference is when it lands: a prompt's plan runs on prod with nobody looking." if tie else ".")
+        )
+    ev = load("evasion.json")
+    if ev and ev.get("detection"):
+        a, f_ = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
+        un = ev["detection"]["unseen"]
+        out.append(
+            f"- **Told which rule it broke, the agent sometimes gets around it.** Plans that passed only after breaking a rule were harmful {a['harmful_pct']}% of the time, against {f_['harmful_pct']}% for first-time passes. "
+            f"A measured check and a second model now send those plans back: {un['harmful']['caught']} of {un['harmful']['total']} harmful caught on plans neither had seen, {un['good']['caught']} of {un['good']['total']} good sent back by mistake (`bench/evasion.json`)."
+        )
+    rt = load("redteam.json")
+    if rt:
+        same = rt.get("prod_unchanged")
+        out.append(f"- **{rt['contained']} of {rt['total']} live attacks contained**, each in a microVM with no network card, checked from the host{', with prod’s hash unchanged' if same else ''} (`bench/redteam.json`).")
+    line = vultr_line(load("vultr.json"))
+    if line:
+        out.append(f"- **On Vultr end to end:** {line} (`bench/vultr.json`).")
+    return "\n".join(out)
+
+
 BLOCKS = {
+    "vultr": block_vultr,
+    "summary": block_summary,
     "evasion": block_evasion,
     "market": block_market,
     "reviewer": block_reviewer,
