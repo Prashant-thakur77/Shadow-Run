@@ -100,6 +100,9 @@ def summary(run: dict) -> None:
         print(f"apply     {run['apply'].get('outcome')}: {run['apply'].get('reason')}")
 
 
+REPO_URL = "https://github.com/Prashant-thakur77/Shadow-Run"
+
+
 def markdown(run: dict) -> str:
     """A pull request comment: what this migration really does, measured on a clone of prod."""
     final = run.get("final") or {}
@@ -131,6 +134,10 @@ def markdown(run: dict) -> str:
     undo = final.get("undo") or {}
     if undo.get("verified"):
         lines += ["Undo plan generated and proved on the clone.", ""]
+    if run.get("rehearse_only"):
+        # The free Action's comment is where a team first sees a measurement, so it says how to put the agent itself behind one.
+        lines += ["---", f"<sub>Rehearsed by Shadow Run. To put every change your coding agent makes through the same rehearsal, and a person's approval, before it reaches prod: "
+                  f"connect the agent over MCP at `{url or '$SHADOWRUN_URL'}/mcp` with a token from the Guardrails page ([setup]({REPO_URL}#try-it)).</sub>", ""]
     return "\n".join(lines)
 
 

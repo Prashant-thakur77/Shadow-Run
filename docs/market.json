@@ -67,7 +67,8 @@
   "Thin clones, so a rehearsal stays fast past a gigabyte, and masking personal data in the clone.",
   "Clones restored from Vultr Managed PostgreSQL's own backups, so a rehearsal skips the dump.",
   "An auto-apply list that grows: suggest additions from what a team keeps approving, and test each against the attacker first.",
-  "First customers: the free Action on real teams' migrations, then paid protected databases."
+  "First customers: the free Action on real teams' migrations, listed on GitHub Marketplace, with its pull request comment pointing at the MCP setup; then paid protected databases.",
+  "A one-click deployment of infra/provision.py for the self-hosted tier, on the customer's own Vultr account."
  ],
  "competition": [
   {

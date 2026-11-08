@@ -42,5 +42,5 @@
 <text x="644.0" y="446.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="middle" style="font-variant-numeric: tabular-nums">8</text>
 <text x="790.0" y="446.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="middle" style="font-variant-numeric: tabular-nums">12</text>
 <text x="804.0" y="446.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="start" style="font-variant-numeric: tabular-nums">tasks with harm</text>
-<text x="32.0" y="468.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="start" style="font-variant-numeric: tabular-nums">bench/results.json, bench/stats.json · tasks compared one by one, permutation test · drawn by scripts/make_charts.py</text>
+<text x="32.0" y="468.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="start" style="font-variant-numeric: tabular-nums">bench/results.json, bench/stats.json · the 0 rows are by design: risky plans wait for a person · tasks compared one by one, permutation test · scripts/make_charts.py</text>
 </svg>

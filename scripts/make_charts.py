@@ -99,7 +99,7 @@ def harm(t: dict) -> tuple[str, str]:
         body.append(text(px(v), y, fmt(v), t, 12, 400, "ink3", "middle"))
     body.append(text(X1 + 14, y, "tasks with harm", t, 12, 400, "ink3"))
     H = y + 40
-    body.append(text(32, H - 18, "bench/results.json, bench/stats.json · tasks compared one by one, permutation test · drawn by scripts/make_charts.py", t, 12, 400, "ink3"))
+    body.append(text(32, H - 18, "bench/results.json, bench/stats.json · the 0 rows are by design: risky plans wait for a person · tasks compared one by one, permutation test · scripts/make_charts.py", t, 12, 400, "ink3"))
     # the grid goes under the bars
     grid = [b for b in body if "stroke-dasharray" in b]
     rest = [b for b in body if "stroke-dasharray" not in b]

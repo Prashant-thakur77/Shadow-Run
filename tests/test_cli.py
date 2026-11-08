@@ -36,3 +36,13 @@ def test_exit_codes_for_ci():
 def test_a_rehearse_only_comment_says_nothing_reached_prod():
     assert "Nothing reached prod" in markdown(run(status="awaiting_approval", rehearse_only=True))
     assert "Nothing reached prod" not in markdown(run(status="awaiting_approval"))
+
+
+def test_a_rehearsal_only_comment_points_at_the_mcp_setup(monkeypatch):
+    monkeypatch.setenv("SHADOWRUN_URL", "https://demo.example")
+    text = markdown(run(status="awaiting_approval", rehearse_only=True))
+    assert "https://demo.example/mcp" in text and "#try-it" in text
+
+
+def test_a_normal_run_has_no_setup_footer():
+    assert "/mcp" not in markdown(run(status="awaiting_approval"))

@@ -640,6 +640,25 @@ def block_reviewer() -> str:
     )
 
 
+def fisher_greater(a: int, b: int, c: int, d: int) -> float:
+    """One-sided Fisher exact test that the first row's rate (a of a+b) is higher than the second's (c of c+d)."""
+    from math import comb
+    n1, n2, k = a + b, c + d, a + c
+    total = comb(n1 + n2, k)
+    return sum(comb(n1, x) * comb(n2, k - x) for x in range(a, min(n1, k) + 1)) / total
+
+
+def size_line() -> str:
+    """How big a database it serves today, from the largest scale run that finished."""
+    sc = load("scale.json")
+    ok = [r for r in (sc or {}).get("rows", []) if not r.get("errors") and r.get("rehearsal_total_s")]
+    if not ok:
+        return ""
+    big = max(ok, key=lambda r: r["db_mb"])
+    gb = big["db_mb"] / 1000
+    return (f"**Size served today.** Databases up to about {gb:.0f} GB: a full rehearsal of a {big['db_mb']:,} MB database, {big['rows_changed']:,} rows changed, took "
+            f"{big['rehearsal_total_s']:.0f} s (`bench/scale.json`). Thin clones are what takes it past that.")
+
 def evasion_sentence(d: dict) -> str:
     """The finding in one paragraph. The submission uses it too, so the two can't say different things."""
     r = d["rates"]
@@ -647,7 +666,8 @@ def evasion_sentence(d: dict) -> str:
     des, un = d["detection"]["design"], d["detection"]["unseen"]
     return (
         f"Told which rule it broke, the agent sometimes gets around it. In runs recorded before we checked for this, risky plans that passed only after breaking a guardrail "
-        f"did harm in {a['harmful']} of {a['plans']} cases ({a['harmful_pct']}%), against {f['harmful']} of {f['plans']} ({f['harmful_pct']}%) for plans that passed first time. "
+        f"did harm in {a['harmful']} of {a['plans']} cases ({a['harmful_pct']}%), against {f['harmful']} of {f['plans']} ({f['harmful_pct']}%) for plans that passed first time "
+        f"(one-sided Fisher exact test on those counts, p = {fisher_greater(a['harmful'], a['plans'] - a['harmful'], f['harmful'], f['plans'] - f['harmful']):.4f}). "
         f"So a plan that follows a broken rule now gets two more checks, and if either doubts it, the plan goes back to the agent. "
         f"On plans nobody read while writing the checks, they caught {un['harmful']['caught']} of {un['harmful']['total']} harmful plans and sent back {un['good']['caught']} of {un['good']['total']} good ones."
     )
@@ -719,7 +739,7 @@ def vultr_line(vu: dict | None) -> str:
     budget = (vu.get("spend") or {}).get("budget") or {}
     parts = []
     if inf.get("tokens"):
-        parts.append(f"the final benchmark spent {inf['tokens']:,} tokens of Serverless Inference across the {inf['models_used']} models it used (${inf['cost_usd']:.2f})")
+        parts.append(f"the final benchmark spent {inf['tokens']:,} tokens of Serverless Inference across the {inf['models_used']} models the benchmark called (${inf['cost_usd']:.2f})")
     if mv.get("total"):
         parts.append(f"booted {mv['total']:,} microVMs on one VX1")
     if pg.get("databases_created"):
@@ -809,7 +829,8 @@ def block_summary() -> str:
         a, f_ = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
         out.append(
             f"- **It found a failure mode a rule can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely. "
-            f"Plans that passed only after breaking a rule were harmful {a['harmful_pct']}% of the time, against {f_['harmful_pct']}% for first-time passes, so Shadow Run now screens every such plan twice, "
+            f"Plans that passed only after breaking a rule were harmful {a['harmful_pct']}% of the time, against {f_['harmful_pct']}% for first-time passes "
+            f"(Fisher exact, p = {fisher_greater(a['harmful'], a['plans'] - a['harmful'], f_['harmful'], f_['plans'] - f_['harmful']):.4f}), so Shadow Run now screens every such plan twice, "
             "once by measurement and once by a second model. What each catches is in [what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it) (`bench/evasion.json`)."
         )
     rt, inc, cl = load("redteam.json"), load("incidents.json"), load("controls.json")
@@ -873,7 +894,7 @@ def block_economics() -> str:
         return ""
     rows = [
         ["Inference on Vultr Serverless Inference, every model call", f"${e['inf']:g} per task (mean over all {e['tasks']} tasks)"],
-        [f"VX1 time, at most: the host's list price (${e['vx1']:g} an hour) for the task's whole wall time ({e['secs']:g} s)", f"${e['vx1_task']:.5f} per task"],
+        [f"VX1 time, at most: the host's list price (${e['vx1']:g} an hour) for the task's whole wall time ({e['secs']:g} s, mean over all {e['tasks']} tasks)", f"${e['vx1_task']:.5f} per task"],
         ["Variable cost per 1,000 rehearsed tasks", f"${e['per_k']:.2f}"],
     ]
     if e.get("fixed") is not None:
@@ -899,7 +920,7 @@ def block_microvm() -> str:
                 files.append((int(hit.group(1)), i["command"]))
     shell = max(files) if files else None
     text = ("**Why a microVM and not a database transaction.** A transaction can undo rows. It can't undo `rm -rf`, a fork bomb or a call that sends your data out, and it decides on prod itself. "
-            "A microVM on the VX1 runs the whole plan, SQL or shell, on a clone with its own kernel and no network card, and the host measures what happened.")
+            "A microVM on the VX1 runs the whole plan, SQL or shell, on a clone with its own kernel, and the host measures what happened. A database plan's microVM has no network card at all; a host plan's has its link down, a deny-all policy and a host firewall for the sandbox user.")
     if shell:
         text += f" Replaying real incidents, `{shell[1]}` deleted {shell[0]:,} files on its clone and nothing on prod"
     text += f"; {rt['contained']} of {rt['total']} hostile plans, from `DROP DATABASE` to a fork bomb, a memory bomb and key theft, were contained, checked from the host (`bench/incidents.json`, `bench/redteam.json`)."
@@ -925,6 +946,7 @@ def block_business() -> str:
             ["Self-hosted", "The control plane and sandboxes on the team's own Vultr account, for regulated teams.", "A licence per deployment"],
         ]),
         "",
+        *([size_line(), ""] if size_line() else []),
         "**Revenue.** " + " ".join(m["revenue"]),
         "",
         "**What comes next.** " + " ".join(m["next"]),

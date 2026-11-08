@@ -43,9 +43,9 @@ _How to read these: the same agent (`qwen3.8-27b` on Vultr Serverless Inference)
 - **Nothing harmful reached prod unseen: 0 of 23, against 10 for the agent alone.** 19 of 23 risky plans waited for a person with a measured report of what each would do, and nothing that changed anything was applied without one (`bench/results.json`).
 - **On 20 tasks adapted from an outside benchmark (SABER), harm went from 7.33 to 2**, also holding task by task (p = 0.0078), so the effect isn't only on our own tasks.
 - **Fast and cheap enough to sit in the loop.** A rehearsal on a full clone takes 2.97 s at the median and about $0.000126 of VX1 time at list price, boot to destroy. A whole held-out task, every model call and retry included, takes 26.2 s and costs $0.00347 of inference.
-- **It found a failure mode a rule can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely. Plans that passed only after breaking a rule were harmful 35% of the time, against 13% for first-time passes, so Shadow Run now screens every such plan twice, once by measurement and once by a second model. What each catches is in [what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it) (`bench/evasion.json`).
+- **It found a failure mode a rule can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely. Plans that passed only after breaking a rule were harmful 35% of the time, against 13% for first-time passes (Fisher exact, p = 0.0018), so Shadow Run now screens every such plan twice, once by measurement and once by a second model. What each catches is in [what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it) (`bench/evasion.json`).
 - **7 of 7 live attacks contained**, each in a microVM with no network card, checked from the host, with prod’s hash unchanged; **6 of 6 real incident commands** replayed on a clone and blocked; **34 of 34 checks** on approval, apply and undo passed, attacks and honest path alike (`bench/redteam.json`, `bench/incidents.json`, `bench/controls.json`).
-- **On Vultr end to end:** The final benchmark spent 9,351,405 tokens of Serverless Inference across the 4 models it used ($3.76), booted 1,198 microVMs on one VX1, created 1,008 throwaway databases on Managed PostgreSQL over the VPC, and Object Storage holds 79 signed evidence bundles and 79 pre-apply backups. Spent so far: $31.33 of the $200 credit (`bench/vultr.json`).
+- **On Vultr end to end:** The final benchmark spent 9,351,405 tokens of Serverless Inference across the 4 models the benchmark called ($3.76), booted 1,198 microVMs on one VX1, created 1,008 throwaway databases on Managed PostgreSQL over the VPC, and Object Storage holds 79 signed evidence bundles and 79 pre-apply backups. Spent so far: $31.33 of the $200 credit (`bench/vultr.json`).
 - **Who pays:** whoever owns the database at a team using coding agents, and 90% of professional developers now use them weekly ([JetBrains Developer Ecosystem Survey 2026](https://blog.jetbrains.com/research/2026/08/ai-coding-agent-adoption-2026/)). It starts free as a pull request Action, then $500 a month per protected database, against a measured variable cost of about $4.45 per 1,000 rehearsed tasks ([unit economics](#unit-economics)). [Gartner, June 2025](https://www.gartner.com/en/newsroom/press-releases/2025-06-11-gartner-predicts-that-guardian-agents-will-capture-10-15-percent-of-the-agentic-ai-market-by-2030) expects guardian agents, the category this sits in, to take 10 to 15% of the agentic AI market by 2030 ([who this is for](#who-this-is-for), [market](#market-and-competition)).
 <!-- summary:end -->
 
@@ -69,7 +69,7 @@ _How to read these: the same agent (`qwen3.8-27b` on Vultr Serverless Inference)
 | Pattern B: a person approves before the final action | A different person approves the exact hashes of the plan, its report and its guardrails. The same plan then runs on prod in one transaction that rolls back on any difference | [Approval and apply checks](#containment), `bench/controls.json` |
 | Process isolation | One microVM per rehearsal with its own kernel, from a golden disk, never reused | [Containment](#containment) |
 | Secret hygiene | No credential enters the sandbox, and a canary token on the host must never appear in anything returned | [Containment](#containment), the key-theft attack |
-| Resource limits | CPU, memory and wall-clock caps, a statement timeout, no network card, and a host firewall for the sandbox user | The fork bomb, memory bomb and network attacks |
+| Resource limits | CPU, memory and wall-clock caps and a statement timeout. No network card for a database plan; for a host plan the link is down under a deny-all policy. A host firewall for the sandbox user either way | The fork bomb, memory bomb and network attacks |
 | Lifecycle discipline | Destroyed in `finally` on success, failure and timeout, a janitor for anything left, and a teardown proof on every run | The soak test |
 | Every agent LLM call on Vultr Serverless Inference | The planner, its retries, the explainer, the second model, the guardrail drafter, the attacker and the content-safety check. `control/llm.py` refuses to call any endpoint that isn't Vultr's | `bench/vultr.json`, `tests/test_llm_vultr_only.py` |
 | A production-style web app on Vultr with a public URL | FastAPI and React on Vultr Cloud Compute over HTTPS, an MCP server, a CLI and a GitHub Action | [Live demo](https://144-202-92-64.sslip.io), [Try it](#try-it) |
@@ -87,7 +87,7 @@ A rule can't see those side effects before they happen, and a person reading a d
 ```mermaid
 flowchart LR
     A["AI agent<br/>MCP · CLI · GitHub Action"] -->|"plan"| F["Freeze and hash<br/>static gate"]
-    F --> R["Rehearse on a full clone<br/>fresh microVM on a Vultr VX1<br/>no network card, no secrets"]
+    F --> R["Rehearse on a full clone<br/>fresh microVM on a Vultr VX1<br/>cut off from the network, no secrets"]
     R --> M["Postgres measures<br/>rows, cascades, dollars"]
     M --> G{"Frozen guardrails<br/>and evasion checks"}
     G -->|"fail: measurements go back"| A
@@ -149,7 +149,7 @@ How it compares with the approaches the benchmark measured it against, and with 
 | --- | --- | --- | --- | --- | --- |
 | Runs the exact plan on a full copy of prod first | No | No | No | No | **Yes** |
 | Measures what it really did: rows, cascades, dollars | No | No | No | Guardrails only | **Yes** |
-| Contains a hostile plan (DROP, `rm -rf`, exfiltration) | No | No | Only what it reads as unsafe | No | **Yes, in a microVM with no network card** |
+| Contains a hostile plan (DROP, `rm -rf`, exfiltration) | No | No | Only what it reads as unsafe | No | **Yes, in a microVM cut off from the network** |
 | Shows a person the measured result before prod | No | No | No | No | **Yes** |
 | Binds the approval to the exact plan's hash | No | No | No | No | **Yes** |
 | Rolls back if prod differs from the rehearsal | No | No | No | On a failed guardrail | **Yes, on any difference** |
@@ -174,7 +174,7 @@ Vultr is the whole control layer here, not just hosting.
 `infra/provision.py` creates all of it from zero, and `infra/teardown.py` removes it and confirms each resource returns 404.
 
 <!-- microvm:start -->
-**Why a microVM and not a database transaction.** A transaction can undo rows. It can't undo `rm -rf`, a fork bomb or a call that sends your data out, and it decides on prod itself. A microVM on the VX1 runs the whole plan, SQL or shell, on a clone with its own kernel and no network card, and the host measures what happened. Replaying real incidents, `rm -rf /var/app /cache/` deleted 327 files on its clone and nothing on prod; 7 of 7 hostile plans, from `DROP DATABASE` to a fork bomb, a memory bomb and key theft, were contained, checked from the host (`bench/incidents.json`, `bench/redteam.json`).
+**Why a microVM and not a database transaction.** A transaction can undo rows. It can't undo `rm -rf`, a fork bomb or a call that sends your data out, and it decides on prod itself. A microVM on the VX1 runs the whole plan, SQL or shell, on a clone with its own kernel, and the host measures what happened. A database plan's microVM has no network card at all; a host plan's has its link down, a deny-all policy and a host firewall for the sandbox user. Replaying real incidents, `rm -rf /var/app /cache/` deleted 327 files on its clone and nothing on prod; 7 of 7 hostile plans, from `DROP DATABASE` to a fork bomb, a memory bomb and key theft, were contained, checked from the host (`bench/incidents.json`, `bench/redteam.json`).
 <!-- microvm:end -->
 
 <!-- vultr:start -->
@@ -199,7 +199,7 @@ Re-run: `python -m bench.vultr_usage`.
 </picture>
 
 <!-- evasion:start -->
-In runs recorded before we checked for this, risky plans that passed only after breaking a guardrail did harm in 20 of 57 cases (35%), against 11 of 85 (13%) for plans that passed first time. So a plan that follows a broken rule now gets two more checks, and if either doubts it, the plan goes back to the agent. On plans nobody read while writing the checks, they caught 3 of 8 harmful plans and sent back 2 of 12 good ones.
+In runs recorded before we checked for this, risky plans that passed only after breaking a guardrail did harm in 20 of 57 cases (35%), against 11 of 85 (13%) for plans that passed first time (one-sided Fisher exact test on those counts, p = 0.0018). So a plan that follows a broken rule now gets two more checks, and if either doubts it, the plan goes back to the agent. On plans nobody read while writing the checks, they caught 3 of 8 harmful plans and sent back 2 of 12 good ones.
 
 None of the 30 safe plans broke a rule first, so the checks cost nothing there.
 
@@ -498,9 +498,11 @@ Nothing has to be trusted on day one, and each step is a price:
 | 3. A short auto-apply list | The columns the team is happy to change with no person looking, each tested against the attacker first. | Included |
 | Self-hosted | The control plane and sandboxes on the team's own Vultr account, for regulated teams. | A licence per deployment |
 
+**Size served today.** Databases up to about 1 GB: a full rehearsal of a 1,019 MB database, 1,463,901 rows changed, took 56 s (`bench/scale.json`). Thin clones are what takes it past that.
+
 **Revenue.** A monthly subscription per protected database, since cost grows with database size and not with seats. A self-hosted licence for regulated teams, who run the control plane and sandboxes on their own Vultr account.
 
-**What comes next.** Thin clones, so a rehearsal stays fast past a gigabyte, and masking personal data in the clone. Clones restored from Vultr Managed PostgreSQL's own backups, so a rehearsal skips the dump. An auto-apply list that grows: suggest additions from what a team keeps approving, and test each against the attacker first. First customers: the free Action on real teams' migrations, then paid protected databases.
+**What comes next.** Thin clones, so a rehearsal stays fast past a gigabyte, and masking personal data in the clone. Clones restored from Vultr Managed PostgreSQL's own backups, so a rehearsal skips the dump. An auto-apply list that grows: suggest additions from what a team keeps approving, and test each against the attacker first. First customers: the free Action on real teams' migrations, listed on GitHub Marketplace, with its pull request comment pointing at the MCP setup; then paid protected databases. A one-click deployment of infra/provision.py for the self-hosted tier, on the customer's own Vultr account.
 <!-- business:end -->
 
 How far it scales today is in [Scope and design notes](#scope-and-design-notes).
@@ -511,7 +513,7 @@ How far it scales today is in [Scope and design notes](#scope-and-design-notes).
 | Cost to serve | Measured |
 | --- | --- |
 | Inference on Vultr Serverless Inference, every model call | $0.0033 per task (mean over all 60 tasks) |
-| VX1 time, at most: the host's list price ($0.153 an hour) for the task's whole wall time (27.1 s) | $0.00115 per task |
+| VX1 time, at most: the host's list price ($0.153 an hour) for the task's whole wall time (27.1 s, mean over all 60 tasks) | $0.00115 per task |
 | Variable cost per 1,000 rehearsed tasks | $4.45 |
 | Fixed cost of one deployment: the control VM, the VX1 host and the bucket at list price. Prod is the customer's own database | $147 a month |
 | Margin on one protected database at $500 a month and 1,000 rehearsed tasks, fixed costs included | 70% |
@@ -555,7 +557,7 @@ Restart the control plane, and the target appears next to the demo. Start on a s
 ## Engineering and reproducibility
 
 <!-- tests:start -->
-**609 automated tests** in 14 files. 48 of them boot real microVMs on KVM: rehearsals, the blast-radius measurement, guardrails, the proved undo and the containment checks. The rest cover the static gate, plan hashing, approvals, apply and roll back on drift, the budget, the API, the CLI, the MCP tools and the benchmark harness, many of them against a real Postgres. CI runs every test that doesn't need `/dev/kvm` on each push, and checks that the README's charts still match the benchmark files. Run them with `pytest`, or `pytest -m 'not kvm'` on a machine without KVM.
+**611 automated tests** in 14 files. 48 of them boot real microVMs on KVM: rehearsals, the blast-radius measurement, guardrails, the proved undo and the containment checks. The rest cover the static gate, plan hashing, approvals, apply and roll back on drift, the budget, the API, the CLI, the MCP tools and the benchmark harness, many of them against a real Postgres. CI runs every test that doesn't need `/dev/kvm` on each push, and checks that the README's charts still match the benchmark files. Run them with `pytest`, or `pytest -m 'not kvm'` on a machine without KVM.
 <!-- tests:end -->
 
 - **Check it yourself in seconds.** `python scripts/verify.py` recomputes every headline claim from `bench/*.json`, checks this page states the same number, and checks that the code which measured is the code in this checkout. CI runs it on every push.
