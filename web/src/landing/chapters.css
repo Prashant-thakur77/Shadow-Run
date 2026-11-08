@@ -1154,7 +1154,7 @@
     min-height: 44px;
   }
 }
-/* On a phone each competitor is a short stack, so where we're weak never sits off to the side, behind a sideways scroll. */
+/* On a phone each competitor is a short stack, so the scope today never sits off to the side, behind a sideways scroll. */
 @media (max-width: 719px) {
   .pays-table thead {
     position: absolute;
@@ -1301,6 +1301,48 @@
   }
   .pays-stat {
     text-align: left;
+  }
+}
+
+/* The price ladder: each way to run it named, then what it costs. */
+.pays-ladder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pays-ladder li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pays-tier,
+.pays-cost-what {
+  font-size: var(--fs-s);
+  font-weight: 600;
+  line-height: 1.4;
+}
+/* Cost to serve, one ruled row under the plan: a cell for each figure the API sent, so a missing one leaves no gap. */
+.pays-cost {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+@media (max-width: 999px) {
+  .pays-cost {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 719px) {
+  .pays-cost {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* The stacked row already reads "Scope today" above the text. */
+  .pays-us td strong {
+    display: none;
   }
 }
 

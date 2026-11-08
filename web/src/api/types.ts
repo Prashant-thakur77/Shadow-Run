@@ -787,6 +787,35 @@ export interface Market {
   next?: string[];
   competition?: { who?: string; strength?: string; gap?: string; urls?: string[] }[];
   us?: { strength?: string; weakness?: string; usp?: string };
+  /** Added by the API, not in the file: what it costs to serve, from the published benchmark. Null when a file is missing. */
+  economics?: Economics | null;
+  /** Added by the API: the largest database a full rehearsal finished on (bench/scale.json), in MB. */
+  served_db_mb?: number | null;
+}
+
+/** control/economics.py, the README's cost-to-serve arithmetic. Costs are measured; the price is the plan. */
+export interface Economics {
+  /** How many benchmark tasks the per-task means cover. */
+  tasks: number;
+  /** Inference per task, USD. */
+  inf: number;
+  /** Wall time per task, seconds. */
+  secs: number;
+  /** The VX1 host's list price, USD an hour. */
+  vx1: number;
+  /** VX1 time per task at most: the whole host for the task's whole wall time, USD. */
+  vx1_task: number;
+  per_task: number;
+  /** Variable cost per 1,000 rehearsed tasks, USD. */
+  per_k: number;
+  /** The planned price, USD per protected database a month. */
+  price: number;
+  /** One deployment a month at list price: the control VM, the VX1 host and the bucket. */
+  fixed: number | null;
+  /** Infrastructure gross margin, 0 to 1, with 1, 2 or 3 databases on one deployment and 1,000 tasks each a month. */
+  margin_k?: Record<string, number>;
+  margin_one_db?: number;
+  tasks_to_cost?: number;
 }
 
 export interface Receipt {

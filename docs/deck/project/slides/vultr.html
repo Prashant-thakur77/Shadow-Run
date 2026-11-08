@@ -1,24 +1,13 @@
-<section id="vultr" data-transition="fade" style="background:#101213;color:#EFECE6;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:44px">
-<h2 style="font-size:72px;font-weight:700;line-height:1.1;letter-spacing:-1px">Built on Vultr, end to end</h2>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:64px">
-<div style="display:flex;flex-direction:column;gap:16px">
-<h3 style="font-size:36px;font-weight:600;color:#7FD1B9">Vultr services</h3>
-<p style="font-size:30px;line-height:1.3"><b>VX1</b> runs the rehearsal microVMs on KVM</p>
-<p style="font-size:30px;line-height:1.3"><b>Cloud Compute</b> runs the control plane, web app and MCP server</p>
-<p style="font-size:30px;line-height:1.3"><b>Serverless Inference</b> serves every LLM call</p>
-<p style="font-size:30px;line-height:1.3"><b>Managed Postgres</b> is the demo production database</p>
-<p style="font-size:30px;line-height:1.3"><b>Object Storage</b> keeps evidence and backups</p>
-<p style="font-size:30px;line-height:1.3"><b>VPC</b> keeps the runner private</p>
+<section id="vultr" data-transition="fade" style="background:#F4F2EC;color:#16191B;font-family:'IBM Plex Sans', Arial, sans-serif;padding:44px 128px 44px;display:flex;flex-direction:column;gap:16px">
+<h2 style="font-size:56px;font-weight:700;line-height:1.1;letter-spacing:-1px">Built on Vultr. Only the control plane reaches prod.</h2>
+<img src="/_blob/b7786d689981db415feb044c94bafbdb" alt="Architecture: the web app, MCP agents and CLI reach a control plane VM, which holds the only production credential. It sends plans to a VX1 host, where a fresh microVM with no network and no credentials runs each one. The control plane calls Vultr Serverless Inference, snapshots and applies to Managed Postgres, and writes evidence to Object Storage." style="width:1664px;height:712px;object-fit:contain;background:#FFFFFF;border-radius:8px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:22px;line-height:1.35;color:#5C605A">Measured in the final benchmark</p>
+<div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:16px;align-items:stretch">
+<div style="background:#FFFFFF;padding:16px 20px;border-radius:8px;display:flex;flex-direction:column;gap:4px"><p style="font-size:36px;font-weight:700;color:#0B7A5E">[vu_microvms]</p><p style="font-size:21px;line-height:1.25">microVMs booted on the VX1</p></div>
+<div style="background:#FFFFFF;padding:16px 20px;border-radius:8px;display:flex;flex-direction:column;gap:4px"><p style="font-size:36px;font-weight:700;color:#0B7A5E">[vu_databases]</p><p style="font-size:21px;line-height:1.25">databases created on Managed PostgreSQL</p></div>
+<div style="background:#FFFFFF;padding:16px 20px;border-radius:8px;display:flex;flex-direction:column;gap:4px"><p style="font-size:36px;font-weight:700;color:#0B7A5E">[vu_tokens]</p><p style="font-size:21px;line-height:1.25">tokens of Serverless Inference across [vu_models] models</p></div>
+<div style="background:#FFFFFF;padding:16px 20px;border-radius:8px;display:flex;flex-direction:column;gap:4px"><p style="font-size:36px;font-weight:700;color:#0B7A5E">[vu_objects]</p><p style="font-size:21px;line-height:1.25">evidence bundles and backups in Object Storage</p></div>
+<div style="background:#FFFFFF;padding:16px 20px;border-radius:8px;display:flex;flex-direction:column;gap:4px"><p style="font-size:36px;font-weight:700;color:#0B7A5E">$[vu_spent]</p><p style="font-size:21px;line-height:1.25">of the $[vu_budget] credit spent in all</p></div>
 </div>
-<div style="display:flex;flex-direction:column;gap:16px">
-<h3 style="font-size:36px;font-weight:600;color:#7FD1B9">Measured in the final benchmark</h3>
-<p style="font-size:30px;line-height:1.3"><b>[vu_microvms]</b> microVMs booted on the VX1</p>
-<p style="font-size:30px;line-height:1.3"><b>[vu_databases]</b> databases created on Managed PostgreSQL</p>
-<p style="font-size:30px;line-height:1.3"><b>[vu_tokens]</b> tokens of Serverless Inference across [vu_models] models</p>
-<p style="font-size:30px;line-height:1.3"><b>[vu_objects]</b> evidence bundles and backups in Object Storage</p>
-<p style="font-size:30px;line-height:1.3"><b>$[vu_spent]</b> of the $[vu_budget] credit spent in all</p>
-</div>
-</div>
-<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#9A9A93">github.com/Prashant-thakur77/Shadow-Run. One script builds it all from zero, one removes it.</p>
-<aside>Ends where the pitch started: your agent wants to touch prod, so let it break a clone first. The whole stack is created by infra/provision.py and removed by infra/teardown.py, which confirms each resource returns 404.</aside>
+<aside>Two VMs on one VPC Network, plus Managed Postgres, Object Storage and Serverless Inference. VX1 runs the rehearsal microVMs on KVM; Cloud Compute runs the control plane, web app and MCP server; every LLM call goes to Serverless Inference. The microVM gets a clone and a plan, never a credential. infra/provision.py builds the whole stack and infra/teardown.py removes it, confirming each resource returns 404.</aside>
 </section>

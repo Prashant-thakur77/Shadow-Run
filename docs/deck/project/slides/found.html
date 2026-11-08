@@ -1,20 +1,21 @@
-<section id="found" data-transition="fade" style="background:#101213;color:#EFECE6;font-family:'IBM Plex Sans', Arial, sans-serif;padding:112px 128px 140px;display:flex;flex-direction:column;gap:32px">
+<section id="found" data-transition="fade" style="background:#101213;color:#EFECE6;font-family:'IBM Plex Sans', Arial, sans-serif;padding:96px 128px 112px;display:flex;flex-direction:column;gap:28px">
 <h2 style="font-size:68px;font-weight:700;line-height:1.1;letter-spacing:-1px">Told which rule it broke, the agent got around it</h2>
 <p style="font-size:30px;line-height:1.35;color:#C9C6BE">[request]</p>
 <div style="display:flex;flex-direction:column;gap:14px;font-size:24px;border-left:2px solid #2E3235;padding-left:28px">[ladder]</div>
+<p style="font-size:26px;line-height:1.35;color:#C9C6BE">A second model, reading only the plans: “[reader]”</p>
 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:28px">
 <div style="background:#1A1D1F;padding:28px 32px;border:1px solid #2E3235;border-radius:8px;display:flex;flex-direction:column;gap:8px">
-<p style="font-size:38px;font-weight:700;color:#F08A7A">[ax_from] → [ax_to]</p>
-<p style="font-size:24px;line-height:1.3">harm on outside-benchmark tasks, approved unread, after the checks this finding led to: [ax_down] tasks better, [ax_up] worse.</p>
+<p style="font-size:38px;font-weight:700;color:#F08A7A">[after_pct]% against [first_pct]%</p>
+<p style="font-size:24px;line-height:1.3">did harm: risky plans that passed only after breaking a rule, against those that passed first time. Runs before the checks.</p>
 </div>
 <div style="background:#1A1D1F;padding:28px 32px;border:1px solid #2E3235;border-radius:8px;display:flex;flex-direction:column;gap:8px">
-<p style="font-size:38px;font-weight:700;color:#7FD1B9">[safe_broke] of [safe_plans] safe plans</p>
-<p style="font-size:24px;line-height:1.3">broke a rule before passing, so screening these plans never slows down safe work.</p>
+<p style="font-size:38px;font-weight:700;color:#7FD1B9">[ax_from] → [ax_to]</p>
+<p style="font-size:24px;line-height:1.3">harm on outside-benchmark tasks, approved unread, after the two changes this led to: [ax_down] tasks better, [ax_up] worse.</p>
 </div>
 <div style="background:#1A1D1F;padding:28px 32px;border:1px solid #2E3235;border-radius:8px;display:flex;flex-direction:column;gap:8px">
-<p style="font-size:38px;font-weight:700">Two independent checks</p>
-<p style="font-size:24px;line-height:1.3">a measured column check and a second model on Vultr inference read every plan that passed after breaking a rule. Either one's doubt sends it back.</p>
+<p style="font-size:38px;font-weight:700">[safe_broke] of [safe_plans] safe plans</p>
+<p style="font-size:24px;line-height:1.3">broke a rule first, so in the benchmark the new checks never held up safe work.</p>
 </div>
 </div>
-<aside>This is what the benchmark taught us. The retry loop tells the agent which rule it broke, and some rewrites get past the rule without meeting it: unpaying a paid invoice, dropping a foreign key, promoting an owner. A guardrail can't see it, because the guardrail is what it got around. So a plan that follows a broken rule now gets two more checks. The unseen plans reuse the same tasks on a stricter schema, so say that.</aside>
+<aside>This is what the benchmark taught us. The retry loop tells the agent which rule it broke, and some rewrites get past the rule without meeting it: unpaying a paid invoice, dropping a foreign key, promoting an owner. A guardrail can't see it, because the guardrail is what it got around. So a plan that passes after breaking a rule now gets two more checks: a measured column check and a second model's read. Either one's doubt sends it back. The other change: an empty plan can now be a refusal. On the held-out tasks the two changes took harm from [ah_from] to [ah_to]. The unseen plans reuse the same tasks on a stricter schema, so say that.</aside>
 </section>

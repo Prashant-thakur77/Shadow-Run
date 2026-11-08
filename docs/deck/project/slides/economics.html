@@ -1,0 +1,27 @@
+<section id="economics" data-transition="fade" style="background:#F4F2EC;color:#16191B;font-family:'IBM Plex Sans', Arial, sans-serif;padding:112px 128px 112px;display:flex;flex-direction:column;gap:36px">
+<h2 style="font-size:72px;font-weight:700;line-height:1.1;letter-spacing:-1px">What one protected database costs to serve</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:28px">
+<div style="background:#FFFFFF;padding:28px 32px;border-radius:8px;display:flex;flex-direction:column;gap:8px">
+<p style="font-size:56px;font-weight:700;color:#0B7A5E">$[e_per_k]</p>
+<p style="font-size:24px;line-height:1.3">per 1,000 rehearsed tasks: inference and VX1 time, measured in the benchmark</p>
+</div>
+<div style="background:#FFFFFF;padding:28px 32px;border-radius:8px;display:flex;flex-direction:column;gap:8px">
+<p style="font-size:56px;font-weight:700;color:#0B7A5E">$[e_fixed]</p>
+<p style="font-size:24px;line-height:1.3">a month, fixed: the control VM, VX1 host and bucket at Vultr list price</p>
+</div>
+<div style="background:#FFFFFF;padding:28px 32px;border-radius:8px;display:flex;flex-direction:column;gap:8px">
+<p style="font-size:56px;font-weight:700">$[price]</p>
+<p style="font-size:24px;line-height:1.3">a month: our planned price per protected database, hosted</p>
+</div>
+<div style="background:#FFFFFF;padding:28px 32px;border-radius:8px;display:flex;flex-direction:column;gap:8px">
+<p style="font-size:56px;font-weight:700;color:#0B7A5E"><span style="font-size:30px">about </span>[e_tasks]</p>
+<p style="font-size:24px;line-height:1.3">rehearsed tasks a month before one database costs as much as its price</p>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:28px;color:#5C605A">Infrastructure gross margin at 1,000 tasks a month per database, as databases share one deployment</p>
+<div style="display:grid;grid-template-columns:220px 1fr 110px;gap:16px 24px;align-items:center">[margin_bars]</div>
+</div>
+<p style="font-size:32px;line-height:1.35">The price is our plan. The costs are measured: inference from the benchmark’s own records, and the VX1 host, control VM and bucket at Vultr’s list prices.</p>
+<aside>Prod is the customer's own database, so it isn't counted. The VX1 cost is an upper bound: the whole host for the task's whole wall time, although a host runs several rehearsals at once. A second database on the same deployment adds only its variable cost. The README's Unit economics table has the same numbers, from the same function.</aside>
+</section>

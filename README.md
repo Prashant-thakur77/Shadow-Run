@@ -14,14 +14,14 @@
 
 </div>
 
-Shadow Run sits between an AI agent and production and holds the only credential. Every risky SQL or shell plan runs first on a full clone of prod inside a throwaway microVM on Vultr. Postgres measures what it really did, frozen business guardrails decide, and a different person approves that exact plan before the same plan runs on prod in one transaction that rolls back if anything it measures differs from the rehearsal.
+Shadow Run sits between an AI agent and production, and it holds the only credential. Every risky SQL or shell plan runs first on a full clone of prod, in a throwaway microVM on Vultr. Postgres measures what the plan really did, and frozen business guardrails decide. A different person approves that exact plan. The same plan then runs on prod in one transaction, which rolls back if anything it measures differs from the rehearsal.
 
-**Don't authorize the command. Authorize its measured effect.** Allowlists, linters and rules in a prompt all judge what a command says. Shadow Run judges what it does, on a real copy of your data, before it can touch the original. That matters more than it sounds: told which rule it broke, an agent can get around the rule while every guardrail still passes.
+**Don't authorize the command. Authorize its measured effect.** Allowlists, linters and rules in a prompt judge what a command says. Shadow Run judges what it does, on a real copy of your data, before it can touch the original.
 
 <p align="center"><b><a href="https://144-202-92-64.sslip.io">Live demo</a></b> · <b><a href="https://144-202-92-64.sslip.io/race">Race the agent</a></b> · <a href="https://144-202-92-64.sslip.io/incidents">Real incidents, replayed</a> · <a href="https://144-202-92-64.sslip.io/results">Results and receipts</a> · <a href="docs/slides.pdf">Slides</a> · <a href="docs/API.md">API</a></p>
 
 <p align="center"><img src="docs/img/race.gif" width="100%" alt="A real race recorded on the live site: the same task run twice on Vultr. The agent alone would erase paid invoices on its clone; through Shadow Run the plan waits for a person, nothing reaches prod and prod's hash is unchanged."></p>
-<p align="center"><sub>A real race, recorded on the live site: one task, the agent alone and through Shadow Run, side by side on Vultr. Alone, its plan erases paid invoices on its clone; through Shadow Run, the rewritten plan waits for a person with the measured report, and nothing reaches prod.</sub></p>
+<p align="center"><sub>A real race, recorded on the live site: one task, run by the agent alone and through Shadow Run, side by side on Vultr. Alone, its plan erases paid invoices on its clone. Through Shadow Run, the rewritten plan waits for a person with the measured report, and nothing reaches prod.</sub></p>
 
 <!-- live:start -->
 Live: https://144-202-92-64.sslip.io
@@ -53,28 +53,39 @@ _How to read these: the same agent (`qwen3.8-27b` on Vultr Serverless Inference)
 
 ![The same plan, without and with Shadow Run: what it would have erased on the seeded demo, and prod's hash unchanged](docs/img/with-without.png)
 
+## The story
+
+Coding agents now get production credentials to run migrations and fix data. One bad command can erase a company's data in seconds. At [PocketOS](#the-problem), by its founder's account, an agent found a token and deleted the production volume and its backups.
+
+Today we approve what a command says. An allowlist matches its text, a linter parses it, and a reviewer reads the diff and guesses at cascades. None of them sees the side effects before they happen.
+
+Shadow Run approves what the command does. The agent never holds the credential. Its plan runs first on a full clone of prod, in a microVM on Vultr. Postgres measures what changed, and frozen guardrails decide. Unless the change is on a low-risk list the team named, a different person approves that measured result. Prod then runs exactly that plan, and rolls back if anything it measures differs from the rehearsal.
+
+Rehearsals exposed a new failure. Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely, and every guardrail still passes. Shadow Run now checks for that ([what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it)).
+
+Next: thin clones for larger databases, masked personal data, and an auto-apply list that learns from what a team approves ([what comes next](#who-this-is-for)). The aim: a measured rehearsal as the default gate between coding agents and production.
 
 ## Challenge 1, point by point
 
 | The brief asks for | What Shadow Run does | Where to check |
 | --- | --- | --- |
 | Vultr as the central control layer: plan, dispatch to an isolated environment, verifiable output | The control plane on Vultr Cloud Compute freezes and hashes the plan, rehearses it on a full clone in a microVM on a Vultr VX1, and returns the blast radius as Postgres measured it | [How it works](#how-it-works), [Built on Vultr](#built-on-vultr) |
-| Pattern A: the model writes code, it runs isolated, real output comes back, errors go back for a retry | The agent's SQL or shell runs on the clone. A failed guardrail goes back to the agent with the measurements, and it rewrites the plan and rehearses again on a new clone | [The recorded retries](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it) |
-| Pattern B: a person approves before the final action | A different person approves the exact hashes of the plan, its report and its guardrails. The same plan then runs on prod in one transaction that rolls back on any difference | [Approval and apply checks](#containment), `bench/controls.json` |
-| Process isolation | One microVM per rehearsal with its own kernel, from a golden disk, never reused | [Containment](#containment) |
-| Secret hygiene | No credential enters the sandbox, and a canary token on the host must never appear in anything returned | [Containment](#containment), the key-theft attack |
-| Resource limits | CPU, memory and wall-clock caps and a statement timeout. No network card for a database plan; for a host plan the link is down under a deny-all policy. A host firewall for the sandbox user either way | The fork bomb, memory bomb and network attacks |
-| Lifecycle discipline | Destroyed in `finally` on success, failure and timeout, a janitor for anything left, and a teardown proof on every run | The soak test |
-| Every agent LLM call on Vultr Serverless Inference | The planner, its retries, the explainer, the second model, the guardrail drafter, the attacker and the content-safety check. `control/llm.py` refuses to call any endpoint that isn't Vultr's | `bench/vultr.json`, `tests/test_llm_vultr_only.py` |
+| Pattern A: the model writes code, it runs isolated, real output comes back, errors go back for a retry | The agent's SQL or shell runs on the clone. A failed guardrail goes back to the agent with the measurements, and it rewrites the plan and rehearses on a new clone | [The recorded retries](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it) |
+| Pattern B: a person approves before the final action | A different person approves the exact hashes of the plan, its report and its guardrails. The same plan then runs on prod in one transaction that rolls back if anything it measures differs | [Approval and apply checks](#containment), `bench/controls.json` |
+| Process isolation | One microVM per rehearsal, with its own kernel, from a golden disk, never reused | [Containment](#containment) |
+| Secret hygiene | No credential enters the sandbox. A canary token on the host must never appear in anything returned | [Containment](#containment), the key-theft attack |
+| Resource limits | CPU, memory and wall-clock caps, and a statement timeout. A database plan's microVM has no network card; a host plan's has its link down under a deny-all policy. A host firewall for the sandbox user in both cases | The fork bomb, memory bomb and network attacks |
+| Lifecycle discipline | Destroyed in `finally` on success, failure and timeout. A janitor removes anything left, and every run carries a teardown proof | The soak test |
+| Every agent LLM call on Vultr Serverless Inference | The planner, its retries, the explainer, the second model, the guardrail drafter, the attacker and the content-safety check. `control/llm.py` refuses any endpoint that isn't Vultr's | `bench/vultr.json`, `tests/test_llm_vultr_only.py` |
 | A production-style web app on Vultr with a public URL | FastAPI and React on Vultr Cloud Compute over HTTPS, an MCP server, a CLI and a GitHub Action | [Live demo](https://144-202-92-64.sslip.io), [Try it](#try-it) |
 
 ## The problem
 
 Agents now hold real credentials, and they act on production. In October 2026, [49.8% of the security and technology professionals Salt Security surveyed](https://campustechnology.com/articles/2026/10/21/unexpected-ai-agent-activity-reported-by-nearly-half-of-organizations-in-recent-survey.aspx) had confirmed or suspected an AI agent acting unexpectedly or without authorization. More than 40% of those had seen agents modify or delete data, and only 17.5% said their organization could automatically stop an agent in production.
 
-The incidents are public. By its founder's account, a Cursor agent at [PocketOS](https://www.pcgamer.com/software/ai/here-we-go-again-ai-deletes-entire-company-database-and-all-backups-in-9-seconds-then-cheerfully-admits-i-violated-every-principle-i-was-given/) found an API token in an unrelated file and deleted the production volume and its backups in nine seconds. Claude Code ran `terraform destroy` against [DataTalks.Club](https://aishippingblog.com/p/how-i-dropped-our-production-database) off a stale state file. At [SaaStr](https://fortune.com/2025/07/23/ai-coding-tool-replit-wiped-database-called-it-a-catastrophic-failure/) a Replit agent wiped records during a code freeze. Separating dev from prod didn't help, because the agent found a credential that reached prod, and the damage hid in side effects nobody listed in the plan: a cascade, a trigger, a sequence, a file outside the folder it was asked to clean.
+The incidents are public. By its founder's account, a Cursor agent at [PocketOS](https://www.pcgamer.com/software/ai/here-we-go-again-ai-deletes-entire-company-database-and-all-backups-in-9-seconds-then-cheerfully-admits-i-violated-every-principle-i-was-given/) found an API token in an unrelated file and deleted the production volume and its backups in nine seconds. Claude Code ran `terraform destroy` against [DataTalks.Club](https://aishippingblog.com/p/how-i-dropped-our-production-database) off a stale state file. At [SaaStr](https://fortune.com/2025/07/23/ai-coding-tool-replit-wiped-database-called-it-a-catastrophic-failure/) a Replit agent wiped records during a code freeze.
 
-A rule can't see those side effects before they happen, and a person reading a diff can't either. Only running the plan can.
+Separating dev from prod didn't help. The agent found a credential that reached prod, and the damage hid in side effects the plan never listed: a cascade, a trigger, a sequence, a file outside the folder it was asked to clean. A rule can't see those before they happen, and neither can a person reading a diff. Only running the plan can.
 
 ## How it works
 
@@ -91,32 +102,35 @@ flowchart LR
     X --> E[("Evidence and backup<br/>Vultr Object Storage")]
 ```
 
-The agent never gets the credential. It gets a few tools, and Shadow Run holds the only prod login. The model proposes plans and explains results. It never grades itself: Postgres measures, frozen checks decide, and any number in the model's explanation that the measurements don't contain gets flagged.
+The agent never gets the credential. It gets a few tools, and Shadow Run holds the only prod login. The model proposes plans and explains results, but it never grades itself. Postgres measures, frozen checks decide, and any number in the model's explanation that the measurements don't contain is flagged.
 
-1. The plan is frozen: SHA-256 of the exact steps, with the guardrails hashed alongside it.
-2. A static gate reads it with real parsers (sqlglot for SQL, shfmt and ShellCheck for shell). Anything the gate can't read counts as unsafe.
-3. Prod is snapshotted and restored into a fresh Microsandbox microVM with no network device and no credentials. The plan runs there as an unprivileged role.
-4. Postgres measures the blast radius: rows per table, each cascade traced to the step that caused it, schema changes, before and after samples, and what it does to the numbers a business watches, such as paid invoices in dollars. No model is involved in this part.
-5. Business guardrails run in the same transaction. They're frozen SQL the agent can't edit. On failure, the measurements go back to the agent, which revises and rehearses on a new clone. A plan that passes only after breaking a rule gets two more checks, one measured and one a second model's read, for getting around the rule instead of meeting it ([what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it)).
-6. A plan that passes is checked three more ways. A different model reads the request against the final plan, because a retry loop can narrow a plan until it passes. Its doubt can add a person, and it can never remove one. A second microVM must reproduce the result. Then Shadow Run writes the exact inverse from the row log, cascades included, runs it on the clone, and checks that the content hash of every touched table returns to its starting value.
-7. A small change goes through alone only if it stays on a list of tables and columns the team named as low-risk, and every business number stays put. Everything else waits for a different person, who approves those exact hashes. A changed or replayed approval gets a 409.
-8. The same plan runs on prod in one transaction, with the touched tables locked and re-checked for drift. If row counts, row content, schema or guardrails differ from the rehearsal at all, it rolls back. A backup and a signed evidence bundle go to Object Storage. Undo is one button, and it goes through this same pipeline.
+1. **Freeze.** The exact steps are hashed with SHA-256, and the guardrails are hashed with them.
+2. **Read.** A static gate parses the plan with real parsers: sqlglot for SQL, shfmt and ShellCheck for shell. Anything it can't parse counts as unsafe.
+3. **Clone.** Prod is snapshotted and restored into a fresh Microsandbox microVM with no network device and no credentials. The plan runs there as an unprivileged role.
+4. **Measure.** Postgres reports the blast radius: rows per table, each cascade traced to the step that caused it, schema changes, before and after samples, and the effect on numbers a business watches, such as paid invoices in dollars. No model is involved.
+5. **Check.** Business guardrails run in the same transaction. They're frozen SQL the agent can't edit. On a failure, the measurements go back to the agent, which revises the plan and rehearses on a new clone. A plan that passes only after breaking a rule gets two more checks for getting around the rule instead of meeting it: one measured, one a second model's read ([what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it)).
+6. **Confirm.** A passing plan is checked three more ways. A different model reads the request against the final plan, because a retry loop can narrow a plan until it passes. Its doubt can add a person, never remove one. A second microVM must reproduce the result. Then Shadow Run writes the exact inverse from the row log, cascades included, runs it on the clone, and checks that every touched table's content hash returns to its starting value.
+7. **Approve.** A small change goes through alone only if it stays on a list of tables and columns the team named as low-risk, and every business number stays put. Everything else waits for a different person, who approves those exact hashes. A changed or replayed approval gets a 409.
+8. **Apply.** The same plan runs on prod in one transaction, with the touched tables locked and re-checked for drift. If row counts, row content, schema or guardrails differ from the rehearsal at all, it rolls back. A backup and a signed evidence bundle go to Object Storage. Undo is one button, and it goes through the same pipeline.
 
 ![Architecture](docs/architecture.svg)
 
-It works with any MCP agent. Here is a [real OpenCode session on Vultr inference](docs/evidence/opencode-session.md): it rehearses a hard delete, sees the invoices cascade, hits the guardrails, rewrites the plan as a soft delete and stops to wait for a person.
+It works with any MCP agent. In this [real OpenCode session on Vultr inference](docs/evidence/opencode-session.md), the agent rehearses a hard delete, sees the invoices cascade, hits the guardrails, rewrites the plan as a soft delete and stops to wait for a person.
 
 ## Try it
 
-**Race the agent** runs one task twice, side by side, on Vultr: the agent alone on its own clone, and the agent through Shadow Run. Or press Continue as guest and click an example task. Then try to break it: approve your own run, tamper with a hash, change prod behind its back. The server refuses for real. On Audit, change one character and watch the hash chain break. Incidents replays real ones, Red team runs seven attacks live, and Receipts lists every measured claim with the command that reproduces it.
+- **[Race the agent](https://144-202-92-64.sslip.io/race)** runs one task twice, side by side, on Vultr: the agent alone on its own clone, and the agent through Shadow Run.
+- **Continue as guest** and click an example task. Then try to break it: approve your own run, tamper with a hash, change prod behind its back. The server refuses for real.
+- On **Audit**, change one character and watch the hash chain break.
+- **Incidents** replays real ones, **Red team** runs seven attacks live, and **Receipts** lists every measured claim with the command that reproduces it.
 
 <details><summary>From an agent, a terminal or a pull request</summary>
 
-Through MCP with OpenCode on Vultr inference, copy [`docs/opencode.json`](docs/opencode.json), set `VULTR_INFERENCE_KEY` and `SHADOWRUN_TOKEN` (shown under Connect an agent on the Guardrails page), and ask it to change the database. Any MCP client connects to the same `/mcp` endpoint with that token. This entry's demo and benchmark run every model call on Vultr inference.
+**MCP.** For OpenCode on Vultr inference, copy [`docs/opencode.json`](docs/opencode.json), set `VULTR_INFERENCE_KEY` and `SHADOWRUN_TOKEN` (shown under Connect an agent on the Guardrails page), and ask it to change the database. Any MCP client connects to the same `/mcp` endpoint with that token. Every model call in this entry's demo and benchmark runs on Vultr inference.
 
-To check every headline number on this page against the raw benchmark files, with no network: `python scripts/verify.py`.
+**Check the numbers.** `python scripts/verify.py` checks every headline number on this page against the raw benchmark files, with no network.
 
-From a terminal or CI:
+**Terminal or CI.**
 
 ```
 pip install -e . && export SHADOWRUN_URL=https://144-202-92-64.sslip.io
@@ -125,20 +139,22 @@ echo "UPDATE users SET status = 'suspended' WHERE last_login_at < now() - interv
 shadowrun rehearse plan.sql --target demo-saas   # exit 0 applied, 2 needs a person, 3 blocked, 4 rolled back
 ```
 
-As a GitHub Action, `uses: Prashant-thakur77/Shadow-Run@main` rehearses a migration in a pull request and posts what it really does as a comment. It never applies anything, since nobody has reviewed the pull request yet. Here's [a real pull request](https://github.com/Prashant-thakur77/Shadow-Run/pull/1) where the Action ran on GitHub and posted what a bad migration really does, and the [workflow](.github/workflows/shadowrun.yml), which runs on the public demo with no stored secret.
+**GitHub Action.** `uses: Prashant-thakur77/Shadow-Run@main` rehearses a migration in a pull request and posts what it really does as a comment. It never applies anything, because nobody has reviewed the pull request yet. See [a real pull request](https://github.com/Prashant-thakur77/Shadow-Run/pull/1) where the Action ran on GitHub and posted what a bad migration really does, and the [workflow](.github/workflows/shadowrun.yml), which runs on the public demo with no stored secret.
 
 </details>
 
 ## What's new here
 
-- **It holds against a plan that lies.** A plan that behaves on the clone and misbehaves on prod, by branching on `current_user`, is rolled back at apply because the row content differs from the rehearsal. A deferred trigger that only fires at COMMIT is still measured. Both are live checks in [`bench/controls.json`](#containment); a check that only reads the plan can't catch either.
-- **It looks for an agent getting around a rule.** Told which rule it broke, an agent will sometimes change what the rule looks at instead of doing the work properly. A plan that passes after breaking a rule gets a measured check and a second model's read, and goes back if either doubts it. How often each one catches it is in [what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it).
-- **An undo proved before anyone approves.** Written from the row log and run on the clone, with each table's hash checked against where it began.
-- **Blast radius in dollars, measured by the database.** Rows per table, each cascade traced to its step, and what that does to the numbers a business watches. No model is involved.
-- **It attacks its own policy, and publishes the score.** A model is told every rule and tries to do damage. What it finds becomes a rule, which has to hold on a clean clone, fail on the attack and let normal work through.
-- **It warns about its own retry loop.** A plan can be narrowed until it passes, so the page says when the final plan changes fewer rows than the first, and a second model checks it still does what was asked.
+Teams have long tried changes on a copy first. What's new is that the rehearsal authorizes the agent's action: the measurement is bound to the exact plan a person signs, and the apply refuses anything that differs from it.
 
-How it compares with the approaches the benchmark measured it against, and with handing the agent a database URL:
+- **It catches a plan that lies.** A plan that branches on `current_user` to behave on the clone and misbehave on prod is rolled back at apply because its row content differs from the rehearsal, and a deferred trigger that fires only at COMMIT is still measured. A check that only reads the plan can't catch either one; both are [live checks](#containment) in `bench/controls.json`.
+- **It checks whether the agent got around a rule.** A plan that passes only after breaking a rule gets a measured check and a second model's read, and goes back to the agent if either doubts it. Told which rule it broke, an agent sometimes changes what the rule looks at instead of doing the job, and every guardrail still passes ([what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it)).
+- **The undo is proved before anyone approves.** Shadow Run writes the inverse from the row log, runs it on the clone and checks that each table's hash returns to where it began. The person approving knows the way back works before prod changes.
+- **The database measures the blast radius, in dollars too.** Postgres reports rows per table, each cascade traced to its step, and the change in the numbers a business watches, with no model involved. The reviewer sees what the plan did to the business, not a statement to decode.
+- **It attacks its own policy and publishes the score.** An attacker model is told every rule and tries to do damage, and what it finds becomes a candidate rule, kept only if it holds on a clean clone, fails on the attack and lets normal work through. The policy is tested by something that knows it, and what still gets through is [on this page](#we-attacked-our-own-policy).
+- **It warns about its own retry loop.** The page says when the final plan changes fewer rows than the first, and a second model checks that it still does what was asked. A retry loop can narrow a plan until it passes, and the person approving should know when that happened.
+
+Against the approaches the benchmark measured, and against handing the agent a database URL:
 
 | | Agent with a database URL | Rules in the agent's prompt | A rule gate that reads the plan | A transaction with rollback | **Shadow Run** |
 | --- | --- | --- | --- | --- | --- |
@@ -150,8 +166,6 @@ How it compares with the approaches the benchmark measured it against, and with 
 | Rolls back if prod differs from the rehearsal | No | No | No | On a failed guardrail | **Yes: row counts, row content, schema or guardrails** |
 | Proves an undo before anyone approves | No | No | No | No | **Yes** |
 | Sends back plans that got around a rule | No | No | No | No | **Yes** |
-
-Teams have long tried changes on a copy first. What's new is making that rehearsal the thing that authorizes an agent's action: the measurement is bound to the exact plan a person signs, and the apply refuses anything that differs from it.
 
 ## Built on Vultr
 
@@ -264,7 +278,7 @@ No plan that changed anything reached prod without a person, so a harm count of 
 
 </details>
 
-Three modes, same model, same prompt, same seeded database, a fresh copy for every run: the agent directly on prod, the agent behind a rule gate that refuses flagged plans and lets it retry with no person (the same rules Shadow Run starts with), and the agent through Shadow Run.
+Three modes ran, each with the same model, prompt and seeded database, and a fresh copy for every run: the agent directly on prod, the agent behind a rule gate, and the agent through Shadow Run. The rule gate refuses flagged plans and lets the agent retry with no person, using the rules Shadow Run starts with.
 
 <!-- results:start -->
 | Metric | Agent directly | Rule gate, refused plans retried, no person | Shadow Run |
@@ -361,7 +375,7 @@ Inference cost per task across all 60 tasks, where the table above is held-out o
 
 ## Containment
 
-The host decides, and every result is printed on the run page. Teardown, file hashes, firewall counters and prod's hash are measured from outside the sandbox. The kernel read, network probes and secret scan run inside the guest and report out, so those are as strong as the guest's own answers.
+The host decides, and every result is printed on the run page. Teardown, file hashes, firewall counters and prod's hash are measured from outside the sandbox. The kernel read, network probes and secret scan run inside the guest and report out, so they are only as strong as the guest's own answers.
 
 | Criterion | Controls | Proof on each run |
 | --- | --- | --- |
@@ -370,7 +384,7 @@ The host decides, and every result is printed on the run page. Teardown, file ha
 | Resource limits | 2 vCPUs, 2 GB, 120 s wall clock, statement timeout. Two network walls: no NIC at all, plus a host iptables chain for the sandbox uid that also rejects the metadata IP and the VPC. | Probes to prod, the metadata IP and the internet read the reply, not just the connect. Rejected-packet counter. |
 | Lifecycle discipline | Destroyed in `finally`, on success, failure and timeout. A janitor removes anything over 10 minutes old. | Not listed by the runtime, disk gone, no leftover processes. |
 
-Each attack runs for real in a clone with the gate off, and it only counts if it demonstrably executed.
+Each attack runs for real in a clone with the gate off, and counts only if it demonstrably executed.
 
 <!-- redteam:start -->
 **7 of 7 contained.**
@@ -392,7 +406,7 @@ Each attack runs for real in a clone with the gate off, and it only counts if it
 Prod hash before and after the whole suite: `03d0ebc88dd80e26` and `03d0ebc88dd80e26`. Second wall tested alone, with the no-NIC wall deliberately opened: rejected packets went from 6 to 9, and the sandbox reached nothing outside. A new clone made after all the attacks matches one made before them. Re-run: `python scripts/redteam_live.py`, or the button on the Red team page.
 <!-- redteam:end -->
 
-We also tried to break the approval, the apply and the measurement on the live system, and checked that the honest path still works. Some of these came from independent reviews of this code, which found holes that are now closed.
+We also tried to break the approval, the apply and the measurement on the live system, and checked that the honest path still works. Some of these checks came from independent reviews of this code, and the holes they found are now closed.
 
 <!-- controls:start -->
 **23 of 23 attacks were refused, rolled back or held, and 11 of 11 checks that the honest path still works passed**, at 2026-11-07T21:48:11Z. Re-run: `python -m checker.controls`.
@@ -445,9 +459,9 @@ Soak test: 50 rehearsals in 133.2 s, every one contained with teardown confirmed
 
 ## Real incidents, replayed
 
-The PocketOS incident is the one a rehearsal can't measure: a single cloud API call. What protects you there is that the agent never holds a credential to make it.
-
 The commands behind documented incidents, run on a clone. Each is measured even when the gate refuses it, to show what it would have done.
+
+PocketOS is the one a rehearsal can't measure, because the damage was a single cloud API call. What protects you there is that the agent never holds a credential to make it.
 
 <details><summary>Each incident's command, what it did on a clone, and whether prod's hash moved</summary>
 
@@ -468,7 +482,7 @@ The commands and how each was adapted are in [`demo/incidents.yaml`](demo/incide
 
 ## We attacked our own policy
 
-A guardrail only protects what someone thought of. So an attacker model is told every guardrail and the exact rule for auto-apply, then tries to do real damage. Its own damage check runs on a clone, so a claim of damage has to be real. The first auto-apply rule was a row limit, and the attacker fit real damage under it, so auto-apply now works from a named list of what may change without a person. The attacker can still change what's on the list, so the last column is what matters: not how many got through, but what they could reach.
+A guardrail only protects what someone thought of. So an attacker model is told every guardrail and the exact auto-apply rule, then tries to do real damage. Its damage check runs on a clone, so a claimed hit has to be real. The first auto-apply rule was a row limit, and the attacker fit real damage under it. Auto-apply now works from a named list of what may change without a person. The attacker can still change what's on the list, so the last column is what matters: not how many got through, but what they could reach.
 
 <details><summary>The attacker's three rounds against our auto-apply policy, and what each could reach with no person looking</summary>
 
@@ -484,7 +498,7 @@ Replaying the attacks that passed the rules, against the rules they taught: 7 of
 
 </details>
 
-An attack that passes the rules also produces a candidate rule, which counts only if it holds on the clean database, fails on that plan, and lets [a list of ordinary changes](demo/normal_work.yaml) through. A person's judgment feeds the same loop: when a reviewer rejects a plan and says why, the model turns the reason into a rule, proved the same way.
+An attack that passes the rules also produces a candidate rule. It counts only if it holds on the clean database, fails on that plan and lets [a list of ordinary changes](demo/normal_work.yaml) through. A person's judgment feeds the same loop: when a reviewer rejects a plan and says why, the model turns the reason into a rule, proved the same way.
 
 ## Who this is for
 
@@ -549,6 +563,27 @@ The price is our plan. The costs are measured: inference from the benchmark's ow
 
 </details>
 
+## Engineering and reproducibility
+
+<!-- tests:start -->
+**623 automated tests** in 15 files. 48 of them boot real microVMs on KVM: rehearsals, the blast-radius measurement, guardrails, the proved undo and the containment checks. The rest cover the static gate, plan hashing, approvals, apply and roll back on drift, the budget, the API, the CLI, the MCP tools and the benchmark harness, many of them against a real Postgres. CI runs every test that doesn't need `/dev/kvm` on each push, and checks that the README's charts still match the benchmark files. Run them with `pytest`, or `pytest -m 'not kvm'` on a machine without KVM. The KVM tests, which CI can't run, last ran on a developer machine with KVM and Microsandbox, the runtime the VX1 uses: 48 of 48 passed in 105.5 s, at 2026-11-08 17:29 (`bench/kvm_tests.json`, re-run: `python scripts/kvm_record.py`).
+<!-- tests:end -->
+
+- **Check it yourself in seconds.** `python scripts/verify.py` recomputes every headline claim from `bench/*.json` and checks this page states the same number. Through `bench/provenance.py`, it also checks that the code which measured is the code in this checkout; the sha256 is under the results table. CI runs it on every push.
+- **Every measured number on this page is generated.** `scripts/make_readme_table.py` writes each block from `bench/*.json`, and `scripts/make_charts.py` draws the charts from the same files. CI fails if the README or a chart no longer matches the data. Survey and market figures come from `docs/market.json`, each with its source.
+- **Every measurement has its re-run command** next to it.
+- **The whole stack is code.** `infra/provision.py` builds it on Vultr from zero, and `infra/teardown.py` removes it and confirms each resource returns 404.
+- **Evidence is kept.** Each applied run writes a signed evidence bundle and a pre-apply backup to Object Storage. The audit log is a hash chain you can verify on the Audit page.
+
+## Run your own
+
+```
+cp .env.example .env          # VULTR_API_KEY and VULTR_INFERENCE_KEY
+bash scripts/up.sh            # 2 VMs, Managed Postgres, bucket, VPC, firewall groups, walls, web UI, HTTPS
+bash scripts/final.sh         # every number on this page, measured on what up.sh built
+python infra/teardown.py      # removes everything, confirms 404
+```
+
 <details><summary>Point it at your own database</summary>
 
 ```
@@ -560,27 +595,6 @@ Restart the control plane, and the target appears next to the demo. Start on a s
 
 </details>
 
-## Engineering and reproducibility
-
-<!-- tests:start -->
-**611 automated tests** in 14 files. 48 of them boot real microVMs on KVM: rehearsals, the blast-radius measurement, guardrails, the proved undo and the containment checks. The rest cover the static gate, plan hashing, approvals, apply and roll back on drift, the budget, the API, the CLI, the MCP tools and the benchmark harness, many of them against a real Postgres. CI runs every test that doesn't need `/dev/kvm` on each push, and checks that the README's charts still match the benchmark files. Run them with `pytest`, or `pytest -m 'not kvm'` on a machine without KVM. The KVM tests, which CI can't run, last ran on a developer machine with KVM and Microsandbox, the runtime the VX1 uses: 48 of 48 passed in 105.5 s, at 2026-11-08 17:29 (`bench/kvm_tests.json`, re-run: `python scripts/kvm_record.py`).
-<!-- tests:end -->
-
-- **Check it yourself in seconds.** `python scripts/verify.py` recomputes every headline claim from `bench/*.json`, checks this page states the same number, and checks that the code which measured is the code in this checkout. CI runs it on every push.
-- **Every measured number on this page is generated.** `scripts/make_readme_table.py` writes each block from `bench/*.json`, `scripts/make_charts.py` draws the charts from the same files, and CI fails if the README or a chart no longer matches the data. Survey and market figures come from `docs/market.json`, each with its source.
-- **Every measurement has its re-run command** next to it, and `bench/provenance.py` checks that the code that measured is the code in this checkout. The sha256 is under the results table.
-- **The whole stack is code.** `infra/provision.py` builds it on Vultr from zero, and `infra/teardown.py` removes it and confirms each resource returns 404.
-- **Evidence is kept.** Each applied run writes a signed evidence bundle and a pre-apply backup to Object Storage, and the audit log is a hash chain you can verify on the Audit page.
-
-## Run your own
-
-```
-cp .env.example .env          # VULTR_API_KEY and VULTR_INFERENCE_KEY
-bash scripts/up.sh            # 2 VMs, Managed Postgres, bucket, VPC, firewall groups, walls, web UI, HTTPS
-bash scripts/final.sh         # every number on this page, measured on what up.sh built
-python infra/teardown.py      # removes everything, confirms 404
-```
-
 ## Scope and design notes
 
 Shadow Run is built for Postgres and Linux hosts. These are the boundaries it was designed around, and what it does at each one.
@@ -588,13 +602,13 @@ Shadow Run is built for Postgres and Linux hosts. These are the boundaries it wa
 <details><summary>Calls outside the target, the shared demo identity, invariants no guardrail encodes, Linux hosts, plans that act differently on prod, teams, personal data and size</summary>
 
 - **Calls outside the target can't be rehearsed.** Email, Stripe or a cloud API fail on the clone, so the plan is blocked, or flagged for a person if a step swallows the failure. Either way, Shadow Run can't say what the call would have done.
-- **One guest holds both identities on the public demo,** so the whole flow fits in one tab. An identity can't approve its own run, but that only means two people if two people hold them, as they would in a real deployment.
-- **Some harm needs a person to catch it.** If no guardrail encodes an invariant, Shadow Run can only show the diff. The approved-unread numbers above are that gap, measured. A column on the auto-apply list can be changed badly, up to the row limit, with no person looking. On the demo, that list is one notes column.
-- **Linux hosts are weaker than Postgres.** systemd needs a boot path that microsandbox only offers with a NIC present, so host rehearsals use a deny-all policy, a downed link and the host firewall instead of no NIC. Files are hashed under `/etc`, `/var/app`, `/srv`, `/opt/app`, `/home` and `/root`. Elsewhere a change shows up by inode change time and sends the plan to a person, except in `/proc`, `/sys`, `/dev`, `/run`, `/tmp`, `/var/tmp` and the system journal, which aren't watched. A host plan runs as root in the same guest as the code measuring it, so a plan written to lie could lie to the file report. That's why a host plan with no person looking is limited to plain commands naming paths inside the auto-apply list, and why a person approving a host plan should read the plan itself. The demo's "prod host" is a long-lived VM on the VX1, and apply on a host can't be transactional: it keeps a tar and restores it on any mismatch.
-- **Plans that act differently on prod.** A plan that asks where it's running, through `current_user` or `inet_server_addr()`, always goes to a person. One branching on something else, such as `random()`, is caught at apply as a mismatch and rolled back, which can also reject harmless nondeterminism. With no person looking, a plan may only call functions from a short list, because a function can do things no row log sees. Timestamp columns are the exception, because `now()` differs between rehearsal and apply: only whether they are NULL is compared, so a wrong timestamp on the right rows would pass that one check.
+- **One guest holds both identities on the public demo,** so the whole flow fits in one tab. An identity can't approve its own run, but that means two people only when two people hold them, as they would in a real deployment.
+- **Some harm needs a person to catch it.** If no guardrail encodes an invariant, Shadow Run can only show the diff. The approved-unread numbers above measure that gap. A column on the auto-apply list can be changed badly, up to the row limit, with no person looking. On the demo, that list is one notes column.
+- **Linux hosts are weaker than Postgres.** systemd needs a boot path that microsandbox only offers with a NIC present. So host rehearsals use a deny-all policy, a downed link and the host firewall instead of no NIC. Files are hashed under `/etc`, `/var/app`, `/srv`, `/opt/app`, `/home` and `/root`. Elsewhere, a change shows up by inode change time and sends the plan to a person. `/proc`, `/sys`, `/dev`, `/run`, `/tmp`, `/var/tmp` and the system journal aren't watched. A host plan runs as root in the same guest as the code measuring it, so a plan written to lie could lie to the file report. That's why a host plan with no person looking is limited to plain commands naming paths inside the auto-apply list, and why a person approving a host plan should read the plan itself. The demo's "prod host" is a long-lived VM on the VX1. Apply on a host can't be transactional, so it keeps a tar and restores it on any mismatch.
+- **Plans that act differently on prod.** A plan that asks where it's running, through `current_user` or `inet_server_addr()`, always goes to a person. One that branches on something else, such as `random()`, is caught at apply as a mismatch and rolled back, which can also reject harmless nondeterminism. With no person looking, a plan may only call functions from a short list, because a function can do things no row log sees. Timestamp columns are the exception, because `now()` differs between rehearsal and apply. Only whether they are NULL is compared, so a wrong timestamp on the right rows would pass that one check.
 - **One team per deployment.** Everyone with a login can read every run and the audit log. Separate teams need separate deployments.
 - **PII masking isn't built,** so a clone holds real data, though it has no way to send it anywhere.
-- **Size.** A snapshot grows with the database, because the clone is a full restore, and a rehearsal grows with how many rows the plan changes. A plan that hits the time limit is refused, not approved. Thin clones (DBLab, ZFS) are the fix at larger sizes, and they aren't built.
+- **Size.** The clone is a full restore, so a snapshot grows with the database, and a rehearsal grows with how many rows the plan changes. A plan that hits the time limit is refused, not approved. Thin clones (DBLab, ZFS) are the fix at larger sizes, and they aren't built.
 
 </details>
 

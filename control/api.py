@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 from checker.control_kinds import control_kind
 from control import hero
-from control import auth, evidence, llm, settings
+from control import auth, economics, evidence, llm, settings
 from control.approvals import ApprovalError, challenge
 from control.gate import check_plan
 from control.mcp_server import McpAuth
@@ -411,9 +411,18 @@ def public_info() -> dict:
 
 @app.get("/api/market")
 def market() -> dict:
-    """Who pays, with sources. Public, like the README section it comes from, and only ever what docs/market.json says."""
+    """Who pays, with sources. Public, like the README section it comes from: what docs/market.json says, plus what it costs
+    to serve, from the published benchmark files and the README's own arithmetic (control/economics.py). Each is null when
+    a file it needs is missing."""
     path = ROOT / "docs" / "market.json"
-    return json.loads(path.read_text()) if path.exists() else {}
+    if not path.exists():
+        return {}
+    m = json.loads(path.read_text())
+    return {
+        **m,
+        "economics": economics.economics(bench_json("results.json"), bench_json("vultr.json"), m),
+        "served_db_mb": economics.served_db_mb(bench_json("scale.json")),
+    }
 
 
 @app.post("/api/demo/enter")

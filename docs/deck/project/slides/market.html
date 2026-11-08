@@ -1,20 +1,38 @@
-
-<section id="market" data-transition="fade" style="background:#101213;color:#EFECE6;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 120px;display:flex;flex-direction:column;gap:40px">
+<section id="market" data-transition="fade" style="background:#101213;color:#EFECE6;font-family:'IBM Plex Sans', Arial, sans-serif;padding:96px 128px 96px;display:flex;flex-direction:column;gap:28px">
 <h2 style="font-size:72px;font-weight:700;line-height:1.1;letter-spacing:-1px">Who pays, and for what</h2>
+<p style="font-size:32px;line-height:1.35">The buyer is the engineer who owns production Postgres at a team that lets coding agents run migrations and data fixes.</p>
 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px">
-<div style="background:#1A1D1F;padding:36px 40px;border:1px solid #2E3235;border-radius:8px;display:flex;flex-direction:column;gap:12px">
-<p style="font-size:68px;font-weight:700;color:#7FD1B9">[weekly]%</p>
-<p style="font-size:28px;line-height:1.3">of professional developers use coding agents at work every week. JetBrains, 2026.</p>
+<div style="background:#1A1D1F;padding:28px 36px;border:1px solid #2E3235;border-radius:8px;display:flex;flex-direction:column;gap:8px">
+<p style="font-size:56px;font-weight:700;color:#7FD1B9">[weekly]%</p>
+<p style="font-size:24px;line-height:1.3">of professional developers use coding agents at work every week. JetBrains, 2026.</p>
 </div>
-<div style="background:#1A1D1F;padding:36px 40px;border:1px solid #2E3235;border-radius:8px;display:flex;flex-direction:column;gap:12px">
-<p style="font-size:68px;font-weight:700;color:#7FD1B9">[g_low] to [g_high]%</p>
-<p style="font-size:28px;line-height:1.3">of the agentic AI market goes to guardian agents by [g_year]. Gartner.</p>
+<div style="background:#1A1D1F;padding:28px 36px;border:1px solid #2E3235;border-radius:8px;display:flex;flex-direction:column;gap:8px">
+<p style="font-size:56px;font-weight:700;color:#7FD1B9">[g_low] to [g_high]%</p>
+<p style="font-size:24px;line-height:1.3">of the agentic AI market goes to guardian agents by [g_year]. Gartner.</p>
 </div>
-<div style="background:#1A1D1F;padding:36px 40px;border:1px solid #2E3235;border-radius:8px;display:flex;flex-direction:column;gap:12px">
-<p style="font-size:68px;font-weight:700;color:#7FD1B9">$[first_m] million</p>
-<p style="font-size:28px;line-height:1.3">a year at [first_pct]% of [pg] PostgreSQL companies (6sense), one database each, at our planned $[price] a month. All of them would be $[sam] billion.</p>
+<div style="background:#1A1D1F;padding:28px 36px;border:1px solid #2E3235;border-radius:8px;display:flex;flex-direction:column;gap:8px">
+<p style="font-size:56px;font-weight:700;color:#7FD1B9">$[first_m] million</p>
+<p style="font-size:24px;line-height:1.3">a year if [first_pct]% of [pg] PostgreSQL companies (6sense) protect one database each at our planned price. All of them: $[sam] billion.</p>
 </div>
 </div>
-<p style="font-size:34px;line-height:1.35">The buyer is the engineer who owns production Postgres. Shadow Run is open source and free to self-host on the team's own Vultr account, with a pull request Action that can't touch prod. Hosted, it's a subscription per protected database, with a support licence for regulated teams. [economics_line]</p>
-<aside>The percentages are other firms' published figures; combining them is our arithmetic, and the price is our plan, so say that out loud. Vendor counts of PostgreSQL companies run from about 19,000 to about 173,000.</aside>
+<div style="display:grid;grid-template-columns:1fr 48px 1fr 48px 1fr;gap:16px;align-items:center">
+<div style="height:100%;background:#12332B;padding:28px 36px;border:1px solid #2E7D68;border-radius:8px;display:flex;flex-direction:column;gap:8px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:22px;color:#9A9A93">SELF-HOSTED</p>
+<p style="font-size:44px;font-weight:700;color:#7FD1B9">Free</p>
+<p style="font-size:24px;line-height:1.3">Open source, on the team’s own Vultr account. It pays Vultr about $[e_fixed] a month at list price.</p>
+</div>
+<p style="font-size:40px;color:#7FD1B9;text-align:center">→</p>
+<div style="height:100%;background:#1A1D1F;padding:28px 36px;border:1px solid #2E3235;border-radius:8px;display:flex;flex-direction:column;gap:8px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:22px;color:#9A9A93">HOSTED</p>
+<p style="font-size:44px;font-weight:700">$[price] a month</p>
+<p style="font-size:24px;line-height:1.3">per protected database, run inside the customer’s own Vultr account. Up to about [size_gb] GB today.</p>
+</div>
+<p style="font-size:40px;color:#7FD1B9;text-align:center">→</p>
+<div style="height:100%;background:#1A1D1F;padding:28px 36px;border:1px solid #2E3235;border-radius:8px;display:flex;flex-direction:column;gap:8px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:22px;color:#9A9A93">REGULATED TEAMS</p>
+<p style="font-size:44px;font-weight:700">Support licence</p>
+<p style="font-size:24px;line-height:1.3">Self-hosted, with support, priced per deployment.</p>
+</div>
+</div>
+<aside>The percentages are other firms' published figures; combining them is our arithmetic, and the price is our plan, so say that out loud. Vendor counts of PostgreSQL companies run from about 19,000 to about 173,000. The free pull request Action is the way in: every migration gets a comment saying what it really does, and it can't touch prod.</aside>
 </section>
