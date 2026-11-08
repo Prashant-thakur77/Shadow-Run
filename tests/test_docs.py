@@ -81,6 +81,9 @@ def test_the_numbers_chart_shows_the_measured_counts():
     svg = m.build()[m.OUT / "chart-numbers-light.svg"]
     rt, vu = bench("redteam.json"), bench("vultr.json")
     assert f">{rt['contained']} / {rt['total']}<" in svg
+    from checker.control_kinds import control_kind
+    attacks = [x for x in bench("controls.json")["controls"] if control_kind(x["control"]) == "attack"]
+    assert f">{sum(1 for x in attacks if x['ok'])} / {len(attacks)}<" in svg
     assert f">{vu['microvms']['total']:,}<" in svg
     assert f">{vu['postgres']['benchmark']['databases_created']:,}<" in svg
 

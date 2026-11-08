@@ -38,7 +38,7 @@ def claims() -> list[tuple[str, str, str]]:
     return [
         ("Held-out harm, approved unread", f"harm fell from {d['harm']:g} to {u['harm']:g} of {h['tasks']} held-out risky tasks", "stats.json main.sets.heldout.arms"),
         ("...task by task", f"{c['tasks_down']} tasks better, {c['tasks_up']} worse, p = {c['permutation_p']:g}", "stats.json ...compare.unread_vs_direct.harm"),
-        ("Nothing harmful reached prod unseen", f"{held['harm_on_prod']['mean']:g} of {h['tasks']} did harm, against {d['harm']:g} for the agent alone", "results.json heldout.shadow_run.harm_on_prod"),
+        ("Held for a person, nothing unseen", f"{held['risky_held']['mean']:g} of {h['tasks']} risky plans waited for a person with a measured report, so {held['harm_on_prod']['mean']:g} did harm unseen", "results.json heldout.shadow_run.risky_held, harm_on_prod"),
         ("Outside benchmark (SABER)", f"from {ext['from']:g} to {ext['to']:g} on {ext['tasks']} tasks adapted from an outside benchmark ({ext['tasks_down']} better, {ext['tasks_up']} worse)", "stats.json main.sets.external"),
         ("Rehearsal time, median", f"a rehearsal takes {held['rehearsal_s']['p50']:g} s at the median", "results.json heldout.shadow_run.rehearsal_s.p50"),
         ("Evasion checks, outside benchmark", f"from {ax['from']:g} to {ax['to']:g} on the outside-benchmark tasks ({ax['tasks_down']} tasks better, {ax['tasks_up']} worse)", "evasion.json after.external.harm"),

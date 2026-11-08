@@ -32,7 +32,7 @@ def summarise(report: Path) -> dict:
         "errors": errors,
         "skipped": skipped,
         "seconds": round(float(suite.get("time", 0)), 1),
-        "host": "a KVM host running Microsandbox, as the VX1 does",
+        "host": "a developer machine with KVM and Microsandbox, the runtime the VX1 uses",
         "rerun": "python scripts/kvm_record.py",
     }
 

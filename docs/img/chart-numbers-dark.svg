@@ -8,12 +8,12 @@
 <text x="50.0" y="150.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">prod&#x27;s hash unchanged</text>
 <rect x="260.0" y="58" width="212.0" height="112" rx="6" fill="none" stroke="#30363d"/>
 <text x="278.0" y="104.0" font-size="32" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">6 / 6</text>
-<text x="278.0" y="132.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">real incidents replayed on a</text>
-<text x="278.0" y="150.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">clone, all blocked</text>
+<text x="278.0" y="132.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">real incident commands</text>
+<text x="278.0" y="150.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">stopped before prod</text>
 <rect x="488.0" y="58" width="212.0" height="112" rx="6" fill="none" stroke="#30363d"/>
-<text x="506.0" y="104.0" font-size="32" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">34 / 34</text>
-<text x="506.0" y="132.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">approval and apply attacks</text>
-<text x="506.0" y="150.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">refused, honest path works</text>
+<text x="506.0" y="104.0" font-size="32" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">23 / 23</text>
+<text x="506.0" y="132.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">attacks on approval and</text>
+<text x="506.0" y="150.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">apply refused or rolled back</text>
 <rect x="716.0" y="58" width="212.0" height="112" rx="6" fill="none" stroke="#30363d"/>
 <text x="734.0" y="104.0" font-size="32" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">50 / 50</text>
 <text x="734.0" y="132.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">rehearsals in a row, every</text>

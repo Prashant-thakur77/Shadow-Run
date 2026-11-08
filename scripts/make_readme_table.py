@@ -618,7 +618,7 @@ def block_market() -> str:
     lines = [
         f"**Who is exposed.** {d['weekly_pct']}% of professional developers use coding agents at work at least weekly and {d['daily_pct']}% daily ([{d['source']}]({d['url']}), {d['respondents']} respondents). [{pg['count']:,} companies use PostgreSQL]({pg['url']}), by {pg['source']}'s 2026 count. {pg['caveat']}",
         "",
-        f"**Market.** [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']}. [{a['source']}]({a['url']}) sizes AI agents at ${a['usd_b_2025']} billion in 2025 and ${a['usd_b_2033']} billion by 2033. Combining the two, which is our arithmetic and not theirs, gives ${derived['tam_usd_b_on_2033_forecast'][0]} to {derived['tam_usd_b_on_2033_forecast'][1]} billion on the 2033 forecast. The market this version can serve: at the ${price['usd_per_database_month']} a month we plan to charge, {derived['first_target_pct']}% of those companies with one protected database each is ${derived['first_target_usd_m_per_year']} million a year, and all of them, which is a ceiling since not all let agents near prod, is ${derived['sam_usd_b_per_year']} billion.",
+        f"**Market.** [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']}. [{a['source']}]({a['url']}) sizes AI agents at ${a['usd_b_2025']} billion in 2025 and ${a['usd_b_2033']} billion by 2033. Bottom up: at the ${price['usd_per_database_month']} a month we plan to charge, {derived['first_target_pct']}% of those companies with one protected database each is ${derived['first_target_usd_m_per_year']} million a year, and all of them, which is a ceiling since not all let agents near prod, is ${derived['sam_usd_b_per_year']} billion.",
         "",
         "| Who else | What they do well | What's missing for this job |",
         "| --- | --- | --- |",
@@ -827,23 +827,18 @@ def block_summary() -> str:
     held_sql = (ctl.get("sets") or {}).get("heldout_sql") if ctl.get("status") == "measured" and ctl.get("same_code_as_main") else None
     if c["harm"]["excludes_zero"] and c["harm"]["difference"] < 0:
         line = (f"- **Even if the reviewer approves every plan without reading it, harm fell from {d['harm']:g} to {u['harm']:g} of {h['tasks']} held-out risky tasks** "
-                f"({c['harm']['tasks_down']} tasks better, {c['harm']['tasks_up']} worse, {fmt_p(c['harm']['permutation_p'])})")
+                f"({c['harm']['tasks_down']} tasks better, {c['harm']['tasks_up']} worse)")
         if ext and ext["harm"]["excludes_zero"] and ext["harm"]["difference"] < 0:
             line += f", and from {ext['harm']['from']:g} to {ext['harm']['to']:g} on {v['sets']['external']['tasks']} tasks adapted from an outside benchmark ({ext['harm']['tasks_down']} better, {ext['harm']['tasks_up']} worse)"
         line += "."
         if held_sql:
             arms = held_sql["arms"]
-            line += (f" Giving the agent every guardrail in its prompt helps too: harm {arms['rules_in_prompt']['harm']:g} on the {held_sql['tasks']} held-out SQL tasks, against {arms['unread']['harm']:g} through Shadow Run. "
-                     "Only Shadow Run also shows a person what the plan really does before prod, and contains a hostile plan.")
+            line += (f" Giving the agent every guardrail in its prompt gets close, {arms['rules_in_prompt']['harm']:g} against {arms['unread']['harm']:g} on the {held_sql['tasks']} held-out SQL tasks. "
+                     "What a prompt can't do is show a person what the plan really does before prod, or contain a hostile plan, and that is what Shadow Run adds: "
+                     f"{held['risky_held']['mean']:g} of {h['tasks']} risky plans waited for a person with a measured report, so {held['harm_on_prod']['mean']:g} did harm unseen.")
         out.append(line + " (`bench/stats.json`)")
     else:
         out.append(f"- **Approved unread, harm went from {d['harm']:g} to {u['harm']:g}** ({fmt_ci(c['harm'])}, {fmt_p(c['harm']['permutation_p'])}). (`bench/stats.json`)")
-    out.append(
-        f"- **By design, nothing reaches prod unseen: {held['harm_on_prod']['mean']:g} of {h['tasks']} did harm, against {d['harm']:g} for the agent alone.** "
-        + f"{held['risky_held']['mean']:g} of {h['tasks']} risky plans waited for a person with a measured report of what each would do"
-        + (", and nothing that changed anything was applied without one" if alone_changed == 0 else f", and the {alone_changed} that changed something alone stayed inside the team's named low-risk list")
-        + " (`bench/results.json`)."
-    )
     ev = load("evasion.json")
     if ev and ev.get("detection"):
         aft = ev.get("after") or {}
@@ -852,7 +847,7 @@ def block_summary() -> str:
                 "as in [the recorded run](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it). ")
         if ex_h and he_h and ex_h["difference"] < 0:
             line += (f"The two changes it led to cut harm, approved unread, from {ex_h['from']:g} to {ex_h['to']:g} on the outside-benchmark tasks ({ex_h['tasks_down']} tasks better, {ex_h['tasks_up']} worse) "
-                     f"and from {he_h['from']:g} to {he_h['to']:g} on the held-out tasks ({he_h['tasks_down']} better, {he_h['tasks_up']} worse)")
+                     f"and from {he_h['from']:g} to {he_h['to']:g} on the held-out tasks ({he_h['tasks_down']} better, {he_h['tasks_up']} worse), comparing benchmark runs before and after")
         line += " (`bench/evasion.json`)."
         out.append(line)
     rt, inc, cl = load("redteam.json"), load("incidents.json"), load("controls.json")
@@ -880,7 +875,7 @@ def block_summary() -> str:
         dv, g, price = mk["developers_using_agents"], mk["guardian_share"], mk["price"]["usd_per_database_month"]
         out.append(
             f"- **Who pays:** the engineer who owns production Postgres at a team using coding agents, and {dv['weekly_pct']}% of professional developers now use them weekly ([{dv['source']}]({dv['url']})). "
-            f"Shadow Run is open source and free to self-host on Vultr; hosted, it's ${price} a month per protected database"
+            f"Shadow Run is open source and free to self-host on Vultr; hosted, it's ${price} a month per protected database of up to about 1 GB"
             + (f", against ${economics()['fixed']:.0f} a month of Vultr list price per deployment plus a measured ${economics()['per_k']:.2f} per 1,000 rehearsed tasks ([unit economics](#unit-economics))" if (economics() or {}).get("fixed") else "")
             + f". [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, "
             f"to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']} ([who this is for](#who-this-is-for), [market](#market-and-competition))."
@@ -927,7 +922,7 @@ def block_economics() -> str:
     if e.get("fixed") is not None:
         rows += [
             ["Fixed cost of one deployment at Vultr's list price: the control VM, the VX1 host and the bucket. Prod is the customer's own database", f"${e['fixed']:.0f} a month"],
-            [f"Margin on one hosted database at ${e['price']} a month and 1,000 rehearsed tasks, fixed costs included", f"{e['margin_one_db'] * 100:.0f}%"],
+            [f"Infrastructure gross margin on one hosted database at ${e['price']} a month and 1,000 rehearsed tasks, fixed costs included", f"{e['margin_one_db'] * 100:.0f}%"],
             ["...with two databases on the same deployment", f"{e['margin_k'][2] * 100:.0f}%"],
             ["...with three", f"{e['margin_k'][3] * 100:.0f}%"],
             ["Rehearsed tasks a month before one database's total cost reaches its price", f"about {round(e['tasks_to_cost'], -3):,.0f}"],

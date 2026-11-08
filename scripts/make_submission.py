@@ -42,8 +42,7 @@ def form_text(r: dict, st: dict, rt: dict, ev: dict | None, ai: dict, url: str) 
         "Postgres measures the blast radius, frozen guardrails decide, and a different person approves those exact hashes before the same plan runs on prod in one transaction that rolls back on any surprise. Its undo, when one exists, is proved on the clone first."
     )
     tested = f" ({fmt_p(c['harm']['permutation_p'])} over tasks)" if c["harm"]["excludes_zero"] else ""
-    kept = f", and tasks finished safely held up ({u['done']:g} against {d['done']:g})" if u["done"] >= d["done"] else ""
-    parts.append(f"On {h['tasks']} held-out risky tasks, {held['harm_on_prod']['mean']:g} did harm before a person saw the plan, against {d['harm']:g} for the agent alone. Even with every plan approved unread, harm fell from {d['harm']:g} to {u['harm']:g}{tested}{kept}.")
+    parts.append(f"On {h['tasks']} held-out risky tasks, even with every plan approved unread, harm fell from {d['harm']:g} for the same agent alone to {u['harm']:g}{tested}. {held['risky_held']['mean']:g} of {h['tasks']} risky plans waited for a person with a measured report.")
     if ev and ev.get("detection"):
         a, f_ = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
         un = ev["detection"]["unseen"]["harmful"]
@@ -104,7 +103,7 @@ def main() -> int:
     def plain(t: str) -> str:
         t = re.sub(r"^_How to read these:.*?_\n\n", "", t, flags=re.S | re.M)
         t = re.sub(r" ?\((?:\[[^\]]+\]\(#[^)]+\)(?:, )?)+\)", "", t)
-        t = re.sub(r"\[([^\]]+)\]\(#[^)]+\),? ?", "", t)
+        t = re.sub(r"\[([^\]]+)\]\(#[^)]+\)", r"\1", t)
         t = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", t)
         return t.replace("**", "").replace("`", "")
     summary = plain(block_summary()) if measured else ""
@@ -134,7 +133,7 @@ def main() -> int:
         + (f"Cost to serve: ${econ['fixed']:.0f} a month per deployment at list price plus a measured ${econ['per_k']:.2f} per 1,000 rehearsed tasks, inference and VX1 time included, a {econ['margin_one_db'] * 100:.0f}% margin on one database at ${econ['price']} a month. " if econ and econ.get("fixed") else "")
         + 
         f"Gartner expects guardian agents to take {mk['guardian_share']['low_pct']} to {mk['guardian_share']['high_pct']}% of the agentic AI market by {mk['guardian_share']['by_year']}. "
-        f"Migration linters read the statement, and thin clones like DBLab and Neon give a copy. What's different: {mk['us']['usp'].replace(' None of the docs above describe that.', '')} "
+        f"Linters read the statement, and thin clones give a copy. What's different: {mk['us']['usp'].replace(' None of the docs above describe that.', '')} "
         f"Scope today: {mk['us']['weakness'][0].lower()}{mk['us']['weakness'][1:]}"
     )
     gt = load("gauntlet.json") or {}
@@ -170,7 +169,7 @@ Shadow Run
 
 For the README, a blog post or anywhere without a limit.
 
-**The problem.** {incidents}AI agents with real access keep destroying production data with one command. In April 2026 a coding agent at PocketOS deleted a production volume and its backups in nine seconds, by its founder's account. In February, a `terraform destroy` took down DataTalks.Club for about a day. Keeping dev and prod apart didn't help: the agent found a credential that reached prod, and the damage hid in side effects nobody had listed.
+**The problem.** {incidents}AI agents with real access keep destroying production data with one command. In April 2026 a coding agent at PocketOS deleted a production volume and its backups in nine seconds, by its founder's account. In February, a `terraform destroy` took down DataTalks.Club's production database. Keeping dev and prod apart didn't help: the agent found a credential that reached prod, and the damage hid in side effects nobody had listed.
 
 **What Shadow Run does.** Don't authorize the command; authorize its measured effect. Allowlists, linters and rules in a prompt judge what a command says. Shadow Run judges what it does, on a real copy of the data, before it can touch the original. It sits between an agent and production and holds the only credential. Every risky SQL or shell plan is frozen and hashed, read by a static gate, and run on a full clone of prod inside a fresh microVM on a Vultr VX1, with no network card and no secrets. Postgres itself reports what happened: rows per table, every foreign-key cascade traced to the step that caused it, and what it does to the numbers a business watches, in dollars. Frozen business guardrails run in the same transaction, and a failure goes back to the agent to rewrite the plan. A different person approves those exact hashes, and the same plan runs on prod in one transaction that rolls back if anything differs from the rehearsal. A plan's undo, when one exists, is proved on the clone before anyone approves.
 

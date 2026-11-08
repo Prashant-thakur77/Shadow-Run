@@ -150,13 +150,17 @@ def numbers(t: dict) -> tuple[str, str]:
     rt, ctl, so, inc, vu = load("redteam.json"), load("controls.json"), load("soak.json"), load("incidents.json"), load("vultr.json")
     res = load("results.json")
     blocked = sum(1 for i in inc["incidents"] if i["status"] == "blocked" and not i.get("reached_prod"))
+    sys.path.insert(0, str(ROOT))
+    from checker.control_kinds import control_kind
+    attacks = [x for x in ctl["controls"] if control_kind(x["control"]) == "attack"]
+    atk, atk_ok = len(attacks), sum(1 for x in attacks if x.get("ok"))
     contained_soak = so["rehearsals"] if so["all_contained"] and so["all_teardown_ok"] else 0
     tok = vu["inference"]["tokens"]
     rows = [
         ("Contained, checked from outside the sandbox", [
             (f"{rt['contained']} / {rt['total']}", "red-team attacks contained, prod's hash unchanged" if rt["prod_unchanged"] else "red-team attacks contained"),
-            (f"{blocked} / {len(inc['incidents'])}", "real incidents replayed on a clone, all blocked" if blocked == len(inc["incidents"]) else "real incidents replayed on a clone and blocked"),
-            (f"{ctl['passed']} / {ctl['total']}", "approval and apply attacks refused, honest path works"),
+            (f"{blocked} / {len(inc['incidents'])}", "real incident commands stopped before prod"),
+            (f"{atk_ok} / {atk}", "attacks on approval and apply refused or rolled back"),
             (f"{contained_soak} / {so['rehearsals']}", "rehearsals in a row, every sandbox torn down"),
         ]),
         ("Measured on Vultr in the final benchmark", [
