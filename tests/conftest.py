@@ -55,3 +55,17 @@ def second_reader_agrees(request, monkeypatch):
     from control import evasion
 
     monkeypatch.setattr(evasion, "second_reader", lambda *a, **k: {"model": "test", "verdict": "respects_it", "reason": ""})
+
+
+@pytest.fixture(autouse=True)
+def no_live_model(request, monkeypatch):
+    """Only the KVM tests may reach a real model. Anywhere else a model call is a test that forgot its stub: it would spend
+    credit on a developer's machine and fail in CI, which has no key."""
+    if request.node.get_closest_marker("kvm"):
+        return
+    from control import llm
+
+    def refuse(*a, **k):
+        raise AssertionError("a test reached a live model: stub agent.explain, evasion.second_reader or llm.chat")
+
+    monkeypatch.setattr(llm, "_client", refuse)

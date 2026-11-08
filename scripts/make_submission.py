@@ -16,7 +16,7 @@ from make_readme_table import block_summary, evasion_sentence, basis_sentence, c
 # The form's short description takes 50 to 255 characters, so it says what it is, not how.
 SHORT = (
     "Your agent wants to touch prod. Shadow Run lets it break a clone first: every risky plan runs on a full clone "
-    "in a microVM on Vultr, Postgres measures the blast radius, and only the exact plan a person approved reaches prod."
+    "in a microVM on Vultr, Postgres measures the blast radius, and a person approves the exact plan before it reaches prod."
 )
 
 
@@ -38,21 +38,29 @@ def form_text(r: dict, st: dict, rt: dict, ev: dict | None, ai: dict, url: str) 
         parts.append(f"AI agents now hold production credentials. In October 2026, {ai['unexpected_or_unauthorized_pct']}% of professionals {ai['source'].split(',')[0]} surveyed had confirmed or suspected an AI agent acting unexpectedly or without authorization; only {ai['can_stop_automatically_pct']}% could stop one automatically.")
     parts.append(
         "Shadow Run authorizes what a plan does, not what it says. The agent gets no credential. Every risky SQL or shell plan it writes is frozen, hashed and run first on a full clone of prod in a throwaway microVM on a Vultr VX1 with no network card. "
-        "Postgres measures the blast radius, frozen guardrails decide, and a different person approves those exact hashes before the same plan runs on prod in one transaction that rolls back on any surprise. An undo is proved on the clone first."
+        "Postgres measures the blast radius, frozen guardrails decide, and a different person approves those exact hashes before the same plan runs on prod in one transaction that rolls back on any surprise. Almost every plan comes with an undo, proved on the clone first."
     )
     tested = f" ({fmt_p(c['harm']['permutation_p'])} over tasks)" if c["harm"]["excludes_zero"] else ""
-    parts.append(f"On {h['tasks']} held-out risky tasks, {held['harm_on_prod']['mean']:g} did harm before a person saw the plan, against {d['harm']:g} for the agent alone. Approved unread, harm fell from {d['harm']:g} to {u['harm']:g}{tested}.")
+    kept = f", and tasks finished safely held up ({u['done']:g} against {d['done']:g})" if u["done"] >= d["done"] else ""
+    parts.append(f"On {h['tasks']} held-out risky tasks, {held['harm_on_prod']['mean']:g} did harm before a person saw the plan, against {d['harm']:g} for the agent alone. Even with every plan approved unread, harm fell from {d['harm']:g} to {u['harm']:g}{tested}{kept}.")
     if ev and ev.get("detection"):
         a, f_ = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
         un = ev["detection"]["unseen"]["harmful"]
-        parts.append(f"We found that an agent told which rule it broke can learn to get around it: those plans were harmful {a['harmful_pct']}% of the time, against {f_['harmful_pct']}%. A measured check plus a second model now catch {un['caught']} of {un['total']} on plans neither had seen.")
+        parts.append(f"We found that an agent told which rule it broke can learn to get around it: those plans were harmful {a['harmful_pct']}% of the time, against {f_['harmful_pct']}%. Shadow Run now screens every such plan twice, by measurement and by a second model.")
+    inc = load("incidents.json") or {}
+    vu = load("vultr.json") or {}
     if rt:
-        parts.append(f"{rt['contained']} of {rt['total']} live attacks contained. Every model call runs on Vultr Serverless Inference, every rehearsal on a VX1, prod on Vultr Managed PostgreSQL, evidence in Vultr Object Storage.")
+        blocked = sum(1 for i in inc.get("incidents", []) if i["status"] == "blocked" and not i.get("reached_prod"))
+        replayed = f", and {blocked} of {len(inc['incidents'])} real incident commands replayed on a clone were blocked" if inc.get("incidents") else ""
+        parts.append(f"{rt['contained']} of {rt['total']} live attacks contained{replayed}. Every model call Shadow Run makes runs on Vultr Serverless Inference, every rehearsal on a VX1, prod on Vultr Managed PostgreSQL, evidence in Vultr Object Storage.")
+    if vu.get("microvms") and vu.get("inference"):
+        parts.append(f"The final benchmark booted {vu['microvms']['total']:,} microVMs and used {vu['inference']['tokens'] / 1e6:.2f} million tokens of Vultr inference.")
     mk = json.loads((ROOT / "docs" / "market.json").read_text())
     price = (mk.get("price") or {}).get("usd_per_database_month")
     parts.append(
+        f"Who pays: the database owner at a team using coding agents, which {mk['developers_using_agents']['weekly_pct']}% of professional developers now use weekly ({mk['developers_using_agents']['source'].split(' Developer')[0]}). "
         "It plugs into any agent over MCP, a CLI or a GitHub Action that posts what a migration really does on the pull request."
-        + (f" It starts free as that Action, then ${price} a month per protected database, a price no customer has tested yet." if price else "")
+        + (f" It starts free as that Action, then ${price} a month per protected database." if price else "")
     )
     parts.append(f"Race the agent yourself: {url}/race")
     text = "\n\n".join(parts)
@@ -109,8 +117,8 @@ def main() -> int:
         f"Who pays: whoever owns the database at a team using coding agents. {mk['developers_using_agents']['weekly_pct']}% of professional developers now use them weekly ({mk['developers_using_agents']['source']}). "
         f"It starts free, as a pull request Action that can't touch prod, and then a subscription per protected database, with a self-hosted licence for regulated teams. "
         f"Gartner expects guardian agents to take {mk['guardian_share']['low_pct']} to {mk['guardian_share']['high_pct']}% of the agentic AI market by {mk['guardian_share']['by_year']}. "
-        f"Migration linters read the statement, and thin clones like DBLab and Neon give a copy. {mk['us']['usp']} "
-        f"Where it's weak: {mk['us']['weakness'][0].lower()}{mk['us']['weakness'][1:]}"
+        f"Migration linters read the statement, and thin clones like DBLab and Neon give a copy. {mk['us']['usp'].replace(' None of the docs above describe that.', '')} "
+        f"Scope today: {mk['us']['weakness'][0].lower()}{mk['us']['weakness'][1:]}"
     )
     gt = load("gauntlet.json") or {}
     attack = ""
@@ -175,7 +183,7 @@ Use this one if the form's limit is lower than the version above.
 
 ## Tags
 
-AI agents, MCP, sandbox, microVM, Postgres, Vultr, security, DevOps, guardrails, human in the loop
+Vultr, Vultr Serverless Inference, Vultr VX1, Vultr Managed PostgreSQL, Vultr Object Storage, AI agents, agentic AI, AI safety, MCP, microVM, KVM, sandbox, PostgreSQL, database migrations, DevOps, guardrails, human in the loop, Python, FastAPI, React, Qwen, GLM
 
 ## Category
 

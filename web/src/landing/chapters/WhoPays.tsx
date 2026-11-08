@@ -154,7 +154,7 @@ export function WhoPays({ market, videoUrl }: { market: Market | null; videoUrl?
                   <th scope="row">Shadow Run</th>
                   <td data-label="What it does well">{us.strength}</td>
                   <td data-label="Where it's weak">
-                    <strong>Where we're weak.</strong> {us.weakness}
+                    <strong>Scope today.</strong> {us.weakness}
                   </td>
                 </tr>
               )}

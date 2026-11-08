@@ -347,6 +347,7 @@ async def test_a_plan_that_breaks_nothing_is_never_checked(monkeypatch):
 
 async def test_a_submitted_plan_is_never_checked(monkeypatch):
     calls = second_reader_says(monkeypatch, "gets_around_it")
+    monkeypatch.setattr(agent, "explain", lambda *a, **k: {"text": "x"})
     out = await agent.run_loop(
         task=None, fixed_steps=[{"type": "sql", "cmd": "UPDATE t SET status='x' WHERE id=1", "why": ""}], target=TARGET, guardrails=[RULE], run_id="r", snapshot_id="s",
         runner=FakeRunner([wrote(["status"])]), inspection={"tables": [], "foreign_keys": []}, on_event=lambda t, d: None,

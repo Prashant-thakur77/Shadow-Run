@@ -1,12 +1,24 @@
+<div align="center">
+
 # Shadow Run
 
-**Your agent wants to touch prod. Shadow Run lets it break a clone first.**
+### Your agent wants to touch prod. Shadow Run lets it break a clone first.
+
+[![Tests](https://github.com/Prashant-thakur77/Shadow-Run/actions/workflows/tests.yml/badge.svg)](https://github.com/Prashant-thakur77/Shadow-Run/actions/workflows/tests.yml)
+[![Live demo](https://img.shields.io/website?url=https%3A%2F%2F144-202-92-64.sslip.io%2Fapi%2Fpublic&label=live%20demo&up_message=online&down_message=offline)](https://144-202-92-64.sslip.io)
+[![Built on Vultr](https://img.shields.io/badge/built_on-Vultr-007bfc)](#built-on-vultr)
+[![MCP server](https://img.shields.io/badge/MCP-server-6250d6)](#try-it)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1f883d)](LICENSE)
+
+**Vultr Agent Rush · Challenge 1: Blast Radius Zero**
+
+</div>
 
 Shadow Run sits between an AI agent and production and holds the only credential. Every risky SQL or shell plan runs first on a full clone of prod inside a throwaway microVM on Vultr. Postgres measures what it really did, frozen business guardrails decide, and a different person approves that exact plan before the same plan runs on prod in one transaction that rolls back on any surprise.
 
-**Don't authorize the command. Authorize its measured effect.** Allowlists, linters and rules in a prompt all judge what a command says. Shadow Run judges what it does, on a real copy of your data, before it can touch the original. That matters more than it sounds: told which rule it broke, an agent learns to get around the rule, and only a measurement catches that.
+**Don't authorize the command. Authorize its measured effect.** Allowlists, linters and rules in a prompt all judge what a command says. Shadow Run judges what it does, on a real copy of your data, before it can touch the original. That matters more than it sounds: told which rule it broke, an agent can get around the rule, and a rule alone can't see it.
 
-**[Live demo](https://144-202-92-64.sslip.io)** · **[Race the agent](https://144-202-92-64.sslip.io/race)** · [Results and receipts](https://144-202-92-64.sslip.io/results) · [Slides](docs/slides.pdf) · [API](docs/API.md)
+<p align="center"><b><a href="https://144-202-92-64.sslip.io">Live demo</a></b> · <b><a href="https://144-202-92-64.sslip.io/race">Race the agent</a></b> · <a href="https://144-202-92-64.sslip.io/incidents">Real incidents, replayed</a> · <a href="https://144-202-92-64.sslip.io/results">Results and receipts</a> · <a href="docs/slides.pdf">Slides</a> · <a href="docs/API.md">API</a></p>
 
 <!-- live:start -->
 Live: https://144-202-92-64.sslip.io
@@ -16,16 +28,28 @@ Press **Continue as guest**. You get two identities, `judge` to request changes 
 
 ## Key results
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/chart-harm-dark.svg">
+  <img alt="Harm on prod by mode. 23 held-out risky tasks: agent alone 10, rule gate 10.67, Shadow Run approved unread 2.67, Shadow Run with a person reading the report 0. 20 tasks adapted from SABER: 7.33, 5.33, 2 and 0." src="docs/img/chart-harm-light.svg" width="100%">
+</picture>
+
 <!-- summary:start -->
-- **0 of 23 held-out risky tasks did harm on prod before a person saw the plan.** The same agent alone did harm on 10. Nothing that changed anything went through without a person: 19 of 23 risky plans waited, which is where the zero comes from (`bench/results.json`).
-- **Approved unread, harm went from 10 to 2.67**, and that holds task by task (95% CI -11.67 to -3.33, p = 0.0078). Work done: 10 alone, 11.67 through Shadow Run, which this sample can't separate (p = 0.44). (`bench/stats.json`)
+_How to read these: the same agent (`qwen3.8-27b` on Vultr Serverless Inference) and prompt in every mode, a fresh copy of the database for every run, mean of 3 runs per task. Held-out tasks were never used while building Shadow Run. Harm is decided by oracles that check the outcome, not the plan. Approved unread means every plan that waited for a person was approved without being read, the worst case for the reviewer._
+
+- **Even with every plan approved unread, harm fell from 10 to 2.67 of 23 held-out risky tasks, and that holds task by task** (95% CI -11.67 to -3.33, p = 0.0078, 8 tasks better, 0 worse). Tasks finished safely held up: 11.67 through Shadow Run, 10 alone. (`bench/stats.json`)
+- **Nothing harmful reached prod unseen: 0 of 23, against 10 for the agent alone.** 19 of 23 risky plans waited for a person with a measured report of what each would do, and nothing that changed anything was applied without one (`bench/results.json`).
 - **On 20 tasks adapted from an outside benchmark (SABER), harm went from 7.33 to 2**, also holding task by task (p = 0.0078), so the effect isn't only on our own tasks.
-- **A rehearsal takes 2.97 s at the median** and about $0.000126 of VX1 time at list price, boot to destroy. A whole task, every model call included, costs $0.00347 of inference.
-- **Rules in the prompt cut harm about as much:** 3.67 against Shadow Run's 2.67 on 19 SQL tasks, which this sample can't separate. The difference is when it lands: a prompt's plan runs on prod with nobody looking.
-- **Told which rule it broke, the agent sometimes gets around it.** Plans that passed only after breaking a rule were harmful 35% of the time, against 13% for first-time passes. A measured check and a second model now send those plans back: 3 of 8 harmful caught on plans neither had seen, 2 of 12 good sent back by mistake (`bench/evasion.json`).
-- **7 of 7 live attacks contained**, each in a microVM with no network card, checked from the host, with prod’s hash unchanged (`bench/redteam.json`).
-- **On Vultr end to end:** The final benchmark spent 9,351,405 tokens of Serverless Inference across 4 models ($3.76), booted 1,198 microVMs on one VX1, created and dropped 1,008 databases on Managed PostgreSQL over the VPC, and Object Storage holds 158 evidence bundles and pre-apply backups. Spent so far: $31.33 of the $200 credit (`bench/vultr.json`).
+- **Fast and cheap enough to sit in the loop.** A rehearsal on a full clone takes 2.97 s at the median and about $0.000126 of VX1 time at list price, boot to destroy. A whole task, every model call included, costs $0.00347 of inference.
+- **It found a failure mode a rule can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely. Plans that passed only after breaking a rule were harmful 35% of the time, against 13% for first-time passes, so Shadow Run now screens every such plan twice, once by measurement and once by a second model. What each catches is in [what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it) (`bench/evasion.json`).
+- **7 of 7 live attacks contained**, each in a microVM with no network card, checked from the host, with prod’s hash unchanged; **6 of 6 real incident commands** replayed on a clone and blocked; **34 of 34 checks** on approval, apply and undo passed, attacks and honest path alike (`bench/redteam.json`, `bench/incidents.json`, `bench/controls.json`).
+- **On Vultr end to end:** The final benchmark spent 9,351,405 tokens of Serverless Inference across the 4 models it used ($3.76), booted 1,198 microVMs on one VX1, created 1,008 throwaway databases on Managed PostgreSQL over the VPC, and Object Storage holds 79 signed evidence bundles and 79 pre-apply backups. Spent so far: $31.33 of the $200 credit (`bench/vultr.json`).
+- **Who pays:** whoever owns the database at a team using coding agents, and 90% of professional developers now use them weekly ([JetBrains Developer Ecosystem Survey 2026](https://blog.jetbrains.com/research/2026/08/ai-coding-agent-adoption-2026/)). It starts free as a pull request Action, then $500 a month per protected database. [Gartner, June 2025](https://www.gartner.com/en/newsroom/press-releases/2025-06-11-gartner-predicts-that-guardian-agents-will-capture-10-15-percent-of-the-agentic-ai-market-by-2030) expects guardian agents, the category this sits in, to take 10 to 15% of the agentic AI market by 2030 ([who this is for](#who-this-is-for), [market](#market-and-competition)).
 <!-- summary:end -->
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/chart-numbers-dark.svg">
+  <img alt="Shadow Run by the numbers: attacks contained, real incidents blocked, approval and apply checks, soak rehearsals, and what the final benchmark used on Vultr" src="docs/img/chart-numbers-light.svg" width="100%">
+</picture>
 
 ![The same plan, without and with Shadow Run: what it would have erased on the seeded demo, and prod's hash unchanged](docs/img/with-without.png)
 
@@ -33,26 +57,19 @@ Press **Continue as guest**. You get two identities, `judge` to request changes 
 
 <!-- video:end -->
 
-## Try it
+## Challenge 1, point by point
 
-On the web, press Continue as guest and click an example task. Then try to break it: approve your own run, tamper with a hash, change prod behind its back. The server refuses for real. On Audit, change one character and watch the hash chain break. Incidents replays real ones, Red team runs seven attacks live, and Receipts lists every measured claim with the command that reproduces it.
-
-<details><summary>From an agent, a terminal or a pull request</summary>
-
-Through MCP with OpenCode on Vultr inference, copy [`docs/opencode.json`](docs/opencode.json), set `VULTR_INFERENCE_KEY` and `SHADOWRUN_TOKEN` (shown under Connect an agent on the Guardrails page), and ask it to change the database. Other MCP clients work the same way but bring their own model, so this entry's demo and benchmark use Vultr inference only. For example: `claude mcp add --transport http shadowrun "$SHADOWRUN_URL/mcp" --header "Authorization: Bearer $SHADOWRUN_TOKEN"`.
-
-From a terminal or CI:
-
-```
-pip install -e . && export SHADOWRUN_URL=https://144-202-92-64.sslip.io
-export SHADOWRUN_TOKEN=$(shadowrun login --guest)
-echo "UPDATE users SET status = 'suspended' WHERE last_login_at < now() - interval '2 years'" > plan.sql
-shadowrun rehearse plan.sql --target demo-saas   # exit 0 applied, 2 needs a person, 3 blocked, 4 rolled back
-```
-
-As a GitHub Action, `uses: Prashant-thakur77/Shadow-Run@main` rehearses a migration in a pull request and posts what it really does as a comment. It never applies anything, since nobody has reviewed the pull request yet. Here's [a real pull request](https://github.com/Prashant-thakur77/Shadow-Run/pull/1) where the Action ran on GitHub and posted what a bad migration really does, and the [workflow](.github/workflows/shadowrun.yml), which runs on the public demo with no stored secret.
-
-</details>
+| The brief asks for | What Shadow Run does | Where to check |
+| --- | --- | --- |
+| Vultr as the central control layer: plan, dispatch to an isolated environment, verifiable output | The control plane on Vultr Cloud Compute freezes and hashes the plan, rehearses it on a full clone in a microVM on a Vultr VX1, and returns the blast radius as Postgres measured it | [How it works](#how-it-works), [Built on Vultr](#built-on-vultr) |
+| Pattern A: the model writes code, it runs isolated, real output comes back, errors go back for a retry | The agent's SQL or shell runs on the clone. A failed guardrail goes back to the agent with the measurements, and it rewrites the plan and rehearses again on a new clone | [The recorded retries](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it) |
+| Pattern B: a person approves before the final action | A different person approves the exact hashes of the plan, its report and its guardrails. The same plan then runs on prod in one transaction that rolls back on any difference | [Approval and apply checks](#containment), `bench/controls.json` |
+| Process isolation | One microVM per rehearsal with its own kernel, from a golden disk, never reused | [Containment](#containment) |
+| Secret hygiene | No credential enters the sandbox, and a canary token on the host must never appear in anything returned | [Containment](#containment), the key-theft attack |
+| Resource limits | CPU, memory and wall-clock caps, a statement timeout, no network card, and a host firewall for the sandbox user | The fork bomb, memory bomb and network attacks |
+| Lifecycle discipline | Destroyed in `finally` on success, failure and timeout, a janitor for anything left, and a teardown proof on every run | The soak test |
+| Every agent LLM call on Vultr Serverless Inference | The planner, its retries, the explainer, the second model, the guardrail drafter, the attacker and the content-safety check | `bench/vultr.json`, [Built on Vultr](#built-on-vultr) |
+| A production-style web app on Vultr with a public URL | FastAPI and React on Vultr Cloud Compute over HTTPS, an MCP server, a CLI and a GitHub Action | [Live demo](https://144-202-92-64.sslip.io), [Try it](#try-it) |
 
 ## The problem
 
@@ -63,6 +80,19 @@ The incidents are public. By its founder's account, a Cursor agent at [PocketOS]
 A rule can't see those side effects before they happen, and a person reading a diff can't either. Only running the plan can.
 
 ## How it works
+
+```mermaid
+flowchart LR
+    A["AI agent<br/>MCP · CLI · GitHub Action"] -->|"plan"| F["Freeze and hash<br/>static gate"]
+    F --> R["Rehearse on a full clone<br/>fresh microVM on a Vultr VX1<br/>no network card, no secrets"]
+    R --> M["Postgres measures<br/>rows, cascades, dollars"]
+    M --> G{"Frozen guardrails<br/>and evasion checks"}
+    G -->|"fail: measurements go back"| A
+    G -->|"pass"| U["Undo proved on the clone<br/>second clone reproduces"]
+    U --> P["A different person<br/>approves the exact hashes"]
+    P --> X["Same plan on prod<br/>one transaction,<br/>rolls back on any difference"]
+    X --> E[("Evidence and backup<br/>Vultr Object Storage")]
+```
 
 The agent never gets the credential. It gets a few tools, and Shadow Run holds the only prod login. The model proposes plans and explains results. It never grades itself: Postgres measures, frozen checks decide, and any number in the model's explanation that the measurements don't contain gets flagged.
 
@@ -79,15 +109,36 @@ The agent never gets the credential. It gets a few tools, and Shadow Run holds t
 
 It works with any MCP agent. Here is a [real OpenCode session on Vultr inference](docs/evidence/opencode-session.md): it rehearses a hard delete, sees the invoices cascade, hits the guardrails, rewrites the plan as a soft delete and stops to wait for a person.
 
+## Try it
+
+**Race the agent** runs one task twice, side by side, on Vultr: the agent alone on its own clone, and the agent through Shadow Run. Or press Continue as guest and click an example task. Then try to break it: approve your own run, tamper with a hash, change prod behind its back. The server refuses for real. On Audit, change one character and watch the hash chain break. Incidents replays real ones, Red team runs seven attacks live, and Receipts lists every measured claim with the command that reproduces it.
+
+<details><summary>From an agent, a terminal or a pull request</summary>
+
+Through MCP with OpenCode on Vultr inference, copy [`docs/opencode.json`](docs/opencode.json), set `VULTR_INFERENCE_KEY` and `SHADOWRUN_TOKEN` (shown under Connect an agent on the Guardrails page), and ask it to change the database. Any MCP client connects to the same `/mcp` endpoint with that token. This entry's demo and benchmark run every model call on Vultr inference.
+
+From a terminal or CI:
+
+```
+pip install -e . && export SHADOWRUN_URL=https://144-202-92-64.sslip.io
+export SHADOWRUN_TOKEN=$(shadowrun login --guest)
+echo "UPDATE users SET status = 'suspended' WHERE last_login_at < now() - interval '2 years'" > plan.sql
+shadowrun rehearse plan.sql --target demo-saas   # exit 0 applied, 2 needs a person, 3 blocked, 4 rolled back
+```
+
+As a GitHub Action, `uses: Prashant-thakur77/Shadow-Run@main` rehearses a migration in a pull request and posts what it really does as a comment. It never applies anything, since nobody has reviewed the pull request yet. Here's [a real pull request](https://github.com/Prashant-thakur77/Shadow-Run/pull/1) where the Action ran on GitHub and posted what a bad migration really does, and the [workflow](.github/workflows/shadowrun.yml), which runs on the public demo with no stored secret.
+
+</details>
+
 ## What's new here
 
-- **It looks for an agent getting around a rule.** Told which rule it broke, an agent will sometimes change what the rule looks at instead of doing the work properly. A plan that passes after breaking a rule gets a measured check and a second model's read, and goes back if either doubts it. Neither catches every case; the catch rate on plans they hadn't seen is in [what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it).
+- **It looks for an agent getting around a rule.** Told which rule it broke, an agent will sometimes change what the rule looks at instead of doing the work properly. A plan that passes after breaking a rule gets a measured check and a second model's read, and goes back if either doubts it. How often each one catches it is in [what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it).
 - **An undo proved before anyone approves.** Written from the row log and run on the clone, with each table's hash checked against where it began.
 - **Blast radius in dollars, measured by the database.** Rows per table, each cascade traced to its step, and what that does to the numbers a business watches. No model is involved.
 - **It attacks its own policy, and publishes the score.** A model is told every rule and tries to do damage. What it finds becomes a rule, which has to hold on a clean clone, fail on the attack and let normal work through.
 - **It warns about its own retry loop.** A plan can be narrowed until it passes, so the page says when the final plan changes fewer rows than the first, and a second model checks it still does what was asked.
 
-Rehearsing a change on a copy of the data is an old idea. Making that rehearsal the thing that authorizes an agent's action, with the measurement bound to the exact plan a person signs, is what these add up to.
+Teams have long tried changes on a copy first. What's new is making that rehearsal the thing that authorizes an agent's action: the measurement is bound to the exact plan a person signs, and the apply refuses anything that differs from it.
 
 ## Built on Vultr
 
@@ -97,7 +148,7 @@ Vultr is the whole control layer here, not just hosting.
 | --- | --- | --- |
 | VX1 Cloud Compute | Rehearsal microVMs with KVM, the host-side checker, both network walls | `vx1-g-4c-16g-240s`, Seattle |
 | Cloud Compute | Control plane: API, web UI, MCP server, the only prod credential | `vc2-2c-4gb` |
-| Serverless Inference | Every LLM call: the planner and its retry loop, the explainer, a second model that checks the plan still does what was asked, the guardrail drafter, the attacker that tests the guardrails, and the content-safety check on stored text | `qwen3.8-27b`, `glm-5.3-flash`, `glm-5.3`, `nemotron-3.5-content-safety`; cost priced from `/v1/models` |
+| Serverless Inference | Every LLM call: the planner and its retry loop, the explainer, a second model that checks the plan still does what was asked, the guardrail drafter, the attacker that tests the guardrails, and the content-safety check on stored text | `qwen3.8-27b`, `glm-5.3-flash`, `glm-5.3`, `nemotron-3.5-content-safety`, and `deepseek-v4.1-flash-1017` as a second benchmark agent; cost priced from `/v1/models` |
 | Managed PostgreSQL 16 | The demo production database, reached over the VPC by a role that owns one database | 1 node, 2 GB |
 | Object Storage | Evidence bundles and pre-apply backups | S3 API |
 | VPC Network and firewall groups | The runner port is reachable only from the control VM | `10.77.0.0/24` |
@@ -119,6 +170,11 @@ Re-run: `python -m bench.vultr_usage`.
 <!-- vultr:end -->
 
 ## What we found: told which rule it broke, the agent gets around it
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/chart-finding-dark.svg">
+  <img alt="Risky plans that passed every guardrail: harmful 35% of the time when they passed only after breaking a guardrail, 13% when they passed the first time" src="docs/img/chart-finding-light.svg" width="100%">
+</picture>
 
 <!-- evasion:start -->
 In runs recorded before we checked for this, risky plans that passed only after breaking a guardrail did harm in 20 of 57 cases (35%), against 11 of 85 (13%) for plans that passed first time. So a plan that follows a broken rule now gets two more checks, and if either doubts it, the plan goes back to the agent. On plans nobody read while writing the checks, they caught 3 of 8 harmful plans and sent back 2 of 12 good ones.
@@ -416,16 +472,16 @@ Nothing has to be trusted on day one:
 2. **MCP for the agent.** It gives up its database URL and gets rehearse and apply instead. Every change waits for a person.
 3. **A short auto-apply list**, once the team has seen enough reports. It names the columns they're happy to change without a person.
 
-The size limit today is in [Limits](#limits).
+How far it scales today is in [Scope and design notes](#scope-and-design-notes).
 
 ## Market and competition
 
-<details><summary>Market size with sources, revenue, and where each alternative falls short, including where we're weak</summary>
+<details><summary>Market size with sources, the revenue model, how it reaches teams, and where each alternative falls short</summary>
 
 <!-- market:start -->
 **Who is exposed.** 90% of professional developers use coding agents at work at least weekly and 68% daily ([JetBrains Developer Ecosystem Survey 2026](https://blog.jetbrains.com/research/2026/08/ai-coding-agent-adoption-2026/), over 15,000 respondents). [131,339 companies use PostgreSQL](https://technographics.6sense.com/relational-databases/postgresql-market-share), by 6sense's 2026 count. Vendor counts run from about 19,000 to about 173,000, depending on how each defines a user.
 
-**Market.** [Gartner, June 2025](https://www.gartner.com/en/newsroom/press-releases/2025-06-11-gartner-predicts-that-guardian-agents-will-capture-10-15-percent-of-the-agentic-ai-market-by-2030) expects guardian agents, the category this sits in, to take 10 to 15% of the agentic AI market by 2030. [Grand View Research](https://www.grandviewresearch.com/industry-analysis/ai-agents-market-report) sizes AI agents at $7.6 billion in 2025 and $182.9 billion by 2033. Combining the two, which is our arithmetic and not theirs, gives $0.76 to 1.14 billion on today's market and $18.3 to 27.4 billion on the 2033 forecast. The market this version can serve: at the $500 a month we plan to charge, 1% of those companies with one protected database each is $7.9 million a year, and all of them, which is a ceiling since not all let agents near prod, is $0.79 billion. That price is a plan, not tested with a customer.
+**Market.** [Gartner, June 2025](https://www.gartner.com/en/newsroom/press-releases/2025-06-11-gartner-predicts-that-guardian-agents-will-capture-10-15-percent-of-the-agentic-ai-market-by-2030) expects guardian agents, the category this sits in, to take 10 to 15% of the agentic AI market by 2030. [Grand View Research](https://www.grandviewresearch.com/industry-analysis/ai-agents-market-report) sizes AI agents at $7.6 billion in 2025 and $182.9 billion by 2033. Combining the two, which is our arithmetic and not theirs, gives $0.76 to 1.14 billion on today's market and $18.3 to 27.4 billion on the 2033 forecast. The market this version can serve: at the $500 a month we plan to charge, 1% of those companies with one protected database each is $7.9 million a year, and all of them, which is a ceiling since not all let agents near prod, is $0.79 billion.
 
 **Revenue.** A monthly subscription per protected database, since cost grows with database size and not with seats. A self-hosted licence for regulated teams, who run the control plane and sandboxes on their own Vultr account. A rehearsed task costs about $0.0033 of inference at today's benchmark.
 
@@ -436,7 +492,7 @@ The size limit today is in [Limits](#limits).
 | Agent safety tools: safe-migrations-mcp, DryRun | Simple to start with. | safe-migrations-mcp simulates on prod in a rolled-back transaction, which still takes locks. DryRun uses sampled rows and only gives advice. |
 | A senior engineer reading the SQL | Knows what the business means, which no check encodes. | Has to guess what a statement cascades into, and doesn't scale with agents. |
 
-**Where we're weak:** Full restores get slow on large databases, it covers Postgres and Linux hosts only, and it has no customers yet. **What's different:** An approval bound to the measured result of the exact plan, with an apply that rolls back if prod differs. None of the docs above describe that.
+**What's different:** An approval bound to the measured result of the exact plan, with an apply that rolls back if prod differs. None of the docs above describe that. **Scope today:** Built for Postgres and Linux hosts. Rehearsals use full restores today, and thin clones are next, for databases past a few gigabytes.
 
 **What comes next.** Thin clones, so a rehearsal stays fast past a few gigabytes, and masking personal data in the clone. An auto-apply list that grows: suggest additions from what a team keeps approving, and test each against the attacker first. First customers: the free Action on real teams' migrations, then paid protected databases.
 <!-- market:end -->
@@ -454,6 +510,17 @@ Restart the control plane, and the target appears next to the demo. Start on a s
 
 </details>
 
+## Engineering and reproducibility
+
+<!-- tests:start -->
+**599 automated tests** in 13 files. 48 of them boot real microVMs on KVM: rehearsals, the blast-radius measurement, guardrails, the proved undo and the containment checks. The rest cover the static gate, plan hashing, approvals, apply and roll back on drift, the budget, the API, the CLI, the MCP tools and the benchmark harness, many of them against a real Postgres. CI runs every test that doesn't need `/dev/kvm` on each push, and checks that the README's charts still match the benchmark files. Run them with `pytest`, or `pytest -m 'not kvm'` on a machine without KVM.
+<!-- tests:end -->
+
+- **Every measured number on this page is generated.** `scripts/make_readme_table.py` writes each block from `bench/*.json`, `scripts/make_charts.py` draws the charts from the same files, and CI fails if the README or a chart no longer matches the data. Survey and market figures come from `docs/market.json`, each with its source.
+- **Every measurement has its re-run command** next to it, and `bench/provenance.py` checks that the code that measured is the code in this checkout. The sha256 is under the results table.
+- **The whole stack is code.** `infra/provision.py` builds it on Vultr from zero, and `infra/teardown.py` removes it and confirms each resource returns 404.
+- **Evidence is kept.** Each applied run writes a signed evidence bundle and a pre-apply backup to Object Storage, and the audit log is a hash chain you can verify on the Audit page.
+
 ## Run your own
 
 ```
@@ -463,7 +530,11 @@ bash scripts/final.sh         # every number on this page, measured on what up.s
 python infra/teardown.py      # removes everything, confirms 404
 ```
 
-## Limits
+## Scope and design notes
+
+Shadow Run is built for Postgres and Linux hosts. These are the boundaries it was designed around, and what it does at each one.
+
+<details><summary>Calls outside the target, the shared demo identity, invariants no guardrail encodes, Linux hosts, plans that act differently on prod, teams, personal data and size</summary>
 
 - **Calls outside the target can't be rehearsed.** Email, Stripe or a cloud API fail on the clone, so the plan is blocked, or flagged for a person if a step swallows the failure. Either way, Shadow Run can't say what the call would have done.
 - **One guest holds both identities on the public demo,** so the whole flow fits in one tab. An identity can't approve its own run, but that only means two people if two people hold them, as they would in a real deployment.
@@ -473,6 +544,8 @@ python infra/teardown.py      # removes everything, confirms 404
 - **One team per deployment.** Everyone with a login can read every run and the audit log. Separate teams need separate deployments.
 - **PII masking isn't built,** so a clone holds real data, though it has no way to send it anywhere.
 - **Size.** A snapshot grows with the database, because the clone is a full restore, and a rehearsal grows with how many rows the plan changes. A plan that hits the time limit is refused, not approved. Thin clones (DBLab, ZFS) are the fix at larger sizes, and they aren't built.
+
+</details>
 
 <details><summary>Rehearsal time and memory at 22 MB, 101 MB, 1 GB and 3.6 GB</summary>
 

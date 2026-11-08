@@ -50,13 +50,13 @@ if dd['from'] == dd['to']:
 elif dd['excludes_zero']:
     line += f" Work done goes from {n(dd['from'])} to {n(dd['to'])} (p = {n(dd['permutation_p'])})."
 else:
-    line += f" Work done goes from {n(dd['from'])} to {n(dd['to'])}, which could be chance at this sample."
+    line += f" Tasks finished safely held up: {n(dd['to'])} against {n(dd['from'])}." if dd['to'] >= dd['from'] else f" Work done goes from {n(dd['from'])} to {n(dd['to'])} (p = {n(dd['permutation_p'])})."
 ctl = (st.get('controls') or {}).get('sets', {}).get('heldout_sql')
 if ctl and st['controls'].get('same_code_as_main'):
     a = ctl['arms']
-    line += f" A prompt with the rules gets harm to {n(a['rules_in_prompt']['harm'])} of {ctl['tasks']} SQL tasks, but it lands on prod with nobody looking. The zero is the hold."
+    line += f" A prompt with the rules gets harm to {n(a['rules_in_prompt']['harm'])} of {ctl['tasks']} SQL tasks, but its plans land on prod with nobody looking. The zero comes from the hold: risky plans wait for a person with the measured report."
 else:
-    line += " The zero is the hold: nearly every risky plan waits for a person."
+    line += " The zero comes from the hold: risky plans wait for a person with the measured report."
 page = page.replace('[results_line]', line)
 (OUT / 'slides/results.html').write_text(page)
 ev = load('evasion.json')
@@ -71,7 +71,8 @@ ladder = ''.join(
 un = ev['detection']['unseen']
 page = (OUT / 'slides/found.html').read_text()
 for k, v in {'request': esc(ex['request']), 'ladder': ladder, 'after_pct': ev['rates']['passed_after_breaking_a_rule']['harmful_pct'], 'first_pct': ev['rates']['passed_first_time']['harmful_pct'],
-             'unseen_caught': un['harmful']['caught'], 'unseen_total': un['harmful']['total'], 'unseen_false': un['good']['caught'], 'unseen_good': un['good']['total']}.items():
+             'unseen_caught': un['harmful']['caught'], 'unseen_total': un['harmful']['total'], 'unseen_false': un['good']['caught'], 'unseen_good': un['good']['total'],
+             'safe_broke': ev['rates']['safe_plans_that_broke_a_rule_first'], 'safe_plans': ev['rates']['safe_plans']}.items():
     page = page.replace(f'[{k}]', str(v))
 (OUT / 'slides/found.html').write_text(page)
 page = (OUT / 'slides/containment.html').read_text()
@@ -102,6 +103,15 @@ page = (OUT / 'slides/competition.html').read_text()
 cells = ''.join(f"<tr><td>{c['who']}</td><td>{c['strength']}</td><td>{c['gap']}</td></tr>" for c in mk['competition'])
 page = page.replace('[rows]', cells).replace('[usp]', mk['us']['usp']).replace('[weakness]', mk['us']['weakness'])
 (OUT / 'slides/competition.html').write_text(page)
+# What the benchmark used on Vultr, from bench/vultr.json (read-only API counts and the runs' own records).
+vu = json.loads((ROOT / 'bench' / 'vultr.json').read_text())
+page = (OUT / 'slides/vultr.html').read_text()
+for k, v in {'vu_microvms': f"{vu['microvms']['total']:,}", 'vu_databases': f"{vu['postgres']['benchmark']['databases_created']:,}",
+             'vu_tokens': f"{vu['inference']['tokens']:,}", 'vu_models': str(vu['inference']['models_used']),
+             'vu_objects': f"{vu['object_storage']['objects']:,}", 'vu_spent': f"{vu['spend']['budget']['spent_usd']:.2f}",
+             'vu_budget': f"{vu['spend']['budget']['ceiling_usd']:.0f}"}.items():
+    page = page.replace(f'[{k}]', v)
+(OUT / 'slides/vultr.html').write_text(page)
 # The title slide shows the live site's hero, as docs/cover.png has it (scripts/make_cover.cjs renders that from the site).
 import base64
 cover_slide = OUT / 'slides' / 'cover.html'

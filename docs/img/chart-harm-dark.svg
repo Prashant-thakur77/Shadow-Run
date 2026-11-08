@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="486" viewBox="0 0 960 486" role="img" aria-label="Harm on prod, by how the agent&#x27;s plan reached it" font-family="-apple-system, BlinkMacSystemFont, &#x27;Segoe UI&#x27;, &#x27;Noto Sans&#x27;, Helvetica, Arial, sans-serif">
+<title>Harm on prod, by how the agent&#x27;s plan reached it</title>
+<rect x="0.5" y="0.5" width="959" height="485" rx="8" fill="#161b22" stroke="#30363d"/>
+<line x1="352.0" y1="120" x2="352.0" y2="428" stroke="#30363d" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="498.0" y1="120" x2="498.0" y2="428" stroke="#30363d" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="644.0" y1="120" x2="644.0" y2="428" stroke="#30363d" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="790.0" y1="120" x2="790.0" y2="428" stroke="#30363d" stroke-width="1" stroke-dasharray="2 4"/>
+<text x="32.0" y="44.0" font-size="22" font-weight="600" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">Harm on prod, by how the agent&#x27;s plan reached it</text>
+<text x="32.0" y="70.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">Same agent (qwen3.8-27b on Vultr Serverless Inference), same prompt, a fresh copy of the database for every run, mean of 3 runs per task</text>
+<text x="32.0" y="112.0" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">23 held-out risky tasks, ours</text>
+<text x="928.0" y="112.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="end" style="font-variant-numeric: tabular-nums">approved unread vs alone: −7.33 tasks, 8 better, 0 worse, p = 0.0078</text>
+<text x="338.0" y="144.0" font-size="14" font-weight="400" fill="#e6edf3" text-anchor="end" style="font-variant-numeric: tabular-nums">Agent alone, straight to prod</text>
+<path d="M352.0,128.0 H713.0 Q717.0,128.0 717.0,132.0 V146.0 Q717.0,150.0 713.0,150.0 H352.0 Z" fill="#6b6a65"/>
+<text x="725.0" y="144.0" font-size="14" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">10</text>
+<text x="338.0" y="176.0" font-size="14" font-weight="400" fill="#e6edf3" text-anchor="end" style="font-variant-numeric: tabular-nums">Rule gate, retries, no person</text>
+<path d="M352.0,160.0 H737.5 Q741.5,160.0 741.5,164.0 V178.0 Q741.5,182.0 737.5,182.0 H352.0 Z" fill="#6b6a65"/>
+<text x="749.5" y="176.0" font-size="14" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">10.67</text>
+<text x="338.0" y="208.0" font-size="14" font-weight="600" fill="#e6edf3" text-anchor="end" style="font-variant-numeric: tabular-nums">Shadow Run, every plan approved unread</text>
+<path d="M352.0,192.0 H445.5 Q449.5,192.0 449.5,196.0 V210.0 Q449.5,214.0 445.5,214.0 H352.0 Z" fill="#3987e5"/>
+<text x="457.5" y="208.0" font-size="14" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">2.67</text>
+<text x="338.0" y="240.0" font-size="14" font-weight="600" fill="#e6edf3" text-anchor="end" style="font-variant-numeric: tabular-nums">Shadow Run, risky plans held for a person</text>
+<rect x="352.0" y="224.0" width="3" height="22.0" fill="#3987e5"/>
+<text x="363.0" y="240.0" font-size="14" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">0</text>
+<line x1="352" y1="124" x2="352" y2="250" stroke="#7d8590" stroke-width="1"/>
+<text x="32.0" y="286.0" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">20 risky tasks adapted from an outside benchmark (SABER)</text>
+<text x="928.0" y="286.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="end" style="font-variant-numeric: tabular-nums">approved unread vs alone: −5.33 tasks, 8 better, 0 worse, p = 0.0078</text>
+<text x="338.0" y="318.0" font-size="14" font-weight="400" fill="#e6edf3" text-anchor="end" style="font-variant-numeric: tabular-nums">Agent alone, straight to prod</text>
+<path d="M352.0,302.0 H615.5 Q619.5,302.0 619.5,306.0 V320.0 Q619.5,324.0 615.5,324.0 H352.0 Z" fill="#6b6a65"/>
+<text x="627.5" y="318.0" font-size="14" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">7.33</text>
+<text x="338.0" y="350.0" font-size="14" font-weight="400" fill="#e6edf3" text-anchor="end" style="font-variant-numeric: tabular-nums">Rule gate, retries, no person</text>
+<path d="M352.0,334.0 H542.5 Q546.5,334.0 546.5,338.0 V352.0 Q546.5,356.0 542.5,356.0 H352.0 Z" fill="#6b6a65"/>
+<text x="554.5" y="350.0" font-size="14" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">5.33</text>
+<text x="338.0" y="382.0" font-size="14" font-weight="600" fill="#e6edf3" text-anchor="end" style="font-variant-numeric: tabular-nums">Shadow Run, every plan approved unread</text>
+<path d="M352.0,366.0 H421.0 Q425.0,366.0 425.0,370.0 V384.0 Q425.0,388.0 421.0,388.0 H352.0 Z" fill="#3987e5"/>
+<text x="433.0" y="382.0" font-size="14" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">2</text>
+<text x="338.0" y="414.0" font-size="14" font-weight="600" fill="#e6edf3" text-anchor="end" style="font-variant-numeric: tabular-nums">Shadow Run, risky plans held for a person</text>
+<rect x="352.0" y="398.0" width="3" height="22.0" fill="#3987e5"/>
+<text x="363.0" y="414.0" font-size="14" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">0</text>
+<line x1="352" y1="298" x2="352" y2="424" stroke="#7d8590" stroke-width="1"/>
+<text x="352.0" y="446.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="middle" style="font-variant-numeric: tabular-nums">0</text>
+<text x="498.0" y="446.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="middle" style="font-variant-numeric: tabular-nums">4</text>
+<text x="644.0" y="446.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="middle" style="font-variant-numeric: tabular-nums">8</text>
+<text x="790.0" y="446.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="middle" style="font-variant-numeric: tabular-nums">12</text>
+<text x="804.0" y="446.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="start" style="font-variant-numeric: tabular-nums">tasks with harm</text>
+<text x="32.0" y="468.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="start" style="font-variant-numeric: tabular-nums">bench/results.json, bench/stats.json · tasks compared one by one, permutation test · drawn by scripts/make_charts.py</text>
+</svg>

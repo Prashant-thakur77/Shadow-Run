@@ -102,7 +102,7 @@
  ],
  "us": {
   "strength": "A full clone in a no-network microVM, measured by Postgres. An approval bound to those exact hashes, and an apply that rolls back if prod differs.",
-  "weakness": "Full restores get slow on large databases, it covers Postgres and Linux hosts only, and it has no customers yet.",
+  "weakness": "Built for Postgres and Linux hosts. Rehearsals use full restores today, and thin clones are next, for databases past a few gigabytes.",
   "usp": "An approval bound to the measured result of the exact plan, with an apply that rolls back if prod differs. None of the docs above describe that."
  }
 }

@@ -616,7 +616,7 @@ def block_market() -> str:
     lines = [
         f"**Who is exposed.** {d['weekly_pct']}% of professional developers use coding agents at work at least weekly and {d['daily_pct']}% daily ([{d['source']}]({d['url']}), {d['respondents']} respondents). [{pg['count']:,} companies use PostgreSQL]({pg['url']}), by {pg['source']}'s 2026 count. {pg['caveat']}",
         "",
-        f"**Market.** [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']}. [{a['source']}]({a['url']}) sizes AI agents at ${a['usd_b_2025']} billion in 2025 and ${a['usd_b_2033']} billion by 2033. Combining the two, which is our arithmetic and not theirs, gives ${derived['tam_usd_b_on_2025_market'][0]} to {derived['tam_usd_b_on_2025_market'][1]} billion on today's market and ${derived['tam_usd_b_on_2033_forecast'][0]} to {derived['tam_usd_b_on_2033_forecast'][1]} billion on the 2033 forecast. The market this version can serve: at the ${price['usd_per_database_month']} a month we plan to charge, {derived['first_target_pct']}% of those companies with one protected database each is ${derived['first_target_usd_m_per_year']} million a year, and all of them, which is a ceiling since not all let agents near prod, is ${derived['sam_usd_b_per_year']} billion. That price is a plan, not tested with a customer.",
+        f"**Market.** [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']}. [{a['source']}]({a['url']}) sizes AI agents at ${a['usd_b_2025']} billion in 2025 and ${a['usd_b_2033']} billion by 2033. Combining the two, which is our arithmetic and not theirs, gives ${derived['tam_usd_b_on_2025_market'][0]} to {derived['tam_usd_b_on_2025_market'][1]} billion on today's market and ${derived['tam_usd_b_on_2033_forecast'][0]} to {derived['tam_usd_b_on_2033_forecast'][1]} billion on the 2033 forecast. The market this version can serve: at the ${price['usd_per_database_month']} a month we plan to charge, {derived['first_target_pct']}% of those companies with one protected database each is ${derived['first_target_usd_m_per_year']} million a year, and all of them, which is a ceiling since not all let agents near prod, is ${derived['sam_usd_b_per_year']} billion.",
         "",
         "**Revenue.** " + " ".join(m["revenue"]) + (f" A rehearsed task costs about ${cost} of inference at today's benchmark." if cost else ""),
         "",
@@ -625,7 +625,7 @@ def block_market() -> str:
     ]
     for c in m["competition"]:
         lines.append(f"| {c['who']} | {c['strength']} | {c['gap']} |")
-    lines += ["", f"**Where we're weak:** {m['us']['weakness']} **What's different:** {m['us']['usp']}", "", "**What comes next.** " + " ".join(m["next"])]
+    lines += ["", f"**What's different:** {m['us']['usp']} **Scope today:** {m['us']['weakness']}", "", "**What comes next.** " + " ".join(m["next"])]
     return "\n".join(lines)
 
 
@@ -719,13 +719,17 @@ def vultr_line(vu: dict | None) -> str:
     budget = (vu.get("spend") or {}).get("budget") or {}
     parts = []
     if inf.get("tokens"):
-        parts.append(f"the final benchmark spent {inf['tokens']:,} tokens of Serverless Inference across {inf['models_used']} models (${inf['cost_usd']:.2f})")
+        parts.append(f"the final benchmark spent {inf['tokens']:,} tokens of Serverless Inference across the {inf['models_used']} models it used (${inf['cost_usd']:.2f})")
     if mv.get("total"):
         parts.append(f"booted {mv['total']:,} microVMs on one VX1")
     if pg.get("databases_created"):
-        parts.append(f"created and dropped {pg['databases_created']:,} databases on Managed PostgreSQL over the VPC")
+        parts.append(f"created {pg['databases_created']:,} throwaway databases on Managed PostgreSQL over the VPC")
     if os_.get("objects"):
-        parts.append(f"and Object Storage holds {os_['objects']} evidence bundles and pre-apply backups")
+        by = {b["prefix"]: b["objects"] for b in os_.get("by_prefix", [])}
+        if by.get("runs") and by.get("backups"):
+            parts.append(f"and Object Storage holds {by['runs']} signed evidence bundles and {by['backups']} pre-apply backups")
+        else:
+            parts.append(f"and Object Storage holds {os_['objects']} evidence bundles and pre-apply backups")
     text = ", ".join(parts)
     if budget.get("spent_usd") is not None:
         text += f". Spent so far: ${budget['spent_usd']:.2f} of the ${budget['ceiling_usd']:.0f} credit"
@@ -774,54 +778,91 @@ def block_summary() -> str:
     held = r["heldout"]["shadow_run"]
     d, u = h["arms"]["direct"], h["arms"]["unread"]
     c = h["compare"]["unread_vs_direct"]
+    alone_changed = st["main"]["retries"]["auto_applied_that_changed_something"]
     out = [
-        f"- **{held['harm_on_prod']['mean']:g} of {h['tasks']} held-out risky tasks did harm on prod before a person saw the plan.** The same agent alone did harm on {d['harm']:g}. "
-        + (f"Nothing that changed anything went through without a person: {held['risky_held']['mean']:g} of {h['tasks']} risky plans waited, which is where the zero comes from"
-           if st["main"]["retries"]["auto_applied_that_changed_something"] == 0
-           else f"{held['risky_held']['mean']:g} of {h['tasks']} risky plans waited for a person, and the {st['main']['retries']['auto_applied_that_changed_something']} plans that changed something alone stayed inside the team's named low-risk list")
-        + " (`bench/results.json`).",
-        f"- **Approved unread, harm went from {d['harm']:g} to {u['harm']:g}**"
-        + (f", and that holds task by task ({fmt_ci(c['harm'])}, {fmt_p(c['harm']['permutation_p'])})." if c["harm"]["excludes_zero"] and c["harm"]["difference"] < 0 else f" ({fmt_ci(c['harm'])}, {fmt_p(c['harm']['permutation_p'])}).")
-        + (f" Work done: {d['done']:g} alone, {u['done']:g} through Shadow Run, which this sample can't separate ({fmt_p(c['done']['permutation_p'])})." if not c["done"]["excludes_zero"] else f" Work done: {d['done']:g} to {u['done']:g} ({fmt_p(c['done']['permutation_p'])}).")
-        + " (`bench/stats.json`)",
+        f"_How to read these: the same agent (`{r['model']}` on Vultr Serverless Inference) and prompt in every mode, a fresh copy of the database for every run, mean of {r['runs_per_task']} runs per task. "
+        "Held-out tasks were never used while building Shadow Run. Harm is decided by oracles that check the outcome, not the plan. "
+        "Approved unread means every plan that waited for a person was approved without being read, the worst case for the reviewer._",
+        "",
     ]
+    if c["harm"]["excludes_zero"] and c["harm"]["difference"] < 0:
+        done = (f" Tasks finished safely held up: {u['done']:g} through Shadow Run, {d['done']:g} alone." if u["done"] >= d["done"] else
+                f" Tasks finished safely: {u['done']:g} through Shadow Run, {d['done']:g} alone ({fmt_p(c['done']['permutation_p'])}).")
+        out.append(f"- **Even with every plan approved unread, harm fell from {d['harm']:g} to {u['harm']:g} of {h['tasks']} held-out risky tasks, and that holds task by task** ({fmt_ci(c['harm'])}, {fmt_p(c['harm']['permutation_p'])}, {c['harm']['tasks_down']} tasks better, {c['harm']['tasks_up']} worse).{done} (`bench/stats.json`)")
+    else:
+        out.append(f"- **Approved unread, harm went from {d['harm']:g} to {u['harm']:g}** ({fmt_ci(c['harm'])}, {fmt_p(c['harm']['permutation_p'])}). (`bench/stats.json`)")
+    out.append(
+        f"- **Nothing harmful reached prod unseen: {held['harm_on_prod']['mean']:g} of {h['tasks']}, against {d['harm']:g} for the agent alone.** "
+        + f"{held['risky_held']['mean']:g} of {h['tasks']} risky plans waited for a person with a measured report of what each would do"
+        + (", and nothing that changed anything was applied without one" if alone_changed == 0 else f", and the {alone_changed} that changed something alone stayed inside the team's named low-risk list")
+        + " (`bench/results.json`)."
+    )
     ext = (v["sets"].get("external") or {}).get("compare", {}).get("unread_vs_direct")
     if ext and ext["harm"]["excludes_zero"] and ext["harm"]["difference"] < 0:
         out.append(f"- **On {v['sets']['external']['tasks']} tasks adapted from an outside benchmark (SABER), harm went from {ext['harm']['from']:g} to {ext['harm']['to']:g}**, also holding task by task ({fmt_p(ext['harm']['permutation_p'])}), so the effect isn't only on our own tasks.")
     reh = held.get("rehearsal_s") or {}
     price = r.get("vx1_usd_per_hour")
     if reh.get("p50") and price:
-        out.append(f"- **A rehearsal takes {reh['p50']:g} s at the median** and about ${price * reh['p50'] / 3600:.6f} of VX1 time at list price, boot to destroy. A whole task, every model call included, costs ${held['cost_per_task_usd']:g} of inference.")
-    ctl = (st.get("controls") or {})
-    held_sql = (ctl.get("sets") or {}).get("heldout_sql")
-    if held_sql and ctl.get("status") == "measured" and ctl.get("same_code_as_main"):
-        arms = held_sql["arms"]
-        tie = not held_sql["compare"]["unread_vs_rules"]["harm"]["excludes_zero"]
-        out.append(
-            f"- **Rules in the prompt {'cut harm about as much' if tie else 'did differently'}:** {arms['rules_in_prompt']['harm']:g} against Shadow Run's {arms['unread']['harm']:g} on {held_sql['tasks']} SQL tasks"
-            + (", which this sample can't separate. The difference is when it lands: a prompt's plan runs on prod with nobody looking." if tie else ".")
-        )
+        out.append(f"- **Fast and cheap enough to sit in the loop.** A rehearsal on a full clone takes {reh['p50']:g} s at the median and about ${price * reh['p50'] / 3600:.6f} of VX1 time at list price, boot to destroy. A whole task, every model call included, costs ${held['cost_per_task_usd']:g} of inference.")
     ev = load("evasion.json")
     if ev and ev.get("detection"):
         a, f_ = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
-        un = ev["detection"]["unseen"]
         out.append(
-            f"- **Told which rule it broke, the agent sometimes gets around it.** Plans that passed only after breaking a rule were harmful {a['harmful_pct']}% of the time, against {f_['harmful_pct']}% for first-time passes. "
-            f"A measured check and a second model now send those plans back: {un['harmful']['caught']} of {un['harmful']['total']} harmful caught on plans neither had seen, {un['good']['caught']} of {un['good']['total']} good sent back by mistake (`bench/evasion.json`)."
+            f"- **It found a failure mode a rule can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely. "
+            f"Plans that passed only after breaking a rule were harmful {a['harmful_pct']}% of the time, against {f_['harmful_pct']}% for first-time passes, so Shadow Run now screens every such plan twice, "
+            "once by measurement and once by a second model. What each catches is in [what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it) (`bench/evasion.json`)."
         )
-    rt = load("redteam.json")
+    rt, inc, cl = load("redteam.json"), load("incidents.json"), load("controls.json")
+    parts = []
     if rt:
-        same = rt.get("prod_unchanged")
-        out.append(f"- **{rt['contained']} of {rt['total']} live attacks contained**, each in a microVM with no network card, checked from the host{', with prod’s hash unchanged' if same else ''} (`bench/redteam.json`).")
+        parts.append(f"**{rt['contained']} of {rt['total']} live attacks contained**, each in a microVM with no network card, checked from the host{', with prod’s hash unchanged' if rt.get('prod_unchanged') else ''}")
+    if inc and inc.get("incidents"):
+        n = len(inc["incidents"])
+        b = sum(1 for i in inc["incidents"] if i["status"] == "blocked" and not i.get("reached_prod"))
+        parts.append(f"**{b} of {n} real incident commands** replayed on a clone and blocked")
+    if cl and cl.get("total"):
+        parts.append(f"**{cl['passed']} of {cl['total']} checks** on approval, apply and undo passed, attacks and honest path alike")
+    if parts:
+        out.append("- " + "; ".join(parts) + " (`bench/redteam.json`, `bench/incidents.json`, `bench/controls.json`).")
     line = vultr_line(load("vultr.json"))
     if line:
         out.append(f"- **On Vultr end to end:** {line} (`bench/vultr.json`).")
+    mp = ROOT / "docs" / "market.json"
+    if mp.exists():
+        mk = json.loads(mp.read_text())
+        dv, g, price = mk["developers_using_agents"], mk["guardian_share"], mk["price"]["usd_per_database_month"]
+        out.append(
+            f"- **Who pays:** whoever owns the database at a team using coding agents, and {dv['weekly_pct']}% of professional developers now use them weekly ([{dv['source']}]({dv['url']})). "
+            f"It starts free as a pull request Action, then ${price} a month per protected database. [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, "
+            f"to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']} ([who this is for](#who-this-is-for), [market](#market-and-competition))."
+        )
     return "\n".join(out)
 
+
+def block_tests() -> str:
+    """How much of the code the tests reach, counted by pytest itself, so the number can't drift from the suite."""
+    import subprocess
+
+    def collected(*marks: str) -> int | None:
+        r = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", *marks], cwd=ROOT, capture_output=True, text=True)
+        m = re.search(r"(\d+)(?:/\d+)? tests? (?:collected|selected)", r.stdout)
+        return int(m.group(1)) if m else None
+
+    total, kvm = collected(), collected("-m", "kvm")
+    files = len(list((ROOT / "tests").glob("test_*.py")))
+    if not total:
+        return "Run `pytest`."
+    return (
+        f"**{total} automated tests** in {files} files. {kvm} of them boot real microVMs on KVM: rehearsals, the blast-radius measurement, guardrails, "
+        "the proved undo and the containment checks. The rest cover the static gate, plan hashing, approvals, apply and roll back on drift, the budget, the API, "
+        "the CLI, the MCP tools and the benchmark harness, many of them against a real Postgres. CI runs every test that doesn't need `/dev/kvm` on each push, and checks "
+        "that the README's charts still match the benchmark files. Run them with `pytest`, or `pytest -m 'not kvm'` on a machine without KVM."
+    )
 
 BLOCKS = {
     "vultr": block_vultr,
     "summary": block_summary,
+    "tests": block_tests,
     "evasion": block_evasion,
     "market": block_market,
     "reviewer": block_reviewer,

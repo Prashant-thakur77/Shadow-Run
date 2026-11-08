@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="210" viewBox="0 0 960 210" role="img" aria-label="Told which rule it broke, the agent gets around it" font-family="-apple-system, BlinkMacSystemFont, &#x27;Segoe UI&#x27;, &#x27;Noto Sans&#x27;, Helvetica, Arial, sans-serif">
+<title>Told which rule it broke, the agent gets around it</title>
+<rect x="0.5" y="0.5" width="959" height="209" rx="8" fill="#161b22" stroke="#30363d"/>
+<text x="32.0" y="44.0" font-size="22" font-weight="600" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">Told which rule it broke, the agent gets around it</text>
+<text x="32.0" y="70.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">Risky plans that passed every guardrail, and how many of them did harm anyway, by how they got there</text>
+<text x="338.0" y="116.0" font-size="14" font-weight="600" fill="#e6edf3" text-anchor="end" style="font-variant-numeric: tabular-nums">Passed only after breaking a guardrail</text>
+<path d="M352.0,100.0 H792.5 Q796.5,100.0 796.5,104.0 V118.0 Q796.5,122.0 792.5,122.0 H352.0 Z" fill="#3987e5"/>
+<text x="804.5" y="116.0" font-size="14" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">35%  (20 of 57)</text>
+<text x="338.0" y="148.0" font-size="14" font-weight="400" fill="#e6edf3" text-anchor="end" style="font-variant-numeric: tabular-nums">Passed the first time</text>
+<path d="M352.0,132.0 H513.1 Q517.1,132.0 517.1,136.0 V150.0 Q517.1,154.0 513.1,154.0 H352.0 Z" fill="#6b6a65"/>
+<text x="525.1" y="148.0" font-size="14" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">13%  (11 of 85)</text>
+<line x1="352" y1="96" x2="352" y2="158" stroke="#7d8590" stroke-width="1"/>
+<text x="32.0" y="192.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="start" style="font-variant-numeric: tabular-nums">bench/evasion.json · two checks now screen every plan that passes after breaking a rule · drawn by scripts/make_charts.py</text>
+</svg>

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="384" viewBox="0 0 960 384" role="img" aria-label="Shadow Run by the numbers" font-family="-apple-system, BlinkMacSystemFont, &#x27;Segoe UI&#x27;, &#x27;Noto Sans&#x27;, Helvetica, Arial, sans-serif">
+<title>Shadow Run by the numbers</title>
+<rect x="0.5" y="0.5" width="959" height="383" rx="8" fill="#161b22" stroke="#30363d"/>
+<text x="32.0" y="44.0" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">Contained, checked from outside the sandbox</text>
+<rect x="32.0" y="58" width="212.0" height="112" rx="6" fill="none" stroke="#30363d"/>
+<text x="50.0" y="104.0" font-size="32" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">7 / 7</text>
+<text x="50.0" y="132.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">red-team attacks contained,</text>
+<text x="50.0" y="150.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">prod&#x27;s hash unchanged</text>
+<rect x="260.0" y="58" width="212.0" height="112" rx="6" fill="none" stroke="#30363d"/>
+<text x="278.0" y="104.0" font-size="32" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">6 / 6</text>
+<text x="278.0" y="132.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">real incidents replayed on a</text>
+<text x="278.0" y="150.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">clone, all blocked</text>
+<rect x="488.0" y="58" width="212.0" height="112" rx="6" fill="none" stroke="#30363d"/>
+<text x="506.0" y="104.0" font-size="32" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">34 / 34</text>
+<text x="506.0" y="132.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">approval and apply attacks</text>
+<text x="506.0" y="150.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">refused, honest path works</text>
+<rect x="716.0" y="58" width="212.0" height="112" rx="6" fill="none" stroke="#30363d"/>
+<text x="734.0" y="104.0" font-size="32" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">50 / 50</text>
+<text x="734.0" y="132.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">rehearsals in a row, every</text>
+<text x="734.0" y="150.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">sandbox torn down</text>
+<text x="32.0" y="212.0" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">Measured on Vultr in the final benchmark</text>
+<rect x="32.0" y="226" width="212.0" height="112" rx="6" fill="none" stroke="#30363d"/>
+<text x="50.0" y="272.0" font-size="32" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">1,198</text>
+<text x="50.0" y="300.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">microVMs booted on a Vultr</text>
+<text x="50.0" y="318.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">VX1</text>
+<rect x="260.0" y="226" width="212.0" height="112" rx="6" fill="none" stroke="#30363d"/>
+<text x="278.0" y="272.0" font-size="32" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">1,008</text>
+<text x="278.0" y="300.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">databases created on Vultr</text>
+<text x="278.0" y="318.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">Managed PostgreSQL</text>
+<rect x="488.0" y="226" width="212.0" height="112" rx="6" fill="none" stroke="#30363d"/>
+<text x="506.0" y="272.0" font-size="32" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">9.35 M</text>
+<text x="506.0" y="300.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">tokens on Vultr Serverless</text>
+<text x="506.0" y="318.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">Inference</text>
+<rect x="716.0" y="226" width="212.0" height="112" rx="6" fill="none" stroke="#30363d"/>
+<text x="734.0" y="272.0" font-size="32" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">2.97 s</text>
+<text x="734.0" y="300.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">median rehearsal on a fresh</text>
+<text x="734.0" y="318.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">clone, boot to teardown</text>
+<text x="32.0" y="366.0" font-size="12" font-weight="400" fill="#7d8590" text-anchor="start" style="font-variant-numeric: tabular-nums">bench/redteam.json, controls.json, incidents.json, soak.json, vultr.json, results.json · drawn by scripts/make_charts.py</text>
+</svg>
