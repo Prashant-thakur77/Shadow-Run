@@ -640,13 +640,6 @@ def block_reviewer() -> str:
     )
 
 
-def fisher_greater(a: int, b: int, c: int, d: int) -> float:
-    """One-sided Fisher exact test that the first row's rate (a of a+b) is higher than the second's (c of c+d)."""
-    from math import comb
-    n1, n2, k = a + b, c + d, a + c
-    total = comb(n1 + n2, k)
-    return sum(comb(n1, x) * comb(n2, k - x) for x in range(a, min(n1, k) + 1)) / total
-
 
 def size_line() -> str:
     """How big a database it serves today, from the largest scale run that finished."""
@@ -659,6 +652,28 @@ def size_line() -> str:
     return (f"**Size served today.** Databases up to about {gb:.0f} GB: a full rehearsal of a {big['db_mb']:,} MB database, {big['rows_changed']:,} rows changed, took "
             f"{big['rehearsal_total_s']:.0f} s (`bench/scale.json`). Thin clones are what takes it past that.")
 
+SPLIT_NAMES = {"heldout": "Held-out tasks, ours", "external": "Tasks adapted from an outside benchmark (SABER)", "tuning": "Tuning tasks"}
+
+
+def split_sentence(d: dict) -> str:
+    ex = ((d.get("rates") or {}).get("by_split") or {}).get("external")
+    if not ex:
+        return ""
+    a, f = ex["passed_after_breaking_a_rule"], ex["passed_first_time"]
+    return f"The gap is widest on the outside-benchmark tasks: {a['harmful']} of {a['plans']} ({a['harmful_pct']}%) against {f['harmful']} of {f['plans']} ({f['harmful_pct']}%)."
+
+
+def split_table(d: dict) -> str:
+    sp = (d.get("rates") or {}).get("by_split") or {}
+    rows = []
+    for key in ("external", "heldout", "tuning"):
+        if key in sp:
+            a, f = sp[key]["passed_after_breaking_a_rule"], sp[key]["passed_first_time"]
+            rows.append([SPLIT_NAMES.get(key, key), f"{a['harmful']} of {a['plans']} ({a['harmful_pct']}%)", f"{f['harmful']} of {f['plans']} ({f['harmful_pct']}%)"])
+    a, f = d["rates"]["passed_after_breaking_a_rule"], d["rates"]["passed_first_time"]
+    rows.append(["Every recorded run", f"{a['harmful']} of {a['plans']} ({a['harmful_pct']}%)", f"{f['harmful']} of {f['plans']} ({f['harmful_pct']}%)"])
+    return table(["Risky plans that passed every guardrail", "Passed only after breaking a rule: harmful", "Passed first time: harmful"], rows)
+
 def evasion_sentence(d: dict) -> str:
     """The finding in one paragraph. The submission uses it too, so the two can't say different things."""
     r = d["rates"]
@@ -666,8 +681,8 @@ def evasion_sentence(d: dict) -> str:
     des, un = d["detection"]["design"], d["detection"]["unseen"]
     return (
         f"Told which rule it broke, the agent sometimes gets around it. In runs recorded before we checked for this, risky plans that passed only after breaking a guardrail "
-        f"did harm in {a['harmful']} of {a['plans']} cases ({a['harmful_pct']}%), against {f['harmful']} of {f['plans']} ({f['harmful_pct']}%) for plans that passed first time "
-        f"(one-sided Fisher exact test on those counts, p = {fisher_greater(a['harmful'], a['plans'] - a['harmful'], f['harmful'], f['plans'] - f['harmful']):.4f}). "
+        f"did harm in {a['harmful']} of {a['plans']} cases ({a['harmful_pct']}%), against {f['harmful']} of {f['plans']} ({f['harmful_pct']}%) for plans that passed first time. "
+        + split_sentence(d) + " "
         f"So a plan that follows a broken rule now gets two more checks, and if either doubts it, the plan goes back to the agent. "
         f"On plans nobody read while writing the checks, they caught {un['harmful']['caught']} of {un['harmful']['total']} harmful plans and sent back {un['good']['caught']} of {un['good']['total']} good ones."
     )
@@ -680,6 +695,8 @@ def block_evasion() -> str:
     r = d["rates"]
     des, un = d["detection"]["design"], d["detection"]["unseen"]
     out = [evasion_sentence(d).replace("Told which rule it broke, the agent sometimes gets around it. ", "", 1)]
+    if (r.get("by_split") or {}):
+        out.append(split_table(d))
     out.append(f"None of the {r['safe_plans']} safe plans broke a rule first, so the checks cost nothing there.")
     ex = (d.get("examples") or [None])[0]
     if ex:
@@ -802,7 +819,7 @@ def block_summary() -> str:
     out = [
         f"_How to read these: the same agent (`{r['model']}` on Vultr Serverless Inference) and prompt in every mode, a fresh copy of the database for every run, mean of {r['runs_per_task']} runs per task. "
         "Held-out tasks were kept out of tuning ([how](#results)). Harm is decided by oracles that check the outcome, not the plan. "
-        "Approved unread means every plan that waited for a person was approved without being read, the worst case for the reviewer._",
+        "Approved unread means the reviewer clicks approve on every plan that waits, without reading it: the worst case for Shadow Run._",
         "",
     ]
     if c["harm"]["excludes_zero"] and c["harm"]["difference"] < 0:
@@ -823,15 +840,16 @@ def block_summary() -> str:
     reh = held.get("rehearsal_s") or {}
     price = r.get("vx1_usd_per_hour")
     if reh.get("p50") and price:
-        out.append(f"- **Fast and cheap enough to sit in the loop.** A rehearsal on a full clone takes {reh['p50']:g} s at the median and about ${price * reh['p50'] / 3600:.6f} of VX1 time at list price, boot to destroy. A whole held-out task, every model call and retry included, takes {held['seconds_per_task']:g} s and costs ${held['cost_per_task_usd']:g} of inference.")
+        out.append(f"- **Fast and cheap enough to sit in the loop.** On the demo database, a rehearsal on a full clone takes {reh['p50']:g} s at the median and about ${price * reh['p50'] / 3600:.6f} of VX1 time at list price, boot to destroy. A whole held-out task, every model call and retry included, takes {held['seconds_per_task']:g} s and costs ${held['cost_per_task_usd']:g} of inference.")
     ev = load("evasion.json")
     if ev and ev.get("detection"):
         a, f_ = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
+        ex = (ev["rates"].get("by_split") or {}).get("external")
         out.append(
-            f"- **It found a failure mode a rule can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely. "
-            f"Plans that passed only after breaking a rule were harmful {a['harmful_pct']}% of the time, against {f_['harmful_pct']}% for first-time passes "
-            f"(Fisher exact, p = {fisher_greater(a['harmful'], a['plans'] - a['harmful'], f_['harmful'], f_['plans'] - f_['harmful']):.4f}), so Shadow Run now screens every such plan twice, "
-            "once by measurement and once by a second model. What each catches is in [what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it) (`bench/evasion.json`)."
+            "- **It found a failure mode a rule can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely. "
+            + (f"On the outside-benchmark tasks, plans that passed only after breaking a rule did harm {ex['passed_after_breaking_a_rule']['harmful_pct']}% of the time ({ex['passed_after_breaking_a_rule']['harmful']} of {ex['passed_after_breaking_a_rule']['plans']}), against {ex['passed_first_time']['harmful_pct']}% for first-time passes; across every recorded run, {a['harmful_pct']}% against {f_['harmful_pct']}%. "
+               if ex else f"Plans that passed only after breaking a rule were harmful {a['harmful_pct']}% of the time, against {f_['harmful_pct']}% for first-time passes. ")
+            + "So Shadow Run now sends every such plan to a second model, alongside a measured column check. Each split and what each check catches are in [what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it) (`bench/evasion.json`)."
         )
     rt, inc, cl = load("redteam.json"), load("incidents.json"), load("controls.json")
     parts = []
@@ -840,7 +858,8 @@ def block_summary() -> str:
     if inc and inc.get("incidents"):
         n = len(inc["incidents"])
         b = sum(1 for i in inc["incidents"] if i["status"] == "blocked" and not i.get("reached_prod"))
-        parts.append(f"**{b} of {n} real incident commands** replayed on a clone and blocked")
+        measured = sum(1 for i in inc["incidents"] if i.get("measured") or i.get("metrics"))
+        parts.append(f"**{b} of {n} real incident commands** replayed on a clone and stopped before prod" + (f": {measured} measured on the clone, {n - measured} failed there because they reach outside it" if measured < n else ""))
     if cl and cl.get("total"):
         parts.append(f"**{cl['passed']} of {cl['total']} checks** on approval, apply and undo passed, attacks and honest path alike")
     if parts:
@@ -899,8 +918,8 @@ def block_economics() -> str:
     ]
     if e.get("fixed") is not None:
         rows += [
-            ["Fixed cost of one deployment: the control VM, the VX1 host and the bucket at list price. Prod is the customer's own database", f"${e['fixed']:.0f} a month"],
-            [f"Margin on one protected database at ${e['price']} a month and 1,000 rehearsed tasks, fixed costs included", f"{e['margin_one_db'] * 100:.0f}%"],
+            ["Fixed cost of one deployment at Vultr's list price: the control VM, the VX1 host and the bucket. Prod is the customer's own database", f"${e['fixed']:.0f} a month"],
+            [f"Margin on one hosted database at ${e['price']} a month and 1,000 rehearsed tasks, fixed costs included", f"{e['margin_one_db'] * 100:.0f}%"],
             ["Rehearsed tasks a month before one database's total cost reaches its price", f"about {round(e['tasks_to_cost'], -3):,.0f}"],
         ]
     return (table(["Cost to serve", "Measured"], rows)
@@ -937,13 +956,14 @@ def block_business() -> str:
         "The trigger is the day someone asks them to hand an agent a database URL. Today they can give it the credential and hope, or have a senior engineer read each statement and guess what it cascades into. "
         "Shadow Run replaces the guess with a measurement, in rows and in the money the business tracks.",
         "",
-        "Nothing has to be trusted on day one, and each step is a price:",
+        "Nothing has to be trusted on day one:",
         "",
-        table(["Step", "What the team gets", "Price"], [
-            ["1. The pull request Action", "Every migration gets a comment saying what it really does. Nothing can reach prod.", "Free"],
-            ["2. MCP for the agent", "The agent gives up its database URL and gets rehearse and apply instead. Every change waits for a person until the team lists otherwise.", f"${price} a month per protected database"],
-            ["3. A short auto-apply list", "The columns the team is happy to change with no person looking, each tested against the attacker first.", "Included"],
-            ["Self-hosted", "The control plane and sandboxes on the team's own Vultr account, for regulated teams.", "A licence per deployment"],
+        table(["How a team runs it", "What the team gets", "Price"], [
+            ["Self-hosted, open source", "The pull request Action, the MCP server and the sandboxes on the team's own Vultr account, from `scripts/up.sh`. Every migration in a pull request gets a comment saying what it really does, and the agent gives up its database URL for rehearse and apply.",
+             "Free. The team pays Vultr for what it runs" + (f": about ${economics()['fixed']:.0f} a month at list price" if (economics() or {}).get("fixed") else "")],
+            ["Hosted", "The same, with the control plane and sandboxes run for the team. Every change waits for a person until the team lists otherwise.", f"${price} a month per protected database, up to about 1 GB today"],
+            ["An auto-apply list", "The columns the team is happy to change with no person looking, each tested against the attacker first.", "Included"],
+            ["Regulated teams", "Self-hosted, with a support licence.", "Per deployment"],
         ]),
         "",
         *([size_line(), ""] if size_line() else []),

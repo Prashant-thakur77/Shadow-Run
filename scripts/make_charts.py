@@ -113,7 +113,7 @@ def finding(t: dict) -> tuple[str, str]:
     W, X0, X1 = 960, 352, 860
     px = lambda v: X0 + (X1 - X0) * v / 40
     body = [text(32, 44, "Told which rule it broke, the agent gets around it", t, 22, 600),
-            text(32, 70, "Risky plans that passed every guardrail, and how many of them did harm anyway, by how they got there", t, 13, 400, "ink2")]
+            text(32, 70, "Risky plans that passed every guardrail and did harm anyway, across every recorded run. The README breaks this down by task split", t, 13, 400, "ink2")]
     y = 100
     for name, row, tone in (("Passed only after breaking a guardrail", a, "accent"), ("Passed the first time", f, "base")):
         body.append(text(X0 - 14, y + 16, name, t, 14, 600 if tone == "accent" else 400, "ink", "end"))

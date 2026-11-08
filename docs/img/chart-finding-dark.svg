@@ -2,7 +2,7 @@
 <title>Told which rule it broke, the agent gets around it</title>
 <rect x="0.5" y="0.5" width="959" height="209" rx="8" fill="#161b22" stroke="#30363d"/>
 <text x="32.0" y="44.0" font-size="22" font-weight="600" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">Told which rule it broke, the agent gets around it</text>
-<text x="32.0" y="70.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">Risky plans that passed every guardrail, and how many of them did harm anyway, by how they got there</text>
+<text x="32.0" y="70.0" font-size="13" font-weight="400" fill="#9198a1" text-anchor="start" style="font-variant-numeric: tabular-nums">Risky plans that passed every guardrail and did harm anyway, across every recorded run. The README breaks this down by task split</text>
 <text x="338.0" y="116.0" font-size="14" font-weight="600" fill="#e6edf3" text-anchor="end" style="font-variant-numeric: tabular-nums">Passed only after breaking a guardrail</text>
 <path d="M352.0,100.0 H792.5 Q796.5,100.0 796.5,104.0 V118.0 Q796.5,122.0 792.5,122.0 H352.0 Z" fill="#3987e5"/>
 <text x="804.5" y="116.0" font-size="14" font-weight="700" fill="#e6edf3" text-anchor="start" style="font-variant-numeric: tabular-nums">35%  (20 of 57)</text>

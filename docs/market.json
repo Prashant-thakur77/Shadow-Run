@@ -37,7 +37,7 @@
  },
  "price": {
   "usd_per_database_month": 500,
-  "label": "our planned price, not a measured figure and not yet tested with a customer"
+  "label": "our planned price for a hosted, protected database"
  },
  "derived": {
   "tam_usd_b_on_2025_market": [
@@ -55,8 +55,9 @@
   "first_target_usd_m_per_year": 7.9
  },
  "revenue": [
-  "A monthly subscription per protected database, since cost grows with database size and not with seats.",
-  "A self-hosted licence for regulated teams, who run the control plane and sandboxes on their own Vultr account."
+  "Open source and free to self-host: the pull request Action, the MCP server and the sandboxes run on the team's own Vultr account from scripts/up.sh, and the team pays Vultr for what it runs.",
+  "Hosted: a monthly subscription per protected database, with the control plane and sandboxes run for the team.",
+  "A support licence for regulated teams that self-host."
  ],
  "funnel": [
   "The pull request Action, rehearse only and free: every migration gets a comment saying what it really does.",

@@ -32,6 +32,7 @@ def claims() -> list[tuple[str, str, str]]:
     ext = st["main"]["sets"]["external"]["compare"]["unread_vs_direct"]["harm"]
     held = r["heldout"]["shadow_run"]
     a, f = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
+    ex = ev["rates"]["by_split"]["external"]
     blocked = sum(1 for i in inc["incidents"] if i["status"] == "blocked" and not i.get("reached_prod"))
     return [
         ("Held-out harm, approved unread", f"harm fell from {d['harm']:g} to {u['harm']:g} of {h['tasks']} held-out risky tasks", "stats.json main.sets.heldout.arms"),
@@ -39,7 +40,8 @@ def claims() -> list[tuple[str, str, str]]:
         ("Nothing harmful reached prod unseen", f"{held['harm_on_prod']['mean']:g} of {h['tasks']}, against {d['harm']:g} for the agent alone", "results.json heldout.shadow_run.harm_on_prod"),
         ("Outside benchmark (SABER)", f"harm went from {ext['from']:g} to {ext['to']:g}", "stats.json main.sets.external"),
         ("Rehearsal time, median", f"takes {held['rehearsal_s']['p50']:g} s at the median", "results.json heldout.shadow_run.rehearsal_s.p50"),
-        ("Guardrail evasion", f"harmful {a['harmful_pct']}% of the time, against {f['harmful_pct']}%", "evasion.json rates"),
+        ("Guardrail evasion, outside benchmark", f"did harm {ex['passed_after_breaking_a_rule']['harmful_pct']}% of the time ({ex['passed_after_breaking_a_rule']['harmful']} of {ex['passed_after_breaking_a_rule']['plans']})", "evasion.json rates.by_split.external"),
+        ("Guardrail evasion, every run", f"across every recorded run, {a['harmful_pct']}% against {f['harmful_pct']}%", "evasion.json rates"),
         ("Live attacks contained", f"{rt['contained']} of {rt['total']} live attacks contained", "redteam.json contained, total"),
         ("Real incidents blocked", f"{blocked} of {len(inc['incidents'])} real incident commands", "incidents.json incidents[].status"),
         ("Approval and apply checks", f"{cl['passed']} of {cl['total']} checks", "controls.json passed, total"),
