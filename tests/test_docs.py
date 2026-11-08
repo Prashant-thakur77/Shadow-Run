@@ -8,6 +8,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
 # Blocks that read the network (is the demo up), an environment variable (the video link) or pytest itself (the count).
@@ -134,3 +136,19 @@ def test_the_market_file_has_what_the_readme_slides_and_film_read():
     assert m["us"]["usp"] and m["us"]["weakness"]
     for c in m["competition"]:
         assert c["who"] and c["strength"] and c["gap"]
+
+
+def test_every_headline_claim_checks_out_from_the_raw_files():
+    import subprocess
+    import sys
+
+    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "verify.py")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout
+
+
+def test_the_unit_economics_add_up():
+    m = script("make_readme_table")
+    e = m.economics()
+    assert e and abs(e["per_task"] - (e["inf"] + e["vx1_task"])) < 1e-12
+    assert abs(e["per_k"] - 1000 * e["per_task"]) < 1e-9
+    assert 0 < e["margin_1k"] < 1 and e["breakeven"] * e["per_task"] == pytest.approx(e["price"])

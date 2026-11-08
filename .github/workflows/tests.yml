@@ -27,6 +27,8 @@ jobs:
         run: python -m pytest -q -m "not kvm" -p no:cacheprovider
       - name: The README's charts match the benchmark files
         run: python scripts/make_charts.py --check
+      - name: Every headline claim, recomputed from the raw files
+        run: python scripts/verify.py
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 15

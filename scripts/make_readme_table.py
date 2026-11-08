@@ -833,11 +833,48 @@ def block_summary() -> str:
         dv, g, price = mk["developers_using_agents"], mk["guardian_share"], mk["price"]["usd_per_database_month"]
         out.append(
             f"- **Who pays:** whoever owns the database at a team using coding agents, and {dv['weekly_pct']}% of professional developers now use them weekly ([{dv['source']}]({dv['url']})). "
-            f"It starts free as a pull request Action, then ${price} a month per protected database. [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, "
+            f"It starts free as a pull request Action, then ${price} a month per protected database"
+            + (f", against a measured variable cost of about ${economics()['per_k']:.2f} per 1,000 rehearsed tasks ([unit economics](#unit-economics))" if economics() else "")
+            + f". [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, "
             f"to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']} ([who this is for](#who-this-is-for), [market](#market-and-competition))."
         )
     return "\n".join(out)
 
+
+def economics() -> dict | None:
+    """What one rehearsed task costs to serve on Vultr, from the measured run and list prices, against the planned price."""
+    r, vu = load("results.json"), load("vultr.json")
+    mp = ROOT / "docs" / "market.json"
+    if not r or not vu or not mp.exists():
+        return None
+    s = ((r.get("all_risky_and_safe") or {}).get("shadow_run") or {})
+    if not s.get("cost_per_task_usd") or not s.get("seconds_per_task") or not r.get("vx1_usd_per_hour"):
+        return None
+    price = json.loads(mp.read_text())["price"]["usd_per_database_month"]
+    inf, secs, vx1 = s["cost_per_task_usd"], s["seconds_per_task"], r["vx1_usd_per_hour"]
+    # An upper bound: the whole VX1 host, for the task's whole wall time, although a host runs several rehearsals at once.
+    vx1_task = vx1 * secs / 3600
+    per_task = inf + vx1_task
+    burn = ((vu.get("spend") or {}).get("budget") or {}).get("burn_usd_per_hour")
+    return dict(tasks=s.get("risky_tasks", 0) + s.get("safe_tasks", 0), inf=inf, secs=secs, vx1=vx1, vx1_task=vx1_task, per_task=per_task, per_k=per_task * 1000, price=price,
+                margin_1k=1 - per_task * 1000 / price, breakeven=price / per_task, stack_month=burn * 24 * 30 if burn else None)
+
+
+def block_economics() -> str:
+    e = economics()
+    if not e:
+        return ""
+    rows = [
+        ["Inference on Vultr Serverless Inference, every model call", f"${e['inf']:g} (mean over all {e['tasks']} tasks)"],
+        [f"VX1 time, at most: the host's list price (${e['vx1']:g} an hour) for the task's whole wall time ({e['secs']:g} s)", f"${e['vx1_task']:.5f}"],
+        ["Variable cost per 1,000 rehearsed tasks", f"${e['per_k']:.2f}"],
+        [f"Margin before fixed costs at ${e['price']} a month and 1,000 rehearsed tasks", f"{e['margin_1k'] * 100:.1f}%"],
+        ["Rehearsed tasks a month before variable cost reaches the price", f"about {round(e['breakeven'], -3):,.0f}"],
+    ]
+    if e["stack_month"]:
+        rows.append(["The whole demo stack on Vultr (two VMs, Managed PostgreSQL, Object Storage), at its measured burn", f"${e['stack_month']:.0f} a month"])
+    return (table(["Per rehearsed task", "Measured"], rows)
+            + "\n\nThe price is our plan. The costs are measured: inference from the benchmark's own records, VX1 and the stack at Vultr's list prices (`bench/results.json`, `bench/vultr.json`).")
 
 def block_tests() -> str:
     """How much of the code the tests reach, counted by pytest itself, so the number can't drift from the suite."""
@@ -863,6 +900,7 @@ BLOCKS = {
     "vultr": block_vultr,
     "summary": block_summary,
     "tests": block_tests,
+    "economics": block_economics,
     "evasion": block_evasion,
     "market": block_market,
     "reviewer": block_reviewer,
