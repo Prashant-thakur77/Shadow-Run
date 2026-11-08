@@ -16,8 +16,8 @@ from make_readme_table import block_summary, evasion_sentence, basis_sentence, c
 
 # The form's short description takes 50 to 255 characters, so it says what it is, not how.
 SHORT = (
-    "Your agent wants to touch prod. Shadow Run lets it break a clone first: every risky plan runs on a full clone "
-    "in a microVM on Vultr, Postgres measures the blast radius, and a person approves the exact plan before it reaches prod."
+    "Your agent wants to touch prod. Shadow Run lets it break a clone first: every risky plan runs on a full clone of prod "
+    "in a microVM on Vultr, and a person approves what it really did, not what it says, before it reaches the real database."
 )
 
 
