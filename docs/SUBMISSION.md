@@ -10,21 +10,19 @@ Shadow Run
 
 Your agent wants to touch prod. Shadow Run lets it break a clone first: every risky plan runs on a full clone in a microVM on Vultr, Postgres measures the blast radius, and a person approves the exact plan before it reaches prod.
 
-## Long description, for the form (1940 characters; the form takes 600 to 2,000)
+## Long description, for the form (1945 characters; the form takes 600 to 2,000)
 
-In October 2026, 49.8% of professionals Salt Security surveyed had confirmed or suspected an AI agent acting unexpectedly or without authorization; only 17.5% could stop one automatically.
+AI agents are getting the keys to production. Shadow Run is how a team says yes to that safely: the agent never touches prod directly. Every risky change it wants runs first on a disposable copy of production, and what the change really did, not what it says it will do, is what a person approves.
 
-Shadow Run authorizes what a plan does, not what it says. The agent gets no credential. Every risky SQL or shell plan it writes is frozen, hashed and run first on a full clone of prod in a throwaway microVM on a Vultr VX1, cut off from the network. Postgres measures the blast radius, frozen guardrails decide, and a different person approves those exact hashes before the same plan runs on prod in one transaction that rolls back on any surprise. Its undo, when one exists, is proved on the clone first.
+Today, on Vultr: the agent gets no credential. Each SQL or shell plan is frozen, hashed and rehearsed on a full clone of prod in a throwaway microVM on a Vultr VX1, cut off from the network. Postgres measures the blast radius in rows, cascades and dollars, frozen guardrails decide, a different person approves those exact hashes, and the same plan runs on prod in one transaction that rolls back if anything it measures differs. Every model call goes to Vultr Serverless Inference.
 
-On 23 held-out risky tasks, even with every plan approved unread, harm fell from 10 for the same agent alone to 2.67 (p = 0.0078 over tasks). 19 of 23 risky plans waited for a person with a measured report.
+It works. On 23 held-out risky tasks, even with every plan approved unread, harm fell from 10 to 2.67 (p = 0.0078 over tasks). 7 of 7 live attacks were contained and 6 of 6 real incident commands stopped before prod. It also found something new: told which rule it broke, an agent can get around it while every guardrail still passes. The checks this led to cut harm on outside-benchmark tasks from 5.33 to 2.
 
-We found that an agent told which rule it broke can get around it, changing what the rule looks at instead of doing the job safely. The checks this led to cut harm on outside-benchmark tasks from 5.33 to 2, 4 tasks better and 0 worse.
+Where it goes: the best version of Shadow Run is the default gate between every coding agent and every production system. Next come thin clones and clones from Vultr Managed PostgreSQL's own backups, so a rehearsal stays fast past a gigabyte; an auto-apply list that learns from what a team approves, tested against its own attacker first; one-click deployment on a team's own Vultr account; and the free pull request Action on GitHub Marketplace as the way in.
 
-7 of 7 live attacks contained, and 6 of 6 real incident commands replayed on a clone stopped before prod (4 measured there). Every model call goes to Vultr Serverless Inference (9.35 million tokens in the benchmark), every rehearsal to a VX1 (1,198 microVMs), prod to Vultr Managed PostgreSQL, evidence to Object Storage.
+Who pays: the engineer who owns production Postgres at a team using coding agents. It's open source and free to self-host on Vultr; hosted, it's $500 a month per protected database, at about a 70% infrastructure margin on one database.
 
-Who pays: the database owner at a team using coding agents, which 90% of professional developers now use weekly (JetBrains). It plugs into any agent over MCP, a CLI or a pull request Action. It's open source and free to self-host on Vultr; hosted, it's $500 a month per protected database. Cost to serve: $147 a month per deployment at list price plus a measured $4.45 per 1,000 tasks, a 70% margin on one database.
-
-Race the agent yourself: https://144-202-92-64.sslip.io/race
+Race the agent: https://144-202-92-64.sslip.io/race
 
 ## Long description, full
 

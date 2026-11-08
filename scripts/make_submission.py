@@ -27,54 +27,49 @@ def load(name: str) -> dict | None:
 
 
 def form_text(r: dict, st: dict, rt: dict, ev: dict | None, ai: dict, url: str) -> str:
-    """The lablab field takes 600 to 2,000 characters. Every number comes from the same files as the rest."""
-    from make_readme_table import fmt_p
+    """The lablab field takes 600 to 2,000 characters: the vision, what is real today with its proof, and what comes next.
+    Every number comes from the same files as the rest, and what isn't built yet is said as next."""
+    from make_readme_table import economics
     v = view(st, r)
     h = v["sets"]["heldout"]
     d, u = h["arms"]["direct"], h["arms"]["unread"]
     c = h["compare"]["unread_vs_direct"]
-    held = r["heldout"]["shadow_run"]
-    parts = []
-    if ai:
-        parts.append(f"In October 2026, {ai['unexpected_or_unauthorized_pct']}% of professionals {ai['source'].split(',')[0]} surveyed had confirmed or suspected an AI agent acting unexpectedly or without authorization; only {ai['can_stop_automatically_pct']}% could stop one automatically.")
-    parts.append(
-        "Shadow Run authorizes what a plan does, not what it says. The agent gets no credential. Every risky SQL or shell plan it writes is frozen, hashed and run first on a full clone of prod in a throwaway microVM on a Vultr VX1, cut off from the network. "
-        "Postgres measures the blast radius, frozen guardrails decide, and a different person approves those exact hashes before the same plan runs on prod in one transaction that rolls back on any surprise. Its undo, when one exists, is proved on the clone first."
-    )
-    tested = f" ({fmt_p(c['harm']['permutation_p'])} over tasks)" if c["harm"]["excludes_zero"] else ""
-    parts.append(f"On {h['tasks']} held-out risky tasks, even with every plan approved unread, harm fell from {d['harm']:g} for the same agent alone to {u['harm']:g}{tested}. {held['risky_held']['mean']:g} of {h['tasks']} risky plans waited for a person with a measured report.")
-    if ev and ev.get("detection"):
-        a, f_ = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
-        un = ev["detection"]["unseen"]["harmful"]
-        hm = ((ev.get("after") or {}).get("external") or {}).get("harm")
-        tail = (f" The checks this led to cut harm on outside-benchmark tasks from {hm['from']:g} to {hm['to']:g}, {hm['tasks_down']} tasks better and {hm['tasks_up']} worse."
-                if hm and hm["difference"] < 0 else " Shadow Run now sends every such plan to a second model.")
-        parts.append(f"We found that an agent told which rule it broke can get around it, changing what the rule looks at instead of doing the job safely.{tail}")
     inc = load("incidents.json") or {}
     vu = load("vultr.json") or {}
+    e = economics() or {}
+    mk = json.loads((ROOT / "docs" / "market.json").read_text())
+    price = mk["price"]["usd_per_database_month"]
+    parts = [
+        "AI agents are getting the keys to production. Shadow Run is how a team says yes to that safely: the agent never touches prod directly. "
+        "Every risky change it wants runs first on a disposable copy of production, and what the change really did, not what it says it will do, is what a person approves.",
+        "Today, on Vultr: the agent gets no credential. Each SQL or shell plan is frozen, hashed and rehearsed on a full clone of prod in a throwaway microVM on a Vultr VX1, cut off from the network. "
+        "Postgres measures the blast radius in rows, cascades and dollars, frozen guardrails decide, a different person approves those exact hashes, and the same plan runs on prod in one transaction that rolls back if anything it measures differs. "
+        "Every model call goes to Vultr Serverless Inference.",
+    ]
+    proof = f"It works. On {h['tasks']} held-out risky tasks, even with every plan approved unread, harm fell from {d['harm']:g} to {u['harm']:g}"
+    proof += f" (p = {c['harm']['permutation_p']:g} over tasks)." if c["harm"]["excludes_zero"] else "."
     if rt:
         blocked = sum(1 for i in inc.get("incidents", []) if i["status"] == "blocked" and not i.get("reached_prod"))
-        measured = sum(1 for i in inc.get("incidents", []) if i.get("measured") or i.get("metrics"))
-        replayed = f", and {blocked} of {len(inc['incidents'])} real incident commands replayed on a clone stopped before prod ({measured} measured there)" if inc.get("incidents") else ""
-        used = (f" Every model call goes to Vultr Serverless Inference ({vu['inference']['tokens'] / 1e6:.2f} million tokens in the benchmark), every rehearsal to a VX1 ({vu['microvms']['total']:,} microVMs), prod to Vultr Managed PostgreSQL, evidence to Object Storage."
-                if vu.get("microvms") and vu.get("inference") else " Every model call goes to Vultr Serverless Inference, every rehearsal to a VX1, prod to Vultr Managed PostgreSQL, evidence to Object Storage.")
-        parts.append(f"{rt['contained']} of {rt['total']} live attacks contained{replayed}.{used}")
-    mk = json.loads((ROOT / "docs" / "market.json").read_text())
-    price = (mk.get("price") or {}).get("usd_per_database_month")
-    from make_readme_table import economics
-    econ_f = economics()
+        proof += f" {rt['contained']} of {rt['total']} live attacks were contained" + (f" and {blocked} of {len(inc['incidents'])} real incident commands stopped before prod." if inc.get("incidents") else ".")
+    hm = (((ev or {}).get("after") or {}).get("external") or {}).get("harm")
+    if hm and hm["difference"] < 0:
+        proof += (" It also found something new: told which rule it broke, an agent can get around it while every guardrail still passes. "
+                  f"The checks this led to cut harm on outside-benchmark tasks from {hm['from']:g} to {hm['to']:g}.")
+    parts.append(proof)
     parts.append(
-        f"Who pays: the database owner at a team using coding agents, which {mk['developers_using_agents']['weekly_pct']}% of professional developers now use weekly ({mk['developers_using_agents']['source'].split(' Developer')[0]}). "
-        "It plugs into any agent over MCP, a CLI or a pull request Action."
-        + (f" It's open source and free to self-host on Vultr; hosted, it's ${price} a month per protected database." if price else "")
-        + (f" Cost to serve: ${econ_f['fixed']:.0f} a month per deployment at list price plus a measured ${econ_f['per_k']:.2f} per 1,000 tasks, a {econ_f['margin_one_db'] * 100:.0f}% margin on one database." if econ_f and econ_f.get("fixed") else "")
+        "Where it goes: the best version of Shadow Run is the default gate between every coding agent and every production system. "
+        "Next come thin clones and clones from Vultr Managed PostgreSQL's own backups, so a rehearsal stays fast past a gigabyte; an auto-apply list that learns from what a team approves, tested against its own attacker first; "
+        "one-click deployment on a team's own Vultr account; and the free pull request Action on GitHub Marketplace as the way in."
     )
-    parts.append(f"Race the agent yourself: {url}/race")
+    pay = "Who pays: the engineer who owns production Postgres at a team using coding agents. It's open source and free to self-host on Vultr; hosted, it's " + f"${price} a month per protected database"
+    if e.get("margin_one_db") is not None:
+        pay += f", at about a {e['margin_one_db'] * 100:.0f}% infrastructure margin on one database"
+    parts.append(pay + ".")
+    parts.append(f"Race the agent: {url}/race")
     text = "\n\n".join(parts)
     if len(text) > 2000:
         print(f"the form text is {len(text)} characters, over 2,000", file=sys.stderr)
     return text
-
 
 def main() -> int:
     state = json.loads((ROOT / "infra/STATE.json").read_text())
