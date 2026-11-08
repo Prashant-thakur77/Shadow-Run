@@ -172,7 +172,7 @@ export function HasHappened({ incidents, receipts, loading, market }: { incident
 
   const current = chosen[index];
   return (
-    <section className="ch ch-pin" id="happened" aria-labelledby="happened-title" ref={ref} style={{ height: '170vh' }}>
+    <section className="ch ch-pin" id="happened" aria-labelledby="happened-title" ref={ref} data-snap-steps={mode === 'pinned' && chosen.length > 1 ? chosen.length : undefined} style={{ height: `${100 + Math.max(chosen.length, 1) * 55}vh` }}>
       <div className="ch-stage ch-stage-happened">
         {head}
         <Frame className="stmt-frame">{current && <Slide key={current.id} incident={current} receipt={receiptOf(current)} />}</Frame>

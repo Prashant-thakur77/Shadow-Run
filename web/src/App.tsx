@@ -1,3 +1,4 @@
+import { startSmoothScroll } from './lib/smooth';
 import { createContext, Fragment, lazy, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, errorText } from './api/client';
 import type { Health, ProdChecksum } from './api/types';
@@ -48,6 +49,10 @@ function usePreloadPages(active: boolean) {
 }
 
 export function App() {
+  // One smooth wheel for every page, started once (lib/smooth.ts decides where it shouldn't run).
+  useEffect(() => {
+    void startSmoothScroll();
+  }, []);
   return (
     <RouterProvider>
       <AuthProvider>

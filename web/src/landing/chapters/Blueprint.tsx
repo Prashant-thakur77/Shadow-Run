@@ -264,7 +264,7 @@ export function Blueprint({ hero }: { hero: PublicHero | null }) {
   }
 
   return (
-    <section className="ch ch-pin" id="blueprint" data-jump="end" aria-labelledby="blueprint-title" ref={sectionRef} style={{ height: '200vh' }}>
+    <section className="ch ch-pin" id="blueprint" data-jump="end" aria-labelledby="blueprint-title" ref={sectionRef} style={{ height: '280vh' }}>
       <div className="ch-stage ch-stage-split">
         {plan}
         {side}

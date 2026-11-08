@@ -6,7 +6,7 @@ import { LandingContext } from '../landing/context';
 import { ExhibitRail } from '../landing/ExhibitRail';
 import { Hero } from '../landing/Hero';
 import '../landing/landing.css';
-import { matches, PHONE, REDUCED } from '../lib/media';
+import { smoothScroll, startSmoothScroll, type SmoothScroll } from '../lib/smooth';
 import { navigate } from '../lib/router';
 import { useTheme } from '../lib/theme';
 import { useAsync } from '../lib/useAsync';
@@ -15,31 +15,17 @@ import { PrimaryButton } from '../ui/Halftone';
 // The hero ships with the main chunk. The chapters arrive after first paint.
 const Chapters = lazy(() => import('../landing/chapters/Chapters'));
 
-interface SmoothScroll {
-  resize: () => void;
-  scrollTo: (top: number, options?: { duration?: number }) => void;
-}
-
-/** Smooth wheel on this route only, and never for touch or reduced motion. The nav's jumps stay in jump() below, so there is
- *  one place that knows where a chapter's heading lands. */
+/** The wheel glides here as on every page (lib/smooth.ts). The nav's jumps stay in jump() below, so there is one place
+ *  that knows where a chapter's heading lands. */
 function useSmoothWheel(): RefObject<SmoothScroll | null> {
-  const smooth = useRef<SmoothScroll | null>(null);
+  const smooth = useRef<SmoothScroll | null>(smoothScroll());
   useEffect(() => {
-    if (matches(REDUCED) || matches(PHONE) || matches('(pointer: coarse)')) return;
     let stopped = false;
-    let destroy: (() => void) | undefined;
-    void import('lenis').then(({ default: Lenis }) => {
-      if (stopped) return;
-      const lenis = new Lenis({ lerp: 0.1, autoRaf: true });
-      smooth.current = lenis;
-      destroy = () => {
-        smooth.current = null;
-        lenis.destroy();
-      };
+    void startSmoothScroll().then((s) => {
+      if (!stopped) smooth.current = s;
     });
     return () => {
       stopped = true;
-      destroy?.();
     };
   }, []);
   return smooth;

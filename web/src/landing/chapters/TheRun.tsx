@@ -388,7 +388,7 @@ export function TheRun({ hero, example }: { hero: PublicHero | null; example: Ap
 
   const current = STAGES[stage];
   return (
-    <section className="ch ch-pin" id="run" aria-labelledby="run-title" ref={sectionRef} style={{ height: '230vh' }}>
+    <section className="ch ch-pin" id="run" aria-labelledby="run-title" ref={sectionRef} data-snap-steps={mode === 'pinned' ? STAGES.length : undefined} style={{ height: `${100 + STAGES.length * 45}vh` }}>
       <div className="ch-stage ch-stage-split">
         <div className="run-text">
           {head}
