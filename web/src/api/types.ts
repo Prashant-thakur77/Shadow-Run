@@ -784,6 +784,8 @@ export interface Market {
   derived?: { tam_how?: string; sam_usd_b_per_year?: number; sam_how?: string; first_target_pct?: number; first_target_usd_m_per_year?: number };
   revenue?: string[];
   funnel?: string[];
+  /** What the first person outside the team said after using it, in our words. */
+  first_use?: string;
   next?: string[];
   competition?: { who?: string; strength?: string; gap?: string; urls?: string[] }[];
   us?: { strength?: string; weakness?: string; usp?: string };

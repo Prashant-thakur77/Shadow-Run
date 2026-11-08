@@ -136,6 +136,11 @@ export function WhoPays({ market, videoUrl }: { market: Market | null; videoUrl?
                 <li key={step}>{step}</li>
               ))}
             </ol>
+            {market.first_use && (
+              <p className="pays-note pays-tested">
+                <strong>First outside tester.</strong> {market.first_use}
+              </p>
+            )}
           </div>
           <div className="pays-cell">
             <Label>What it costs</Label>

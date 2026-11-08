@@ -64,6 +64,7 @@
   "MCP for the agent: it gives up its database URL, and every change waits for a person.",
   "A short auto-apply list, once the team has seen enough reports."
  ],
+ "first_use": "A friend used Shadow Run to check whether an agent had done its job correctly, and told us she found it useful for exactly that. That is the question Shadow Run is built to answer: what did the agent's change really do, before anyone trusts it?",
  "next": [
   "Thin clones, so a rehearsal stays fast past a gigabyte, and masking personal data in the clone.",
   "Clones restored from Vultr Managed PostgreSQL's own backups, so a rehearsal skips the dump.",

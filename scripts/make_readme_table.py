@@ -971,6 +971,7 @@ def block_business() -> str:
         "The trigger is the day someone asks them to hand an agent a database URL. Today they can give it the credential and hope, or have a senior engineer read each statement and guess what it cascades into. "
         "Shadow Run replaces the guess with a measurement, in rows and in the money the business tracks.",
         "",
+        *([f"**First outside tester.** {m['first_use']}", ""] if m.get("first_use") else []),
         "Nothing has to be trusted on day one:",
         "",
         table(["How a team runs it", "What the team gets", "Price"], [

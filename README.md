@@ -505,6 +505,8 @@ An attack that passes the rules also produces a candidate rule. It counts only i
 <!-- business:start -->
 **The buyer** is the engineer who owns production Postgres, a platform lead or a staff engineer, at a team that lets coding agents run migrations and data fixes. The trigger is the day someone asks them to hand an agent a database URL. Today they can give it the credential and hope, or have a senior engineer read each statement and guess what it cascades into. Shadow Run replaces the guess with a measurement, in rows and in the money the business tracks.
 
+**First outside tester.** A friend used Shadow Run to check whether an agent had done its job correctly, and told us she found it useful for exactly that. That is the question Shadow Run is built to answer: what did the agent's change really do, before anyone trusts it?
+
 Nothing has to be trusted on day one:
 
 | How a team runs it | What the team gets | Price |
