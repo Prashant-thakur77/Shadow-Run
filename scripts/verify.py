@@ -32,22 +32,25 @@ def claims() -> list[tuple[str, str, str]]:
     ext = st["main"]["sets"]["external"]["compare"]["unread_vs_direct"]["harm"]
     held = r["heldout"]["shadow_run"]
     a, f = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
-    ex = ev["rates"]["by_split"]["external"]
+    ax, ah = ev["after"]["external"]["harm"], ev["after"]["heldout"]["harm"]
+    kv = load("kvm_tests.json")
     blocked = sum(1 for i in inc["incidents"] if i["status"] == "blocked" and not i.get("reached_prod"))
     return [
         ("Held-out harm, approved unread", f"harm fell from {d['harm']:g} to {u['harm']:g} of {h['tasks']} held-out risky tasks", "stats.json main.sets.heldout.arms"),
-        ("...task by task", f"p = {c['permutation_p']:g}, {c['tasks_down']} tasks better, {c['tasks_up']} worse", "stats.json ...compare.unread_vs_direct.harm"),
-        ("Nothing harmful reached prod unseen", f"{held['harm_on_prod']['mean']:g} of {h['tasks']}, against {d['harm']:g} for the agent alone", "results.json heldout.shadow_run.harm_on_prod"),
-        ("Outside benchmark (SABER)", f"harm went from {ext['from']:g} to {ext['to']:g}", "stats.json main.sets.external"),
-        ("Rehearsal time, median", f"takes {held['rehearsal_s']['p50']:g} s at the median", "results.json heldout.shadow_run.rehearsal_s.p50"),
-        ("Guardrail evasion, outside benchmark", f"did harm {ex['passed_after_breaking_a_rule']['harmful_pct']}% of the time ({ex['passed_after_breaking_a_rule']['harmful']} of {ex['passed_after_breaking_a_rule']['plans']})", "evasion.json rates.by_split.external"),
-        ("Guardrail evasion, every run", f"across every recorded run, {a['harmful_pct']}% against {f['harmful_pct']}%", "evasion.json rates"),
+        ("...task by task", f"{c['tasks_down']} tasks better, {c['tasks_up']} worse, p = {c['permutation_p']:g}", "stats.json ...compare.unread_vs_direct.harm"),
+        ("Nothing harmful reached prod unseen", f"{held['harm_on_prod']['mean']:g} of {h['tasks']} did harm, against {d['harm']:g} for the agent alone", "results.json heldout.shadow_run.harm_on_prod"),
+        ("Outside benchmark (SABER)", f"from {ext['from']:g} to {ext['to']:g} on {ext['tasks']} tasks adapted from an outside benchmark ({ext['tasks_down']} better, {ext['tasks_up']} worse)", "stats.json main.sets.external"),
+        ("Rehearsal time, median", f"a rehearsal takes {held['rehearsal_s']['p50']:g} s at the median", "results.json heldout.shadow_run.rehearsal_s.p50"),
+        ("Evasion checks, outside benchmark", f"from {ax['from']:g} to {ax['to']:g} on the outside-benchmark tasks ({ax['tasks_down']} tasks better, {ax['tasks_up']} worse)", "evasion.json after.external.harm"),
+        ("Evasion checks, held-out", f"from {ah['from']:g} to {ah['to']:g} on the held-out tasks ({ah['tasks_down']} better, {ah['tasks_up']} worse)", "evasion.json after.heldout.harm"),
+        ("Evasion rates, every run", f"{a['harmful']} of {a['plans']} cases ({a['harmful_pct']}%), against {f['harmful']} of {f['plans']} ({f['harmful_pct']}%)", "evasion.json rates"),
         ("Live attacks contained", f"{rt['contained']} of {rt['total']} live attacks contained", "redteam.json contained, total"),
         ("Real incidents blocked", f"{blocked} of {len(inc['incidents'])} real incident commands", "incidents.json incidents[].status"),
         ("Approval and apply checks", f"{cl['passed']} of {cl['total']} checks", "controls.json passed, total"),
         ("Soak test", f"{so['rehearsals']} rehearsals in {so['wall_s']:g} s", "soak.json rehearsals, wall_s"),
         ("microVMs on the VX1", f"{vu['microvms']['total']:,} microVMs", "vultr.json microvms.total"),
         ("Serverless Inference tokens", f"{vu['inference']['tokens']:,} tokens", "vultr.json inference.tokens"),
+        ("KVM tests, last run", f"{kv['passed']} of {kv['tests']} passed", "kvm_tests.json"),
         ("Managed PostgreSQL databases", f"{vu['postgres']['benchmark']['databases_created']:,} throwaway databases", "vultr.json postgres.benchmark.databases_created"),
     ]
 

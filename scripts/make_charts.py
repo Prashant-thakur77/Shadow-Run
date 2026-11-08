@@ -107,24 +107,32 @@ def harm(t: dict) -> tuple[str, str]:
 
 
 def finding(t: dict) -> tuple[str, str]:
-    """How often a plan that passed every guardrail was harmful, by whether it broke a rule on the way."""
-    r = load("evasion.json")["rates"]
-    a, f = r["passed_after_breaking_a_rule"], r["passed_first_time"]
-    W, X0, X1 = 960, 352, 860
-    px = lambda v: X0 + (X1 - X0) * v / 40
-    body = [text(32, 44, "Told which rule it broke, the agent gets around it", t, 22, 600),
-            text(32, 70, "Risky plans that passed every guardrail and did harm anyway, across every recorded run. The README breaks this down by task split", t, 13, 400, "ink2")]
-    y = 100
-    for name, row, tone in (("Passed only after breaking a guardrail", a, "accent"), ("Passed the first time", f, "base")):
-        body.append(text(X0 - 14, y + 16, name, t, 14, 600 if tone == "accent" else 400, "ink", "end"))
-        body.append(bar(X0, y, px(row["harmful_pct"]) - X0, 22, t[tone]))
-        body.append(text(px(row["harmful_pct"]) + 8, y + 16, f"{row['harmful_pct']}%  ({row['harmful']} of {row['plans']})", t, 14, 700))
-        y += 32
-    body.append(f'<line x1="{X0}" y1="96" x2="{X0}" y2="{y - 6}" stroke="{t["ink3"]}" stroke-width="1"/>')
-    H = y + 46
-    body.append(text(32, H - 18, "bench/evasion.json · two checks now screen every plan that passes after breaking a rule · drawn by scripts/make_charts.py", t, 12, 400, "ink3"))
-    return frame(W, H, t, body, "Told which rule it broke, the agent gets around it"), "finding"
-
+    """Harm before and after the two changes the evasion finding led to, task by task, approved unread."""
+    aft = load("evasion.json")["after"]
+    W, X0, X1 = 960, 352, 790
+    panels = [("external", "Tasks adapted from an outside benchmark"), ("heldout", "Held-out tasks, ours")]
+    vmax = max(aft[k]["harm"]["from"] for k, _ in panels)
+    scale = max(4, int(vmax) + 2 - int(vmax) % 2)
+    px = lambda v: X0 + (X1 - X0) * v / scale
+    body = [text(32, 44, "What the finding changed: harm, task by task", t, 22, 600),
+            text(32, 70, "Harm on prod, every plan approved unread, before and after the evasion checks and the empty-plan change. Mean of 3 runs per task", t, 13, 400, "ink2")]
+    y = 108
+    for key, label in panels:
+        hm = aft[key]["harm"]
+        body.append(text(32, y, f"{label} ({hm['tasks']})", t, 15, 600))
+        body.append(text(W - 32, y, f"{fmt(hm['difference']).replace('-', '\u2212')} tasks, {hm['tasks_down']} better, {hm['tasks_up']} worse", t, 13, 400, "ink2", "end"))
+        y += 16
+        y0 = y
+        for name, v, tone in (("Before the checks", hm["from"], "base"), ("With the checks", hm["to"], "accent")):
+            body.append(text(X0 - 14, y + 16, name, t, 14, 600 if tone == "accent" else 400, "ink", "end"))
+            body.append(bar(X0, y, px(v) - X0, 22, t[tone]))
+            body.append(text(max(px(v), X0 + 3) + 8, y + 16, fmt(v), t, 14, 700))
+            y += 32
+        body.append(f'<line x1="{X0}" y1="{y0 - 4}" x2="{X0}" y2="{y - 6}" stroke="{t["ink3"]}" stroke-width="1"/>')
+        y += 26
+    H = y + 22
+    body.append(text(32, H - 18, "bench/evasion.json (after) · tasks compared one by one · scripts/make_charts.py", t, 12, 400, "ink3"))
+    return frame(W, H, t, body, "What the finding changed: harm, task by task"), "finding"
 
 def wrap(s: str, n: int) -> list[str]:
     out, cur = [], ""

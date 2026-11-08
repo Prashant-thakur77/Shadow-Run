@@ -618,7 +618,7 @@ def block_market() -> str:
     lines = [
         f"**Who is exposed.** {d['weekly_pct']}% of professional developers use coding agents at work at least weekly and {d['daily_pct']}% daily ([{d['source']}]({d['url']}), {d['respondents']} respondents). [{pg['count']:,} companies use PostgreSQL]({pg['url']}), by {pg['source']}'s 2026 count. {pg['caveat']}",
         "",
-        f"**Market.** [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']}. [{a['source']}]({a['url']}) sizes AI agents at ${a['usd_b_2025']} billion in 2025 and ${a['usd_b_2033']} billion by 2033. Combining the two, which is our arithmetic and not theirs, gives ${derived['tam_usd_b_on_2025_market'][0]} to {derived['tam_usd_b_on_2025_market'][1]} billion on today's market and ${derived['tam_usd_b_on_2033_forecast'][0]} to {derived['tam_usd_b_on_2033_forecast'][1]} billion on the 2033 forecast. The market this version can serve: at the ${price['usd_per_database_month']} a month we plan to charge, {derived['first_target_pct']}% of those companies with one protected database each is ${derived['first_target_usd_m_per_year']} million a year, and all of them, which is a ceiling since not all let agents near prod, is ${derived['sam_usd_b_per_year']} billion.",
+        f"**Market.** [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']}. [{a['source']}]({a['url']}) sizes AI agents at ${a['usd_b_2025']} billion in 2025 and ${a['usd_b_2033']} billion by 2033. Combining the two, which is our arithmetic and not theirs, gives ${derived['tam_usd_b_on_2033_forecast'][0]} to {derived['tam_usd_b_on_2033_forecast'][1]} billion on the 2033 forecast. The market this version can serve: at the ${price['usd_per_database_month']} a month we plan to charge, {derived['first_target_pct']}% of those companies with one protected database each is ${derived['first_target_usd_m_per_year']} million a year, and all of them, which is a ceiling since not all let agents near prod, is ${derived['sam_usd_b_per_year']} billion.",
         "",
         "| Who else | What they do well | What's missing for this job |",
         "| --- | --- | --- |",
@@ -785,7 +785,7 @@ def block_vultr() -> str:
     jobs = "; ".join(f"`{m['model']}`: {', '.join(j['job'] for j in m['jobs'])}" for m in vu.get("models") or [])
     rows = []
     if inf.get("tokens"):
-        rows.append(["Serverless Inference", f"{inf['tokens']:,} tokens over {inf['runs']:,} benchmark runs, ${inf['cost_usd']:.2f}. {jobs}"])
+        rows.append(["Serverless Inference", f"{inf['tokens']:,} tokens over {inf['runs']:,} benchmark runs, ${inf['cost_usd']:.2f}, across the {inf['models_used']} models the benchmark called. Every model the project uses, and for what: {jobs}"])
     if mv.get("total"):
         boot = mv.get("clone_boot_ms") or {}
         rows.append(["VX1", f"{mv['total']:,} microVMs across every benchmark file: {mv['rehearsals']:,} rehearsals and {mv['reproductions']:,} second-clone reproductions. Clone boot p50 {boot.get('p50', 0):,.0f} ms, p95 {boot.get('p95', 0):,.0f} ms. {mv['containment_complete']:,} of {mv['rehearsals']:,} rehearsals came back with a complete containment record; the rest were refused, not counted"])
@@ -822,35 +822,39 @@ def block_summary() -> str:
         "Approved unread means the reviewer clicks approve on every plan that waits, without reading it: the worst case for Shadow Run._",
         "",
     ]
+    ext = (v["sets"].get("external") or {}).get("compare", {}).get("unread_vs_direct")
+    ctl = (st.get("controls") or {})
+    held_sql = (ctl.get("sets") or {}).get("heldout_sql") if ctl.get("status") == "measured" and ctl.get("same_code_as_main") else None
     if c["harm"]["excludes_zero"] and c["harm"]["difference"] < 0:
-        done = (f" Tasks finished safely held up: {u['done']:g} through Shadow Run, {d['done']:g} alone." if u["done"] >= d["done"] else
-                f" Tasks finished safely: {u['done']:g} through Shadow Run, {d['done']:g} alone ({fmt_p(c['done']['permutation_p'])}).")
-        out.append(f"- **Even with every plan approved unread, harm fell from {d['harm']:g} to {u['harm']:g} of {h['tasks']} held-out risky tasks, and that holds task by task** ({fmt_ci(c['harm'])}, {fmt_p(c['harm']['permutation_p'])}, {c['harm']['tasks_down']} tasks better, {c['harm']['tasks_up']} worse).{done} (`bench/stats.json`)")
+        line = (f"- **Even if the reviewer approves every plan without reading it, harm fell from {d['harm']:g} to {u['harm']:g} of {h['tasks']} held-out risky tasks** "
+                f"({c['harm']['tasks_down']} tasks better, {c['harm']['tasks_up']} worse, {fmt_p(c['harm']['permutation_p'])})")
+        if ext and ext["harm"]["excludes_zero"] and ext["harm"]["difference"] < 0:
+            line += f", and from {ext['harm']['from']:g} to {ext['harm']['to']:g} on {v['sets']['external']['tasks']} tasks adapted from an outside benchmark ({ext['harm']['tasks_down']} better, {ext['harm']['tasks_up']} worse)"
+        line += "."
+        if held_sql:
+            arms = held_sql["arms"]
+            line += (f" Giving the agent every guardrail in its prompt helps too: harm {arms['rules_in_prompt']['harm']:g} on the {held_sql['tasks']} held-out SQL tasks, against {arms['unread']['harm']:g} through Shadow Run. "
+                     "Only Shadow Run also shows a person what the plan really does before prod, and contains a hostile plan.")
+        out.append(line + " (`bench/stats.json`)")
     else:
         out.append(f"- **Approved unread, harm went from {d['harm']:g} to {u['harm']:g}** ({fmt_ci(c['harm'])}, {fmt_p(c['harm']['permutation_p'])}). (`bench/stats.json`)")
     out.append(
-        f"- **Nothing harmful reached prod unseen: {held['harm_on_prod']['mean']:g} of {h['tasks']}, against {d['harm']:g} for the agent alone.** "
+        f"- **By design, nothing reaches prod unseen: {held['harm_on_prod']['mean']:g} of {h['tasks']} did harm, against {d['harm']:g} for the agent alone.** "
         + f"{held['risky_held']['mean']:g} of {h['tasks']} risky plans waited for a person with a measured report of what each would do"
         + (", and nothing that changed anything was applied without one" if alone_changed == 0 else f", and the {alone_changed} that changed something alone stayed inside the team's named low-risk list")
         + " (`bench/results.json`)."
     )
-    ext = (v["sets"].get("external") or {}).get("compare", {}).get("unread_vs_direct")
-    if ext and ext["harm"]["excludes_zero"] and ext["harm"]["difference"] < 0:
-        out.append(f"- **On {v['sets']['external']['tasks']} tasks adapted from an outside benchmark (SABER), harm went from {ext['harm']['from']:g} to {ext['harm']['to']:g}**, also holding task by task ({fmt_p(ext['harm']['permutation_p'])}), so the effect isn't only on our own tasks.")
-    reh = held.get("rehearsal_s") or {}
-    price = r.get("vx1_usd_per_hour")
-    if reh.get("p50") and price:
-        out.append(f"- **Fast and cheap enough to sit in the loop.** On the demo database, a rehearsal on a full clone takes {reh['p50']:g} s at the median and about ${price * reh['p50'] / 3600:.6f} of VX1 time at list price, boot to destroy. A whole held-out task, every model call and retry included, takes {held['seconds_per_task']:g} s and costs ${held['cost_per_task_usd']:g} of inference.")
     ev = load("evasion.json")
     if ev and ev.get("detection"):
-        a, f_ = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
-        ex = (ev["rates"].get("by_split") or {}).get("external")
-        out.append(
-            "- **It found a failure mode a rule can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely. "
-            + (f"On the outside-benchmark tasks, plans that passed only after breaking a rule did harm {ex['passed_after_breaking_a_rule']['harmful_pct']}% of the time ({ex['passed_after_breaking_a_rule']['harmful']} of {ex['passed_after_breaking_a_rule']['plans']}), against {ex['passed_first_time']['harmful_pct']}% for first-time passes; across every recorded run, {a['harmful_pct']}% against {f_['harmful_pct']}%. "
-               if ex else f"Plans that passed only after breaking a rule were harmful {a['harmful_pct']}% of the time, against {f_['harmful_pct']}% for first-time passes. ")
-            + "So Shadow Run now sends every such plan to a second model, alongside a measured column check. Each split and what each check catches are in [what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it) (`bench/evasion.json`)."
-        )
+        aft = ev.get("after") or {}
+        ex_h, he_h = (aft.get("external") or {}).get("harm"), (aft.get("heldout") or {}).get("harm")
+        line = ("- **It found a failure mode a rule can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely, "
+                "as in [the recorded run](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it). ")
+        if ex_h and he_h and ex_h["difference"] < 0:
+            line += (f"The two changes it led to cut harm, approved unread, from {ex_h['from']:g} to {ex_h['to']:g} on the outside-benchmark tasks ({ex_h['tasks_down']} tasks better, {ex_h['tasks_up']} worse) "
+                     f"and from {he_h['from']:g} to {he_h['to']:g} on the held-out tasks ({he_h['tasks_down']} better, {he_h['tasks_up']} worse)")
+        line += " (`bench/evasion.json`)."
+        out.append(line)
     rt, inc, cl = load("redteam.json"), load("incidents.json"), load("controls.json")
     parts = []
     if rt:
@@ -865,16 +869,19 @@ def block_summary() -> str:
     if parts:
         out.append("- " + "; ".join(parts) + " (`bench/redteam.json`, `bench/incidents.json`, `bench/controls.json`).")
     line = vultr_line(load("vultr.json"))
+    reh = held.get("rehearsal_s") or {}
     if line:
-        out.append(f"- **On Vultr end to end:** {line} (`bench/vultr.json`).")
+        speed = (f" On the demo database a rehearsal takes {reh['p50']:g} s at the median, and a whole held-out task {held['seconds_per_task']:g} s and ${held['cost_per_task_usd']:g} of inference."
+                 if reh.get("p50") else "")
+        out.append(f"- **On Vultr end to end:** {line}.{speed} (`bench/vultr.json`, `bench/results.json`)")
     mp = ROOT / "docs" / "market.json"
     if mp.exists():
         mk = json.loads(mp.read_text())
         dv, g, price = mk["developers_using_agents"], mk["guardian_share"], mk["price"]["usd_per_database_month"]
         out.append(
-            f"- **Who pays:** whoever owns the database at a team using coding agents, and {dv['weekly_pct']}% of professional developers now use them weekly ([{dv['source']}]({dv['url']})). "
-            f"It starts free as a pull request Action, then ${price} a month per protected database"
-            + (f", against a measured variable cost of about ${economics()['per_k']:.2f} per 1,000 rehearsed tasks ([unit economics](#unit-economics))" if economics() else "")
+            f"- **Who pays:** the engineer who owns production Postgres at a team using coding agents, and {dv['weekly_pct']}% of professional developers now use them weekly ([{dv['source']}]({dv['url']})). "
+            f"Shadow Run is open source and free to self-host on Vultr; hosted, it's ${price} a month per protected database"
+            + (f", against ${economics()['fixed']:.0f} a month of Vultr list price per deployment plus a measured ${economics()['per_k']:.2f} per 1,000 rehearsed tasks ([unit economics](#unit-economics))" if (economics() or {}).get("fixed") else "")
             + f". [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, "
             f"to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']} ([who this is for](#who-this-is-for), [market](#market-and-competition))."
         )
@@ -903,6 +910,7 @@ def economics() -> dict | None:
     out = dict(tasks=s.get("risky_tasks", 0) + s.get("safe_tasks", 0), inf=inf, secs=secs, vx1=vx1, vx1_task=vx1_task, per_task=per_task, per_k=per_task * 1000, price=price, fixed=fixed)
     if fixed is not None:
         out["margin_one_db"] = (price - fixed - per_task * tasks) / price
+        out["margin_k"] = {k: (k * price - fixed - k * per_task * tasks) / (k * price) for k in (1, 2, 3)}
         out["tasks_to_cost"] = (price - fixed) / per_task
     return out
 
@@ -920,11 +928,13 @@ def block_economics() -> str:
         rows += [
             ["Fixed cost of one deployment at Vultr's list price: the control VM, the VX1 host and the bucket. Prod is the customer's own database", f"${e['fixed']:.0f} a month"],
             [f"Margin on one hosted database at ${e['price']} a month and 1,000 rehearsed tasks, fixed costs included", f"{e['margin_one_db'] * 100:.0f}%"],
+            ["...with two databases on the same deployment", f"{e['margin_k'][2] * 100:.0f}%"],
+            ["...with three", f"{e['margin_k'][3] * 100:.0f}%"],
             ["Rehearsed tasks a month before one database's total cost reaches its price", f"about {round(e['tasks_to_cost'], -3):,.0f}"],
         ]
     return (table(["Cost to serve", "Measured"], rows)
             + "\n\nThe price is our plan. The costs are measured: inference from the benchmark's own records, the VX1 host, the control VM and the bucket at Vultr's list prices (`bench/results.json`, `bench/vultr.json`). "
-            "A second database on the same deployment adds only its variable cost.")
+            "A deployment serves one team, and a second database on it adds only its variable cost.")
 
 def block_microvm() -> str:
     """Why the rehearsal is a microVM and not a database transaction, from the incident replays and the red team."""
@@ -967,11 +977,23 @@ def block_business() -> str:
         ]),
         "",
         *([size_line(), ""] if size_line() else []),
+        "**Go to market.** The free Action goes where migrations are reviewed: every pull request comment shows what the migration really does and ends with the MCP setup for the agent (`control/cli.py`). "
+        "Teams that adopt it self-host on their own Vultr account; teams that don't want to run it move to hosted, per protected database.",
+        "",
         "**Revenue.** " + " ".join(m["revenue"]),
         "",
         "**What comes next.** " + " ".join(m["next"]),
     ]
     return "\n".join(lines)
+
+def kvm_line() -> str:
+    k = load("kvm_tests.json")
+    if not k or not k.get("tests"):
+        return ""
+    when = (k.get("at") or "")[:16].replace("T", " ")
+    return (f" The KVM tests, which CI can't run, last ran on {k['host']}: {k['passed']} of {k['tests']} passed in {k['seconds']:g} s, at {when} "
+            f"(`bench/kvm_tests.json`, re-run: `{k['rerun']}`).")
+
 
 def block_tests() -> str:
     """How much of the code the tests reach, counted by pytest itself, so the number can't drift from the suite."""
@@ -991,6 +1013,7 @@ def block_tests() -> str:
         "the proved undo and the containment checks. The rest cover the static gate, plan hashing, approvals, apply and roll back on drift, the budget, the API, "
         "the CLI, the MCP tools and the benchmark harness, many of them against a real Postgres. CI runs every test that doesn't need `/dev/kvm` on each push, and checks "
         "that the README's charts still match the benchmark files. Run them with `pytest`, or `pytest -m 'not kvm'` on a machine without KVM."
+        + kvm_line()
     )
 
 BLOCKS = {

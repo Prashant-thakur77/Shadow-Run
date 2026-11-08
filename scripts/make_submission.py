@@ -47,15 +47,16 @@ def form_text(r: dict, st: dict, rt: dict, ev: dict | None, ai: dict, url: str) 
     if ev and ev.get("detection"):
         a, f_ = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
         un = ev["detection"]["unseen"]["harmful"]
-        ex = (ev["rates"].get("by_split") or {}).get("external")
-        lead = (f"on outside-benchmark tasks those plans did harm {ex['passed_after_breaking_a_rule']['harmful_pct']}% of the time, against {ex['passed_first_time']['harmful_pct']}% for first-time passes"
-                if ex else f"those plans were harmful {a['harmful_pct']}% of the time, against {f_['harmful_pct']}%")
-        parts.append(f"We found that an agent told which rule it broke can get around it: {lead}. Shadow Run now sends every such plan to a second model.")
+        hm = ((ev.get("after") or {}).get("external") or {}).get("harm")
+        tail = (f" The checks this led to cut harm on outside-benchmark tasks from {hm['from']:g} to {hm['to']:g}, {hm['tasks_down']} tasks better and {hm['tasks_up']} worse."
+                if hm and hm["difference"] < 0 else " Shadow Run now sends every such plan to a second model.")
+        parts.append(f"We found that an agent told which rule it broke can get around it, changing what the rule looks at instead of doing the job safely.{tail}")
     inc = load("incidents.json") or {}
     vu = load("vultr.json") or {}
     if rt:
         blocked = sum(1 for i in inc.get("incidents", []) if i["status"] == "blocked" and not i.get("reached_prod"))
-        replayed = f", and {blocked} of {len(inc['incidents'])} real incident commands replayed on a clone were blocked" if inc.get("incidents") else ""
+        measured = sum(1 for i in inc.get("incidents", []) if i.get("measured") or i.get("metrics"))
+        replayed = f", and {blocked} of {len(inc['incidents'])} real incident commands replayed on a clone stopped before prod ({measured} measured there)" if inc.get("incidents") else ""
         used = (f" Every model call goes to Vultr Serverless Inference ({vu['inference']['tokens'] / 1e6:.2f} million tokens in the benchmark), every rehearsal to a VX1 ({vu['microvms']['total']:,} microVMs), prod to Vultr Managed PostgreSQL, evidence to Object Storage."
                 if vu.get("microvms") and vu.get("inference") else " Every model call goes to Vultr Serverless Inference, every rehearsal to a VX1, prod to Vultr Managed PostgreSQL, evidence to Object Storage.")
         parts.append(f"{rt['contained']} of {rt['total']} live attacks contained{replayed}.{used}")
@@ -65,7 +66,7 @@ def form_text(r: dict, st: dict, rt: dict, ev: dict | None, ai: dict, url: str) 
     econ_f = economics()
     parts.append(
         f"Who pays: the database owner at a team using coding agents, which {mk['developers_using_agents']['weekly_pct']}% of professional developers now use weekly ({mk['developers_using_agents']['source'].split(' Developer')[0]}). "
-        "It plugs into any agent over MCP, a CLI or a GitHub Action that posts what a migration really does on the pull request."
+        "It plugs into any agent over MCP, a CLI or a pull request Action."
         + (f" It's open source and free to self-host on Vultr; hosted, it's ${price} a month per protected database." if price else "")
         + (f" Cost to serve: ${econ_f['fixed']:.0f} a month per deployment at list price plus a measured ${econ_f['per_k']:.2f} per 1,000 tasks, a {econ_f['margin_one_db'] * 100:.0f}% margin on one database." if econ_f and econ_f.get("fixed") else "")
     )

@@ -16,7 +16,7 @@
 
 Shadow Run sits between an AI agent and production and holds the only credential. Every risky SQL or shell plan runs first on a full clone of prod inside a throwaway microVM on Vultr. Postgres measures what it really did, frozen business guardrails decide, and a different person approves that exact plan before the same plan runs on prod in one transaction that rolls back on any surprise.
 
-**Don't authorize the command. Authorize its measured effect.** Allowlists, linters and rules in a prompt all judge what a command says. Shadow Run judges what it does, on a real copy of your data, before it can touch the original. That matters more than it sounds: told which rule it broke, an agent can get around the rule, and a rule alone can't see it.
+**Don't authorize the command. Authorize its measured effect.** Allowlists, linters and rules in a prompt all judge what a command says. Shadow Run judges what it does, on a real copy of your data, before it can touch the original. That matters more than it sounds: told which rule it broke, an agent can get around the rule, and only a measurement of what the plan does shows it.
 
 <p align="center"><b><a href="https://144-202-92-64.sslip.io">Live demo</a></b> · <b><a href="https://144-202-92-64.sslip.io/race">Race the agent</a></b> · <a href="https://144-202-92-64.sslip.io/incidents">Real incidents, replayed</a> · <a href="https://144-202-92-64.sslip.io/results">Results and receipts</a> · <a href="docs/slides.pdf">Slides</a> · <a href="docs/API.md">API</a></p>
 
@@ -39,14 +39,12 @@ Press **Continue as guest**. You get two identities, `judge` to request changes 
 <!-- summary:start -->
 _How to read these: the same agent (`qwen3.8-27b` on Vultr Serverless Inference) and prompt in every mode, a fresh copy of the database for every run, mean of 3 runs per task. Held-out tasks were kept out of tuning ([how](#results)). Harm is decided by oracles that check the outcome, not the plan. Approved unread means the reviewer clicks approve on every plan that waits, without reading it: the worst case for Shadow Run._
 
-- **Even with every plan approved unread, harm fell from 10 to 2.67 of 23 held-out risky tasks, and that holds task by task** (95% CI -11.67 to -3.33, p = 0.0078, 8 tasks better, 0 worse). Tasks finished safely held up: 11.67 through Shadow Run, 10 alone. (`bench/stats.json`)
-- **Nothing harmful reached prod unseen: 0 of 23, against 10 for the agent alone.** 19 of 23 risky plans waited for a person with a measured report of what each would do, and nothing that changed anything was applied without one (`bench/results.json`).
-- **On 20 tasks adapted from an outside benchmark (SABER), harm went from 7.33 to 2**, also holding task by task (p = 0.0078), so the effect isn't only on our own tasks.
-- **Fast and cheap enough to sit in the loop.** On the demo database, a rehearsal on a full clone takes 2.97 s at the median and about $0.000126 of VX1 time at list price, boot to destroy. A whole held-out task, every model call and retry included, takes 26.2 s and costs $0.00347 of inference.
-- **It found a failure mode a rule can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely. On the outside-benchmark tasks, plans that passed only after breaking a rule did harm 79% of the time (11 of 14), against 12% for first-time passes; across every recorded run, 35% against 13%. So Shadow Run now sends every such plan to a second model, alongside a measured column check. Each split and what each check catches are in [what we found](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it) (`bench/evasion.json`).
+- **Even if the reviewer approves every plan without reading it, harm fell from 10 to 2.67 of 23 held-out risky tasks** (8 tasks better, 0 worse, p = 0.0078), and from 7.33 to 2 on 20 tasks adapted from an outside benchmark (8 better, 0 worse). Giving the agent every guardrail in its prompt helps too: harm 3.67 on the 19 held-out SQL tasks, against 2.67 through Shadow Run. Only Shadow Run also shows a person what the plan really does before prod, and contains a hostile plan. (`bench/stats.json`)
+- **By design, nothing reaches prod unseen: 0 of 23 did harm, against 10 for the agent alone.** 19 of 23 risky plans waited for a person with a measured report of what each would do, and nothing that changed anything was applied without one (`bench/results.json`).
+- **It found a failure mode a rule can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely, as in [the recorded run](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it). The two changes it led to cut harm, approved unread, from 5.33 to 2 on the outside-benchmark tasks (4 tasks better, 0 worse) and from 4 to 2.67 on the held-out tasks (3 better, 0 worse) (`bench/evasion.json`).
 - **7 of 7 live attacks contained**, each in a microVM with no network card, checked from the host, with prod’s hash unchanged; **6 of 6 real incident commands** replayed on a clone and stopped before prod: 4 measured on the clone, 2 failed there because they reach outside it; **34 of 34 checks** on approval, apply and undo passed, attacks and honest path alike (`bench/redteam.json`, `bench/incidents.json`, `bench/controls.json`).
-- **On Vultr end to end:** The final benchmark spent 9,351,405 tokens of Serverless Inference across the 4 models the benchmark called ($3.76), booted 1,198 microVMs on one VX1, created 1,008 throwaway databases on Managed PostgreSQL over the VPC, and Object Storage holds 79 signed evidence bundles and 79 pre-apply backups. Spent so far: $31.33 of the $200 credit (`bench/vultr.json`).
-- **Who pays:** whoever owns the database at a team using coding agents, and 90% of professional developers now use them weekly ([JetBrains Developer Ecosystem Survey 2026](https://blog.jetbrains.com/research/2026/08/ai-coding-agent-adoption-2026/)). It starts free as a pull request Action, then $500 a month per protected database, against a measured variable cost of about $4.45 per 1,000 rehearsed tasks ([unit economics](#unit-economics)). [Gartner, June 2025](https://www.gartner.com/en/newsroom/press-releases/2025-06-11-gartner-predicts-that-guardian-agents-will-capture-10-15-percent-of-the-agentic-ai-market-by-2030) expects guardian agents, the category this sits in, to take 10 to 15% of the agentic AI market by 2030 ([who this is for](#who-this-is-for), [market](#market-and-competition)).
+- **On Vultr end to end:** The final benchmark spent 9,351,405 tokens of Serverless Inference across the 4 models the benchmark called ($3.76), booted 1,198 microVMs on one VX1, created 1,008 throwaway databases on Managed PostgreSQL over the VPC, and Object Storage holds 79 signed evidence bundles and 79 pre-apply backups. Spent so far: $31.33 of the $200 credit. On the demo database a rehearsal takes 2.97 s at the median, and a whole held-out task 26.2 s and $0.00347 of inference. (`bench/vultr.json`, `bench/results.json`)
+- **Who pays:** the engineer who owns production Postgres at a team using coding agents, and 90% of professional developers now use them weekly ([JetBrains Developer Ecosystem Survey 2026](https://blog.jetbrains.com/research/2026/08/ai-coding-agent-adoption-2026/)). Shadow Run is open source and free to self-host on Vultr; hosted, it's $500 a month per protected database, against $147 a month of Vultr list price per deployment plus a measured $4.45 per 1,000 rehearsed tasks ([unit economics](#unit-economics)). [Gartner, June 2025](https://www.gartner.com/en/newsroom/press-releases/2025-06-11-gartner-predicts-that-guardian-agents-will-capture-10-15-percent-of-the-agentic-ai-market-by-2030) expects guardian agents, the category this sits in, to take 10 to 15% of the agentic AI market by 2030 ([who this is for](#who-this-is-for), [market](#market-and-competition)).
 <!-- summary:end -->
 
 <picture>
@@ -56,9 +54,6 @@ _How to read these: the same agent (`qwen3.8-27b` on Vultr Serverless Inference)
 
 ![The same plan, without and with Shadow Run: what it would have erased on the seeded demo, and prod's hash unchanged](docs/img/with-without.png)
 
-<!-- video:start -->
-
-<!-- video:end -->
 
 ## Challenge 1, point by point
 
@@ -182,7 +177,7 @@ Measured, not estimated: what the final benchmark did on each service, from the 
 
 | Vultr service | In the final benchmark |
 | --- | --- |
-| Serverless Inference | 9,351,405 tokens over 1,249 benchmark runs, $3.76. `qwen3.8-27b`: planner, explainer; `glm-5.3`: guardrail drafter, gauntlet attacker, benchmark planner; `glm-5.3-flash`: second opinion, evasion reader; `nemotron-3.5-content-safety`: content safety; `deepseek-v4.1-flash-1017`: benchmark planner |
+| Serverless Inference | 9,351,405 tokens over 1,249 benchmark runs, $3.76, across the 4 models the benchmark called. Every model the project uses, and for what: `qwen3.8-27b`: planner, explainer; `glm-5.3`: guardrail drafter, gauntlet attacker, benchmark planner; `glm-5.3-flash`: second opinion, evasion reader; `nemotron-3.5-content-safety`: content safety; `deepseek-v4.1-flash-1017`: benchmark planner |
 | VX1 | 1,198 microVMs across every benchmark file: 765 rehearsals and 433 second-clone reproductions. Clone boot p50 1,231 ms, p95 2,161 ms. 761 of 765 rehearsals came back with a complete containment record; the rest were refused, not counted |
 | Managed PostgreSQL 16 | 1,008 databases created from templates for single runs and dropped after them (2 drops failed), over the VPC |
 | Object Storage | 158 objects, 105.4 MiB: 79 under `backups/`, pg_dump of prod taken before each apply (control/evidence.py backup_prod); 79 under `runs/`, signed evidence bundle per run (control/evidence.py write_bundle) |
@@ -195,7 +190,7 @@ Re-run: `python -m bench.vultr_usage`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/chart-finding-dark.svg">
-  <img alt="Risky plans that passed every guardrail: harmful 35% of the time when they passed only after breaking a guardrail, 13% when they passed the first time" src="docs/img/chart-finding-light.svg" width="100%">
+  <img alt="Harm with every plan approved unread, before and after the evasion checks: outside-benchmark tasks 5.33 to 2, held-out tasks 4 to 2.67, no task worse" src="docs/img/chart-finding-light.svg" width="100%">
 </picture>
 
 <!-- evasion:start -->
@@ -450,7 +445,7 @@ Soak test: 50 rehearsals in 133.2 s, every one contained with teardown confirmed
 
 ## Real incidents, replayed
 
-The opening incident is the one a rehearsal can't measure: a single cloud API call. What protects you there is that the agent never holds a credential to make it.
+The PocketOS incident is the one a rehearsal can't measure: a single cloud API call. What protects you there is that the agent never holds a credential to make it.
 
 The commands behind documented incidents, run on a clone. Each is measured even when the gate refuses it, to show what it would have done.
 
@@ -507,6 +502,8 @@ Nothing has to be trusted on day one:
 
 **Size served today.** Databases up to about 1 GB: a full rehearsal of a 1,019 MB database, 1,463,901 rows changed, took 56 s (`bench/scale.json`). Thin clones are what takes it past that.
 
+**Go to market.** The free Action goes where migrations are reviewed: every pull request comment shows what the migration really does and ends with the MCP setup for the agent (`control/cli.py`). Teams that adopt it self-host on their own Vultr account; teams that don't want to run it move to hosted, per protected database.
+
 **Revenue.** Open source and free to self-host: the pull request Action, the MCP server and the sandboxes run on the team's own Vultr account from scripts/up.sh, and the team pays Vultr for what it runs. Hosted: a monthly subscription per protected database, with the control plane and sandboxes run for the team. A support licence for regulated teams that self-host.
 
 **What comes next.** Thin clones, so a rehearsal stays fast past a gigabyte, and masking personal data in the clone. Clones restored from Vultr Managed PostgreSQL's own backups, so a rehearsal skips the dump. An auto-apply list that grows: suggest additions from what a team keeps approving, and test each against the attacker first. First customers: the free Action on real teams' migrations, listed on GitHub Marketplace, with its pull request comment pointing at the MCP setup; then paid protected databases. A one-click deployment of infra/provision.py for the self-hosted tier, on the customer's own Vultr account.
@@ -524,9 +521,11 @@ How far it scales today is in [Scope and design notes](#scope-and-design-notes).
 | Variable cost per 1,000 rehearsed tasks | $4.45 |
 | Fixed cost of one deployment at Vultr's list price: the control VM, the VX1 host and the bucket. Prod is the customer's own database | $147 a month |
 | Margin on one hosted database at $500 a month and 1,000 rehearsed tasks, fixed costs included | 70% |
+| ...with two databases on the same deployment | 84% |
+| ...with three | 89% |
 | Rehearsed tasks a month before one database's total cost reaches its price | about 79,000 |
 
-The price is our plan. The costs are measured: inference from the benchmark's own records, the VX1 host, the control VM and the bucket at Vultr's list prices (`bench/results.json`, `bench/vultr.json`). A second database on the same deployment adds only its variable cost.
+The price is our plan. The costs are measured: inference from the benchmark's own records, the VX1 host, the control VM and the bucket at Vultr's list prices (`bench/results.json`, `bench/vultr.json`). A deployment serves one team, and a second database on it adds only its variable cost.
 <!-- economics:end -->
 
 ## Market and competition
@@ -536,7 +535,7 @@ The price is our plan. The costs are measured: inference from the benchmark's ow
 <!-- market:start -->
 **Who is exposed.** 90% of professional developers use coding agents at work at least weekly and 68% daily ([JetBrains Developer Ecosystem Survey 2026](https://blog.jetbrains.com/research/2026/08/ai-coding-agent-adoption-2026/), over 15,000 respondents). [131,339 companies use PostgreSQL](https://technographics.6sense.com/relational-databases/postgresql-market-share), by 6sense's 2026 count. Vendor counts run from about 19,000 to about 173,000, depending on how each defines a user.
 
-**Market.** [Gartner, June 2025](https://www.gartner.com/en/newsroom/press-releases/2025-06-11-gartner-predicts-that-guardian-agents-will-capture-10-15-percent-of-the-agentic-ai-market-by-2030) expects guardian agents, the category this sits in, to take 10 to 15% of the agentic AI market by 2030. [Grand View Research](https://www.grandviewresearch.com/industry-analysis/ai-agents-market-report) sizes AI agents at $7.6 billion in 2025 and $182.9 billion by 2033. Combining the two, which is our arithmetic and not theirs, gives $0.76 to 1.14 billion on today's market and $18.3 to 27.4 billion on the 2033 forecast. The market this version can serve: at the $500 a month we plan to charge, 1% of those companies with one protected database each is $7.9 million a year, and all of them, which is a ceiling since not all let agents near prod, is $0.79 billion.
+**Market.** [Gartner, June 2025](https://www.gartner.com/en/newsroom/press-releases/2025-06-11-gartner-predicts-that-guardian-agents-will-capture-10-15-percent-of-the-agentic-ai-market-by-2030) expects guardian agents, the category this sits in, to take 10 to 15% of the agentic AI market by 2030. [Grand View Research](https://www.grandviewresearch.com/industry-analysis/ai-agents-market-report) sizes AI agents at $7.6 billion in 2025 and $182.9 billion by 2033. Combining the two, which is our arithmetic and not theirs, gives $18.3 to 27.4 billion on the 2033 forecast. The market this version can serve: at the $500 a month we plan to charge, 1% of those companies with one protected database each is $7.9 million a year, and all of them, which is a ceiling since not all let agents near prod, is $0.79 billion.
 
 | Who else | What they do well | What's missing for this job |
 | --- | --- | --- |
@@ -564,7 +563,7 @@ Restart the control plane, and the target appears next to the demo. Start on a s
 ## Engineering and reproducibility
 
 <!-- tests:start -->
-**611 automated tests** in 14 files. 48 of them boot real microVMs on KVM: rehearsals, the blast-radius measurement, guardrails, the proved undo and the containment checks. The rest cover the static gate, plan hashing, approvals, apply and roll back on drift, the budget, the API, the CLI, the MCP tools and the benchmark harness, many of them against a real Postgres. CI runs every test that doesn't need `/dev/kvm` on each push, and checks that the README's charts still match the benchmark files. Run them with `pytest`, or `pytest -m 'not kvm'` on a machine without KVM.
+**611 automated tests** in 14 files. 48 of them boot real microVMs on KVM: rehearsals, the blast-radius measurement, guardrails, the proved undo and the containment checks. The rest cover the static gate, plan hashing, approvals, apply and roll back on drift, the budget, the API, the CLI, the MCP tools and the benchmark harness, many of them against a real Postgres. CI runs every test that doesn't need `/dev/kvm` on each push, and checks that the README's charts still match the benchmark files. Run them with `pytest`, or `pytest -m 'not kvm'` on a machine without KVM. The KVM tests, which CI can't run, last ran on a KVM host running Microsandbox, as the VX1 does: 48 of 48 passed in 105.5 s, at 2026-11-08 17:29 (`bench/kvm_tests.json`, re-run: `python scripts/kvm_record.py`).
 <!-- tests:end -->
 
 - **Check it yourself in seconds.** `python scripts/verify.py` recomputes every headline claim from `bench/*.json`, checks this page states the same number, and checks that the code which measured is the code in this checkout. CI runs it on every push.

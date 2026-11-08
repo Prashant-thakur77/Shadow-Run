@@ -1,0 +1,11 @@
+{
+ "at": "2026-11-08T17:29:54.502936+05:30",
+ "tests": 48,
+ "passed": 48,
+ "failures": 0,
+ "errors": 0,
+ "skipped": 0,
+ "seconds": 105.5,
+ "host": "a KVM host running Microsandbox, as the VX1 does",
+ "rerun": "python scripts/kvm_record.py"
+}

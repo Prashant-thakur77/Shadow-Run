@@ -67,13 +67,14 @@ def test_the_harm_chart_shows_the_measured_values():
         assert f"p = {sets[key]['compare']['unread_vs_direct']['harm']['permutation_p']:g}" in svg
 
 
-def test_the_finding_chart_shows_the_measured_rates():
+def test_the_finding_chart_shows_the_measured_change():
     m = script("make_charts")
     svg = m.build()[m.OUT / "chart-finding-dark.svg"]
-    r = bench("evasion.json")["rates"]
-    for row in (r["passed_after_breaking_a_rule"], r["passed_first_time"]):
-        assert f"{row['harmful_pct']}%  ({row['harmful']} of {row['plans']})" in svg
-
+    aft = bench("evasion.json")["after"]
+    for key in ("external", "heldout"):
+        hm = aft[key]["harm"]
+        assert f">{hm['from']:g}<" in svg and f">{hm['to']:g}<" in svg
+        assert f"{hm['tasks_down']} better, {hm['tasks_up']} worse" in svg
 
 def test_the_numbers_chart_shows_the_measured_counts():
     m = script("make_charts")

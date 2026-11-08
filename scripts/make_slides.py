@@ -73,7 +73,7 @@ page = (OUT / 'slides/found.html').read_text()
 for k, v in {'request': esc(ex['request']), 'ladder': ladder, 'after_pct': ev['rates']['passed_after_breaking_a_rule']['harmful_pct'], 'first_pct': ev['rates']['passed_first_time']['harmful_pct'],
              'unseen_caught': un['harmful']['caught'], 'unseen_total': un['harmful']['total'], 'unseen_false': un['good']['caught'], 'unseen_good': un['good']['total'],
              'safe_broke': ev['rates']['safe_plans_that_broke_a_rule_first'], 'safe_plans': ev['rates']['safe_plans'],
-             'ext_after': ev['rates']['by_split']['external']['passed_after_breaking_a_rule']['harmful_pct'], 'ext_first': ev['rates']['by_split']['external']['passed_first_time']['harmful_pct']}.items():
+             'ax_from': f"{ev['after']['external']['harm']['from']:g}", 'ax_to': f"{ev['after']['external']['harm']['to']:g}", 'ax_down': ev['after']['external']['harm']['tasks_down'], 'ax_up': ev['after']['external']['harm']['tasks_up']}.items():
     page = page.replace(f'[{k}]', str(v))
 (OUT / 'slides/found.html').write_text(page)
 page = (OUT / 'slides/containment.html').read_text()

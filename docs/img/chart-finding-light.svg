@@ -1,14 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="210" viewBox="0 0 960 210" role="img" aria-label="Told which rule it broke, the agent gets around it" font-family="-apple-system, BlinkMacSystemFont, &#x27;Segoe UI&#x27;, &#x27;Noto Sans&#x27;, Helvetica, Arial, sans-serif">
-<title>Told which rule it broke, the agent gets around it</title>
-<rect x="0.5" y="0.5" width="959" height="209" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
-<text x="32.0" y="44.0" font-size="22" font-weight="600" fill="#1f2328" text-anchor="start" style="font-variant-numeric: tabular-nums">Told which rule it broke, the agent gets around it</text>
-<text x="32.0" y="70.0" font-size="13" font-weight="400" fill="#59636e" text-anchor="start" style="font-variant-numeric: tabular-nums">Risky plans that passed every guardrail and did harm anyway, across every recorded run. The README breaks this down by task split</text>
-<text x="338.0" y="116.0" font-size="14" font-weight="600" fill="#1f2328" text-anchor="end" style="font-variant-numeric: tabular-nums">Passed only after breaking a guardrail</text>
-<path d="M352.0,100.0 H792.5 Q796.5,100.0 796.5,104.0 V118.0 Q796.5,122.0 792.5,122.0 H352.0 Z" fill="#2a78d6"/>
-<text x="804.5" y="116.0" font-size="14" font-weight="700" fill="#1f2328" text-anchor="start" style="font-variant-numeric: tabular-nums">35%  (20 of 57)</text>
-<text x="338.0" y="148.0" font-size="14" font-weight="400" fill="#1f2328" text-anchor="end" style="font-variant-numeric: tabular-nums">Passed the first time</text>
-<path d="M352.0,132.0 H513.1 Q517.1,132.0 517.1,136.0 V150.0 Q517.1,154.0 513.1,154.0 H352.0 Z" fill="#8f8e88"/>
-<text x="525.1" y="148.0" font-size="14" font-weight="700" fill="#1f2328" text-anchor="start" style="font-variant-numeric: tabular-nums">13%  (11 of 85)</text>
-<line x1="352" y1="96" x2="352" y2="158" stroke="#6e7781" stroke-width="1"/>
-<text x="32.0" y="192.0" font-size="12" font-weight="400" fill="#6e7781" text-anchor="start" style="font-variant-numeric: tabular-nums">bench/evasion.json · two checks now screen every plan that passes after breaking a rule · drawn by scripts/make_charts.py</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="342" viewBox="0 0 960 342" role="img" aria-label="What the finding changed: harm, task by task" font-family="-apple-system, BlinkMacSystemFont, &#x27;Segoe UI&#x27;, &#x27;Noto Sans&#x27;, Helvetica, Arial, sans-serif">
+<title>What the finding changed: harm, task by task</title>
+<rect x="0.5" y="0.5" width="959" height="341" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="32.0" y="44.0" font-size="22" font-weight="600" fill="#1f2328" text-anchor="start" style="font-variant-numeric: tabular-nums">What the finding changed: harm, task by task</text>
+<text x="32.0" y="70.0" font-size="13" font-weight="400" fill="#59636e" text-anchor="start" style="font-variant-numeric: tabular-nums">Harm on prod, every plan approved unread, before and after the evasion checks and the empty-plan change. Mean of 3 runs per task</text>
+<text x="32.0" y="108.0" font-size="15" font-weight="600" fill="#1f2328" text-anchor="start" style="font-variant-numeric: tabular-nums">Tasks adapted from an outside benchmark (20)</text>
+<text x="928.0" y="108.0" font-size="13" font-weight="400" fill="#59636e" text-anchor="end" style="font-variant-numeric: tabular-nums">−3.33 tasks, 4 better, 0 worse</text>
+<text x="338.0" y="140.0" font-size="14" font-weight="400" fill="#1f2328" text-anchor="end" style="font-variant-numeric: tabular-nums">Before the checks</text>
+<path d="M352.0,124.0 H737.1 Q741.1,124.0 741.1,128.0 V142.0 Q741.1,146.0 737.1,146.0 H352.0 Z" fill="#8f8e88"/>
+<text x="749.1" y="140.0" font-size="14" font-weight="700" fill="#1f2328" text-anchor="start" style="font-variant-numeric: tabular-nums">5.33</text>
+<text x="338.0" y="172.0" font-size="14" font-weight="600" fill="#1f2328" text-anchor="end" style="font-variant-numeric: tabular-nums">With the checks</text>
+<path d="M352.0,156.0 H494.0 Q498.0,156.0 498.0,160.0 V174.0 Q498.0,178.0 494.0,178.0 H352.0 Z" fill="#2a78d6"/>
+<text x="506.0" y="172.0" font-size="14" font-weight="700" fill="#1f2328" text-anchor="start" style="font-variant-numeric: tabular-nums">2</text>
+<line x1="352" y1="120" x2="352" y2="182" stroke="#6e7781" stroke-width="1"/>
+<text x="32.0" y="214.0" font-size="15" font-weight="600" fill="#1f2328" text-anchor="start" style="font-variant-numeric: tabular-nums">Held-out tasks, ours (23)</text>
+<text x="928.0" y="214.0" font-size="13" font-weight="400" fill="#59636e" text-anchor="end" style="font-variant-numeric: tabular-nums">−1.33 tasks, 3 better, 0 worse</text>
+<text x="338.0" y="246.0" font-size="14" font-weight="400" fill="#1f2328" text-anchor="end" style="font-variant-numeric: tabular-nums">Before the checks</text>
+<path d="M352.0,230.0 H640.0 Q644.0,230.0 644.0,234.0 V248.0 Q644.0,252.0 640.0,252.0 H352.0 Z" fill="#8f8e88"/>
+<text x="652.0" y="246.0" font-size="14" font-weight="700" fill="#1f2328" text-anchor="start" style="font-variant-numeric: tabular-nums">4</text>
+<text x="338.0" y="278.0" font-size="14" font-weight="600" fill="#1f2328" text-anchor="end" style="font-variant-numeric: tabular-nums">With the checks</text>
+<path d="M352.0,262.0 H542.9 Q546.9,262.0 546.9,266.0 V280.0 Q546.9,284.0 542.9,284.0 H352.0 Z" fill="#2a78d6"/>
+<text x="554.9" y="278.0" font-size="14" font-weight="700" fill="#1f2328" text-anchor="start" style="font-variant-numeric: tabular-nums">2.67</text>
+<line x1="352" y1="226" x2="352" y2="288" stroke="#6e7781" stroke-width="1"/>
+<text x="32.0" y="324.0" font-size="12" font-weight="400" fill="#6e7781" text-anchor="start" style="font-variant-numeric: tabular-nums">bench/evasion.json (after) · tasks compared one by one · scripts/make_charts.py</text>
 </svg>
