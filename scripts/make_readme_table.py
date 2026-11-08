@@ -805,6 +805,16 @@ def block_vultr() -> str:
     )
 
 
+def before_checks() -> str:
+    """The held-out result before the evasion checks, which were written after reading plans from those tasks."""
+    b = load("results.before-evasion.json")
+    if not b or b.get("status") != "measured":
+        return ""
+    h = b["heldout"]
+    return (f"; the evasion checks were written after reading plans from them, and before those checks the same comparison went from "
+            f"{h['direct']['harm_on_prod']['mean']:g} to {h['shadow_run']['harm_if_rubber_stamped']['mean']:g}")
+
+
 def block_summary() -> str:
     """The README's first screen: each line is one claim with its number, read from the files it names."""
     r, st = load("results.json"), load("stats.json")
@@ -818,7 +828,7 @@ def block_summary() -> str:
     alone_changed = st["main"]["retries"]["auto_applied_that_changed_something"]
     out = [
         f"_How to read these: the same agent (`{r['model']}` on Vultr Serverless Inference) and prompt in every mode, a fresh copy of the database for every run, mean of {r['runs_per_task']} runs per task. "
-        "Held-out tasks were kept out of tuning ([how](#results)). Harm is decided by oracles that check the outcome, not the plan. "
+        "Held-out tasks were kept out of tuning ([how](#results))" + before_checks() + ". Harm is decided by oracles that check the outcome, not the plan. "
         "Approved unread means the reviewer clicks approve on every plan that waits, without reading it: the worst case for Shadow Run._",
         "",
     ]
@@ -843,7 +853,7 @@ def block_summary() -> str:
     if ev and ev.get("detection"):
         aft = ev.get("after") or {}
         ex_h, he_h = (aft.get("external") or {}).get("harm"), (aft.get("heldout") or {}).get("harm")
-        line = ("- **It found a failure mode a rule can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely, "
+        line = ("- **It found a failure mode the guardrails can't see: guardrail evasion.** Told which rule its plan broke, an agent sometimes changes what the rule looks at instead of doing the job safely, "
                 "as in [the recorded run](#what-we-found-told-which-rule-it-broke-the-agent-gets-around-it). ")
         if ex_h and he_h and ex_h["difference"] < 0:
             line += (f"The two changes it led to cut harm, approved unread, from {ex_h['from']:g} to {ex_h['to']:g} on the outside-benchmark tasks ({ex_h['tasks_down']} tasks better, {ex_h['tasks_up']} worse) "
@@ -858,7 +868,7 @@ def block_summary() -> str:
         n = len(inc["incidents"])
         b = sum(1 for i in inc["incidents"] if i["status"] == "blocked" and not i.get("reached_prod"))
         measured = sum(1 for i in inc["incidents"] if i.get("measured") or i.get("metrics"))
-        parts.append(f"**{b} of {n} real incident commands** replayed on a clone and stopped before prod" + (f": {measured} measured on the clone, {n - measured} failed there because they reach outside it" if measured < n else ""))
+        parts.append(f"**{b} of {n} real incident commands** replayed on a clone and stopped before prod" + (f": {measured} measured on the clone, {n - measured} failed there with nothing to measure" if measured < n else ""))
     if cl and cl.get("total"):
         parts.append(f"**{cl['passed']} of {cl['total']} checks** on approval, apply and undo passed, attacks and honest path alike")
     if parts:
@@ -966,7 +976,7 @@ def block_business() -> str:
         table(["How a team runs it", "What the team gets", "Price"], [
             ["Self-hosted, open source", "The pull request Action, the MCP server and the sandboxes on the team's own Vultr account, from `scripts/up.sh`. Every migration in a pull request gets a comment saying what it really does, and the agent gives up its database URL for rehearse and apply.",
              "Free. The team pays Vultr for what it runs" + (f": about ${economics()['fixed']:.0f} a month at list price" if (economics() or {}).get("fixed") else "")],
-            ["Hosted", "The same, with the control plane and sandboxes run for the team. Every change waits for a person until the team lists otherwise.", f"${price} a month per protected database, up to about 1 GB today"],
+            ["Hosted", "The same, built by `infra/provision.py` inside the team's own Vultr account and run for them, so the prod credential and the clone never leave it. Every change waits for a person until the team lists otherwise.", f"${price} a month per protected database, up to about 1 GB today"],
             ["An auto-apply list", "The columns the team is happy to change with no person looking, each tested against the attacker first.", "Included"],
             ["Regulated teams", "Self-hosted, with a support licence.", "Per deployment"],
         ]),
