@@ -68,4 +68,5 @@ def no_live_model(request, monkeypatch):
     def refuse(*a, **k):
         raise AssertionError("a test reached a live model: stub agent.explain, evasion.second_reader or llm.chat")
 
-    monkeypatch.setattr(llm, "_client", refuse)
+    # The endpoint check in llm._client still runs first; only the client it would build is refused.
+    monkeypatch.setattr(llm, "OpenAI", refuse)

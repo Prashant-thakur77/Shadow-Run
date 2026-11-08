@@ -91,6 +91,10 @@ page = (OUT / 'slides/market.html').read_text()
 for k, v in {'weekly': mk['developers_using_agents']['weekly_pct'], 'g_low': mk['guardian_share']['low_pct'], 'g_high': mk['guardian_share']['high_pct'], 'g_year': mk['guardian_share']['by_year'],
              'tam_now_low': der['tam_usd_b_on_2025_market'][0], 'tam_now_high': der['tam_usd_b_on_2025_market'][1], 'sam': der['sam_usd_b_per_year'], 'first_m': der['first_target_usd_m_per_year'], 'first_pct': der['first_target_pct'], 'pg': f"{mk['postgres_companies']['count']:,}", 'price': mk['price']['usd_per_database_month']}.items():
     page = page.replace(f'[{k}]', str(v))
+sys.path.insert(0, str(ROOT / 'scripts'))
+from make_readme_table import economics
+e = economics()
+page = page.replace('[economics_line]', f"Measured cost to serve: about <b>${e['per_k']:.2f}</b> per 1,000 rehearsed tasks, inference and VX1 time included, against ${e['price']} a month." if e else '')
 (OUT / 'slides/market.html').write_text(page)
 ai = mk.get('agent_incidents') or {}
 page = (OUT / 'slides/problem.html').read_text()

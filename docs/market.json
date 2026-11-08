@@ -64,7 +64,8 @@
   "A short auto-apply list, once the team has seen enough reports."
  ],
  "next": [
-  "Thin clones, so a rehearsal stays fast past a few gigabytes, and masking personal data in the clone.",
+  "Thin clones, so a rehearsal stays fast past a gigabyte, and masking personal data in the clone.",
+  "Clones restored from Vultr Managed PostgreSQL's own backups, so a rehearsal skips the dump.",
   "An auto-apply list that grows: suggest additions from what a team keeps approving, and test each against the attacker first.",
   "First customers: the free Action on real teams' migrations, then paid protected databases."
  ],
@@ -102,7 +103,7 @@
  ],
  "us": {
   "strength": "A full clone in a no-network microVM, measured by Postgres. An approval bound to those exact hashes, and an apply that rolls back if prod differs.",
-  "weakness": "Built for Postgres and Linux hosts. Rehearsals use full restores today, and thin clones are next, for databases past a few gigabytes.",
+  "weakness": "Built for Postgres and Linux hosts. Rehearsals use full restores today, and thin clones are next, for databases past a gigabyte.",
   "usp": "An approval bound to the measured result of the exact plan, with an apply that rolls back if prod differs. None of the docs above describe that."
  }
 }

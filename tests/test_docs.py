@@ -151,4 +151,6 @@ def test_the_unit_economics_add_up():
     e = m.economics()
     assert e and abs(e["per_task"] - (e["inf"] + e["vx1_task"])) < 1e-12
     assert abs(e["per_k"] - 1000 * e["per_task"]) < 1e-9
-    assert 0 < e["margin_1k"] < 1 and e["breakeven"] * e["per_task"] == pytest.approx(e["price"])
+    assert e["fixed"] > 0 and 0 < e["margin_one_db"] < 1
+    assert e["margin_one_db"] == pytest.approx((e["price"] - e["fixed"] - e["per_k"]) / e["price"])
+    assert e["tasks_to_cost"] * e["per_task"] + e["fixed"] == pytest.approx(e["price"])

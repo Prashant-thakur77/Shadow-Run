@@ -485,11 +485,13 @@ def block_models() -> str:
     if len(docs) < 2:
         return NOT_YET if not docs else ""
     rows = []
-    for _, doc in docs:
+    main_code = (load("results.json") or {}).get("code_sha256")
+    for name, doc in docs:
         h = doc["heldout"]
+        code = "final" if doc.get("code_sha256") == main_code else ("before the evasion checks" if "before-evasion" in name else "earlier")
         s = h["shadow_run"]
-        rows.append([f"`{doc['model']}`", f"{doc['runs_per_task']}", fmt_mean(h["direct"]["harm_on_prod"]), fmt_mean(h["static_gate"]["harm_on_prod"]), fmt_mean(s.get("harm_if_rubber_stamped")), fmt_mean(h["direct"]["risky_done"]), fmt_mean(s.get("risky_done_if_rubber_stamped")), "today's" if same_suite(doc) else "before the audit"])
-    return "The agent's model is the variable an adopter can't control, so the same held-out tasks were run with others from Vultr's list:\n\n" + table(["Agent model", "Runs per task", "Direct harm", "Rule gate harm", "Shadow Run harm, approved unread", "Direct finished safely", "Shadow Run finished safely, approved unread", "Oracles"], rows)
+        rows.append([f"`{doc['model']}`", f"{doc['runs_per_task']}", fmt_mean(h["direct"]["harm_on_prod"]), fmt_mean(h["static_gate"]["harm_on_prod"]), fmt_mean(s.get("harm_if_rubber_stamped")), fmt_mean(h["direct"]["risky_done"]), fmt_mean(s.get("risky_done_if_rubber_stamped")), code])
+    return "The agent's model is the variable an adopter can't control, so the same held-out tasks were run with others from Vultr's list:\n\n" + table(["Agent model", "Runs per task", "Direct harm", "Rule gate harm", "Shadow Run harm, approved unread", "Direct finished safely", "Shadow Run finished safely, approved unread", "Code"], rows)
 
 
 def block_scale() -> str:
@@ -618,14 +620,12 @@ def block_market() -> str:
         "",
         f"**Market.** [{g['source']}]({g['url']}) expects guardian agents, the category this sits in, to take {g['low_pct']} to {g['high_pct']}% of the agentic AI market by {g['by_year']}. [{a['source']}]({a['url']}) sizes AI agents at ${a['usd_b_2025']} billion in 2025 and ${a['usd_b_2033']} billion by 2033. Combining the two, which is our arithmetic and not theirs, gives ${derived['tam_usd_b_on_2025_market'][0]} to {derived['tam_usd_b_on_2025_market'][1]} billion on today's market and ${derived['tam_usd_b_on_2033_forecast'][0]} to {derived['tam_usd_b_on_2033_forecast'][1]} billion on the 2033 forecast. The market this version can serve: at the ${price['usd_per_database_month']} a month we plan to charge, {derived['first_target_pct']}% of those companies with one protected database each is ${derived['first_target_usd_m_per_year']} million a year, and all of them, which is a ceiling since not all let agents near prod, is ${derived['sam_usd_b_per_year']} billion.",
         "",
-        "**Revenue.** " + " ".join(m["revenue"]) + (f" A rehearsed task costs about ${cost} of inference at today's benchmark." if cost else ""),
-        "",
         "| Who else | What they do well | What's missing for this job |",
         "| --- | --- | --- |",
     ]
     for c in m["competition"]:
         lines.append(f"| {c['who']} | {c['strength']} | {c['gap']} |")
-    lines += ["", f"**What's different:** {m['us']['usp']} **Scope today:** {m['us']['weakness']}", "", "**What comes next.** " + " ".join(m["next"])]
+    lines += ["", f"**What's different:** {m['us']['usp']} **Scope today:** {m['us']['weakness']}"]
     return "\n".join(lines)
 
 
@@ -635,8 +635,8 @@ def block_reviewer() -> str:
         return ""
     a, b = d["plan_only"], d["with_report"]
     return (
-        f"**Does the report help the person?** A model stood in for the reviewer on {d['plans_scored']} distinct plans the benchmark held, deciding each one twice. Reading the request, schema and plan, as in a pull request, it approved {a['harmful']['approved']} of {a['harmful']['total']} harmful plans and {a['good']['approved']} of {a['good']['total']} good ones. "
-        f"With the measured report added, it approved {b['harmful']['approved']} of {b['harmful']['total']} harmful and {b['good']['approved']} of {b['good']['total']} good. This is a model, not a user study, and it never saw the oracles. Model `{d['model']}`, ${d['cost_usd']} of inference. Re-run: `{d['rerun']}`."
+        f"**Does the report help the person?** A model stood in for the reviewer on {d['plans_scored']} of the {d.get('distinct_plans', d['plans_scored'])} distinct plans the benchmark held, the ones it answered both times, deciding each one twice. Reading the request, schema and plan, as in a pull request, it approved {a['harmful']['approved']} of {a['harmful']['total']} harmful plans and {a['good']['approved']} of {a['good']['total']} good ones. "
+        f"With the measured report added, it approved {b['harmful']['approved']} of {b['harmful']['total']} harmful and {b['good']['approved']} of {b['good']['total']} good. This is a model, not a user study, and it never saw the oracles. Model `{d['model']}`" + (f", ${d['cost_usd']} of inference" if d.get("cost_usd") else "") + f". Re-run: `{d['rerun']}`."
     )
 
 
@@ -751,7 +751,7 @@ def block_vultr() -> str:
         rows.append(["Serverless Inference", f"{inf['tokens']:,} tokens over {inf['runs']:,} benchmark runs, ${inf['cost_usd']:.2f}. {jobs}"])
     if mv.get("total"):
         boot = mv.get("clone_boot_ms") or {}
-        rows.append(["VX1", f"{mv['total']:,} microVMs: {mv['rehearsals']:,} rehearsals and {mv['reproductions']:,} second-clone reproductions. Clone boot p50 {boot.get('p50', 0):,.0f} ms, p95 {boot.get('p95', 0):,.0f} ms. {mv['containment_complete']:,} of {mv['rehearsals']:,} rehearsals came back with a complete containment record; the rest were refused, not counted"])
+        rows.append(["VX1", f"{mv['total']:,} microVMs across every benchmark file: {mv['rehearsals']:,} rehearsals and {mv['reproductions']:,} second-clone reproductions. Clone boot p50 {boot.get('p50', 0):,.0f} ms, p95 {boot.get('p95', 0):,.0f} ms. {mv['containment_complete']:,} of {mv['rehearsals']:,} rehearsals came back with a complete containment record; the rest were refused, not counted"])
     if pg.get("databases_created"):
         rows.append(["Managed PostgreSQL 16", f"{pg['databases_created']:,} databases created from templates for single runs and dropped after them ({pg['drop_failed']} drops failed), over the VPC"])
     if os_.get("objects"):
@@ -781,7 +781,7 @@ def block_summary() -> str:
     alone_changed = st["main"]["retries"]["auto_applied_that_changed_something"]
     out = [
         f"_How to read these: the same agent (`{r['model']}` on Vultr Serverless Inference) and prompt in every mode, a fresh copy of the database for every run, mean of {r['runs_per_task']} runs per task. "
-        "Held-out tasks were never used while building Shadow Run. Harm is decided by oracles that check the outcome, not the plan. "
+        "Held-out tasks were kept out of tuning ([how](#results)). Harm is decided by oracles that check the outcome, not the plan. "
         "Approved unread means every plan that waited for a person was approved without being read, the worst case for the reviewer._",
         "",
     ]
@@ -803,7 +803,7 @@ def block_summary() -> str:
     reh = held.get("rehearsal_s") or {}
     price = r.get("vx1_usd_per_hour")
     if reh.get("p50") and price:
-        out.append(f"- **Fast and cheap enough to sit in the loop.** A rehearsal on a full clone takes {reh['p50']:g} s at the median and about ${price * reh['p50'] / 3600:.6f} of VX1 time at list price, boot to destroy. A whole task, every model call included, costs ${held['cost_per_task_usd']:g} of inference.")
+        out.append(f"- **Fast and cheap enough to sit in the loop.** A rehearsal on a full clone takes {reh['p50']:g} s at the median and about ${price * reh['p50'] / 3600:.6f} of VX1 time at list price, boot to destroy. A whole held-out task, every model call and retry included, takes {held['seconds_per_task']:g} s and costs ${held['cost_per_task_usd']:g} of inference.")
     ev = load("evasion.json")
     if ev and ev.get("detection"):
         a, f_ = ev["rates"]["passed_after_breaking_a_rule"], ev["rates"]["passed_first_time"]
@@ -842,7 +842,7 @@ def block_summary() -> str:
 
 
 def economics() -> dict | None:
-    """What one rehearsed task costs to serve on Vultr, from the measured run and list prices, against the planned price."""
+    """What it costs to serve one protected database on Vultr, from the measured run and list prices, against the planned price."""
     r, vu = load("results.json"), load("vultr.json")
     mp = ROOT / "docs" / "market.json"
     if not r or not vu or not mp.exists():
@@ -855,9 +855,16 @@ def economics() -> dict | None:
     # An upper bound: the whole VX1 host, for the task's whole wall time, although a host runs several rehearsals at once.
     vx1_task = vx1 * secs / 3600
     per_task = inf + vx1_task
-    burn = ((vu.get("spend") or {}).get("budget") or {}).get("burn_usd_per_hour")
-    return dict(tasks=s.get("risky_tasks", 0) + s.get("safe_tasks", 0), inf=inf, secs=secs, vx1=vx1, vx1_task=vx1_task, per_task=per_task, per_k=per_task * 1000, price=price,
-                margin_1k=1 - per_task * 1000 / price, breakeven=price / per_task, stack_month=burn * 24 * 30 if burn else None)
+    # One deployment: the control VM, the VX1 host and the bucket. Prod is the customer's own database, so it isn't counted.
+    res = (((vu.get("spend") or {}).get("budget") or {}).get("resources") or [])
+    fixed_parts = [x for x in res if "dbaas" not in (x.get("plan") or "")]
+    fixed = sum(x["usd_per_hour"] for x in fixed_parts) * 24 * 30 if fixed_parts else None
+    tasks = 1000
+    out = dict(tasks=s.get("risky_tasks", 0) + s.get("safe_tasks", 0), inf=inf, secs=secs, vx1=vx1, vx1_task=vx1_task, per_task=per_task, per_k=per_task * 1000, price=price, fixed=fixed)
+    if fixed is not None:
+        out["margin_one_db"] = (price - fixed - per_task * tasks) / price
+        out["tasks_to_cost"] = (price - fixed) / per_task
+    return out
 
 
 def block_economics() -> str:
@@ -865,16 +872,64 @@ def block_economics() -> str:
     if not e:
         return ""
     rows = [
-        ["Inference on Vultr Serverless Inference, every model call", f"${e['inf']:g} (mean over all {e['tasks']} tasks)"],
-        [f"VX1 time, at most: the host's list price (${e['vx1']:g} an hour) for the task's whole wall time ({e['secs']:g} s)", f"${e['vx1_task']:.5f}"],
+        ["Inference on Vultr Serverless Inference, every model call", f"${e['inf']:g} per task (mean over all {e['tasks']} tasks)"],
+        [f"VX1 time, at most: the host's list price (${e['vx1']:g} an hour) for the task's whole wall time ({e['secs']:g} s)", f"${e['vx1_task']:.5f} per task"],
         ["Variable cost per 1,000 rehearsed tasks", f"${e['per_k']:.2f}"],
-        [f"Margin before fixed costs at ${e['price']} a month and 1,000 rehearsed tasks", f"{e['margin_1k'] * 100:.1f}%"],
-        ["Rehearsed tasks a month before variable cost reaches the price", f"about {round(e['breakeven'], -3):,.0f}"],
     ]
-    if e["stack_month"]:
-        rows.append(["The whole demo stack on Vultr (two VMs, Managed PostgreSQL, Object Storage), at its measured burn", f"${e['stack_month']:.0f} a month"])
-    return (table(["Per rehearsed task", "Measured"], rows)
-            + "\n\nThe price is our plan. The costs are measured: inference from the benchmark's own records, VX1 and the stack at Vultr's list prices (`bench/results.json`, `bench/vultr.json`).")
+    if e.get("fixed") is not None:
+        rows += [
+            ["Fixed cost of one deployment: the control VM, the VX1 host and the bucket at list price. Prod is the customer's own database", f"${e['fixed']:.0f} a month"],
+            [f"Margin on one protected database at ${e['price']} a month and 1,000 rehearsed tasks, fixed costs included", f"{e['margin_one_db'] * 100:.0f}%"],
+            ["Rehearsed tasks a month before one database's total cost reaches its price", f"about {round(e['tasks_to_cost'], -3):,.0f}"],
+        ]
+    return (table(["Cost to serve", "Measured"], rows)
+            + "\n\nThe price is our plan. The costs are measured: inference from the benchmark's own records, the VX1 host, the control VM and the bucket at Vultr's list prices (`bench/results.json`, `bench/vultr.json`). "
+            "A second database on the same deployment adds only its variable cost.")
+
+def block_microvm() -> str:
+    """Why the rehearsal is a microVM and not a database transaction, from the incident replays and the red team."""
+    inc, rt = load("incidents.json"), load("redteam.json")
+    if not inc or not rt:
+        return ""
+    files = []
+    for i in inc["incidents"]:
+        for m in i.get("measured") or []:
+            hit = re.match(r"(\d+) files deleted", m)
+            if hit:
+                files.append((int(hit.group(1)), i["command"]))
+    shell = max(files) if files else None
+    text = ("**Why a microVM and not a database transaction.** A transaction can undo rows. It can't undo `rm -rf`, a fork bomb or a call that sends your data out, and it decides on prod itself. "
+            "A microVM on the VX1 runs the whole plan, SQL or shell, on a clone with its own kernel and no network card, and the host measures what happened.")
+    if shell:
+        text += f" Replaying real incidents, `{shell[1]}` deleted {shell[0]:,} files on its clone and nothing on prod"
+    text += f"; {rt['contained']} of {rt['total']} hostile plans, from `DROP DATABASE` to a fork bomb, a memory bomb and key theft, were contained, checked from the host (`bench/incidents.json`, `bench/redteam.json`)."
+    return text
+
+def block_business() -> str:
+    mp = ROOT / "docs" / "market.json"
+    if not mp.exists():
+        return ""
+    m = json.loads(mp.read_text())
+    price = m["price"]["usd_per_database_month"]
+    lines = [
+        "**The buyer** is the engineer who owns production Postgres, a platform lead or a staff engineer, at a team that lets coding agents run migrations and data fixes. "
+        "The trigger is the day someone asks them to hand an agent a database URL. Today they can give it the credential and hope, or have a senior engineer read each statement and guess what it cascades into. "
+        "Shadow Run replaces the guess with a measurement, in rows and in the money the business tracks.",
+        "",
+        "Nothing has to be trusted on day one, and each step is a price:",
+        "",
+        table(["Step", "What the team gets", "Price"], [
+            ["1. The pull request Action", "Every migration gets a comment saying what it really does. Nothing can reach prod.", "Free"],
+            ["2. MCP for the agent", "The agent gives up its database URL and gets rehearse and apply instead. Every change waits for a person until the team lists otherwise.", f"${price} a month per protected database"],
+            ["3. A short auto-apply list", "The columns the team is happy to change with no person looking, each tested against the attacker first.", "Included"],
+            ["Self-hosted", "The control plane and sandboxes on the team's own Vultr account, for regulated teams.", "A licence per deployment"],
+        ]),
+        "",
+        "**Revenue.** " + " ".join(m["revenue"]),
+        "",
+        "**What comes next.** " + " ".join(m["next"]),
+    ]
+    return "\n".join(lines)
 
 def block_tests() -> str:
     """How much of the code the tests reach, counted by pytest itself, so the number can't drift from the suite."""
@@ -901,6 +956,8 @@ BLOCKS = {
     "summary": block_summary,
     "tests": block_tests,
     "economics": block_economics,
+    "microvm": block_microvm,
+    "business": block_business,
     "evasion": block_evasion,
     "market": block_market,
     "reviewer": block_reviewer,
